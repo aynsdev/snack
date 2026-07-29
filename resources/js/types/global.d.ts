@@ -1,4 +1,5 @@
 import type { Auth } from '@/types/auth';
+import type { FlashMessages, SnackProps } from '@/types/snack';
 
 declare module 'react' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -12,6 +13,9 @@ declare module '@inertiajs/core' {
         sharedPageProps: {
             name: string;
             auth: Auth;
+            /** Workspace rail and current-workspace navigation. */
+            snack: SnackProps;
+            flash: FlashMessages;
             sidebarOpen: boolean;
             [key: string]: unknown;
         };

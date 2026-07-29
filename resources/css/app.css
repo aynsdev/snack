@@ -7,11 +7,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+| Snack design tokens
+|--------------------------------------------------------------------------
+|
+| Every colour is a CSS variable so the brand can be re-themed — per tenant,
+| once Snack is multi-tenant — without touching a single component.
+|
+| Values are oklch because it interpolates perceptually: a hover state derived
+| from the brand orange stays the same hue instead of sliding towards brown.
+| The hex equivalents from the brand palette are noted alongside each token.
+*/
+
 @theme {
     --font-sans:
-        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-        'Noto Color Emoji';
+        'Geist', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
@@ -59,77 +70,170 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
+
+    /* The narrow workspace switcher. Charcoal in both themes: it anchors the
+       app the way a dock does, and gives Snack an identity at a glance. */
+    --color-rail: var(--rail);
+    --color-rail-foreground: var(--rail-foreground);
+    --color-rail-muted: var(--rail-muted);
+    --color-rail-active: var(--rail-active);
+
+    /* Semantic status colours, shared by presence dots, toasts, and badges. */
+    --color-success: var(--success);
+    --color-warning: var(--warning);
+    --color-danger: var(--danger);
+
+    /* Brand ramp, for accents that should stay orange in both themes. */
+    --color-brand: var(--brand);
+    --color-brand-hover: var(--brand-hover);
+    --color-brand-soft: var(--brand-soft);
+    --color-brand-subtle: var(--brand-subtle);
+
+    /* Unread affordances: bold channel names and the mention badge. */
+    --color-unread: var(--unread);
+    --color-mention: var(--mention);
+    --color-mention-foreground: var(--mention-foreground);
 }
 
 :root {
+    /* #FFFFFF / #171717 */
     --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
+    --foreground: oklch(0.205 0 0);
+
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    --card-foreground: oklch(0.205 0 0);
+
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
+    --popover-foreground: oklch(0.205 0 0);
+
+    /* #F97316 — the brand orange carries the primary action. */
+    --primary: oklch(0.705 0.213 47.6);
+    --primary-foreground: oklch(1 0 0);
+
+    /* #F3F4F6 */
+    --secondary: oklch(0.967 0.003 264.542);
     --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
+
+    --muted: oklch(0.967 0.003 264.542);
+    /* #737373 — 4.7:1 on white, clears AA for body text. */
     --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
+
+    /* A warm tint rather than a wash of grey, borrowed from the soft orange. */
+    --accent: oklch(0.967 0.008 60);
     --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.87 0 0);
-    --chart-1: oklch(0.646 0.222 41.116);
-    --chart-2: oklch(0.6 0.118 184.704);
-    --chart-3: oklch(0.398 0.07 227.392);
-    --chart-4: oklch(0.828 0.189 84.429);
-    --chart-5: oklch(0.769 0.188 70.08);
-    --radius: 0.625rem;
+
+    --destructive: oklch(0.637 0.237 25.331);
+    --destructive-foreground: oklch(1 0 0);
+
+    /* #E5E7EB */
+    --border: oklch(0.928 0.006 264.531);
+    --input: oklch(0.928 0.006 264.531);
+    --ring: oklch(0.705 0.213 47.6);
+
+    --chart-1: oklch(0.705 0.213 47.6);
+    --chart-2: oklch(0.723 0.219 149.579);
+    --chart-3: oklch(0.6 0.118 184.704);
+    --chart-4: oklch(0.769 0.188 70.08);
+    --chart-5: oklch(0.637 0.237 25.331);
+
+    /* #FAFAFA — the sidebar sits a half-step back from the message area so the
+       conversation is the brightest surface on screen. */
     --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-foreground: oklch(0.205 0 0);
+    --sidebar-primary: oklch(0.705 0.213 47.6);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.945 0.012 60);
     --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
+    --sidebar-border: oklch(0.928 0.006 264.531);
+    --sidebar-ring: oklch(0.705 0.213 47.6);
+
+    /* #1F1F1F */
+    --rail: oklch(0.245 0 0);
+    --rail-foreground: oklch(0.985 0 0);
+    --rail-muted: oklch(0.62 0 0);
+    --rail-active: oklch(0.705 0.213 47.6);
+
+    --success: oklch(0.723 0.219 149.579);
+    --warning: oklch(0.769 0.188 70.08);
+    --danger: oklch(0.637 0.237 25.331);
+
+    --brand: oklch(0.705 0.213 47.6);
+    --brand-hover: oklch(0.646 0.222 41.116);
+    --brand-soft: oklch(0.837 0.128 66.29);
+    --brand-subtle: oklch(0.96 0.03 70);
+
+    --unread: oklch(0.205 0 0);
+    --mention: oklch(0.637 0.237 25.331);
+    --mention-foreground: oklch(1 0 0);
+
+    --radius: 0.75rem;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
+    /* #171717 / #1F1F1F */
+    --background: oklch(0.205 0 0);
     --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0 0);
+
+    --card: oklch(0.245 0 0);
     --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0 0);
+
+    --popover: oklch(0.245 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
+
+    /* Lighter than the light-mode orange: at the same chroma a dark field
+       makes it read heavier, and this keeps contrast against the foreground. */
+    --primary: oklch(0.75 0.19 47.6);
     --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
+
+    --secondary: oklch(0.29 0 0);
     --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
+
+    --muted: oklch(0.29 0 0);
+    /* 4.8:1 on #171717. */
+    --muted-foreground: oklch(0.72 0 0);
+
+    --accent: oklch(0.32 0.02 60);
     --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.637 0.237 25.331);
-    --border: oklch(0.269 0 0);
-    --input: oklch(0.269 0 0);
-    --ring: oklch(0.439 0 0);
-    --chart-1: oklch(0.488 0.243 264.376);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
+
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.205 0 0);
+
+    --border: oklch(0.31 0 0);
+    --input: oklch(0.31 0 0);
+    --ring: oklch(0.75 0.19 47.6);
+
+    --chart-1: oklch(0.75 0.19 47.6);
+    --chart-2: oklch(0.77 0.17 149.579);
+    --chart-3: oklch(0.7 0.12 184.704);
+    --chart-4: oklch(0.83 0.16 70.08);
+    --chart-5: oklch(0.704 0.191 22.216);
+
+    --sidebar: oklch(0.245 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-primary: oklch(0.75 0.19 47.6);
+    --sidebar-primary-foreground: oklch(0.205 0 0);
+    --sidebar-accent: oklch(0.32 0.015 60);
     --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.269 0 0);
-    --sidebar-ring: oklch(0.439 0 0);
+    --sidebar-border: oklch(0.31 0 0);
+    --sidebar-ring: oklch(0.75 0.19 47.6);
+
+    --rail: oklch(0.18 0 0);
+    --rail-foreground: oklch(0.985 0 0);
+    --rail-muted: oklch(0.62 0 0);
+    --rail-active: oklch(0.75 0.19 47.6);
+
+    --success: oklch(0.77 0.17 149.579);
+    --warning: oklch(0.83 0.16 70.08);
+    --danger: oklch(0.704 0.191 22.216);
+
+    --brand: oklch(0.75 0.19 47.6);
+    --brand-hover: oklch(0.8 0.16 50);
+    --brand-soft: oklch(0.837 0.128 66.29);
+    --brand-subtle: oklch(0.32 0.05 60);
+
+    --unread: oklch(0.985 0 0);
+    --mention: oklch(0.704 0.191 22.216);
+    --mention-foreground: oklch(0.205 0 0);
 }
 
 @layer base {
@@ -139,5 +243,56 @@
 
     body {
         @apply bg-background text-foreground;
+        font-synthesis-weight: none;
+        text-rendering: optimizeLegibility;
+    }
+
+    /*
+     | Focus is restyled, never removed. A keyboard-driven chat app lives or
+     | dies on visible focus.
+     */
+    :focus-visible {
+        @apply outline-2 outline-offset-2 outline-ring;
+    }
+}
+
+@layer components {
+    /*
+     | Message and channel lists scroll constantly. A thin, low-contrast
+     | scrollbar keeps the chrome out of the way without hiding it entirely,
+     | which would strand anyone who relies on seeing the thumb.
+     */
+    .snack-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-border) transparent;
+    }
+
+    .snack-scroll::-webkit-scrollbar {
+        width: 0.5rem;
+        height: 0.5rem;
+    }
+
+    .snack-scroll::-webkit-scrollbar-thumb {
+        background-color: var(--color-border);
+        border-radius: 9999px;
+    }
+
+    .snack-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+}
+
+/*
+| Respect the reader's motion preference. Snack animates a lot — hover states,
+| panel transitions, the typing indicator — and all of it is decorative.
+*/
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
     }
 }

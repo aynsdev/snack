@@ -1,3 +1,5 @@
+import type { SnackUser } from '@/types/snack';
+
 export type User = {
     id: number;
     name: string;
@@ -12,6 +14,14 @@ export type User = {
 
 export type Auth = {
     user: User;
+    /**
+     * The workspace-facing shape of the signed-in user (avatar, presence,
+     * handle), mirroring App\Http\Resources\UserResource. Null when signed out.
+     *
+     * `user` above is the raw model the starter kit's settings pages rely on;
+     * prefer `profile` anywhere inside a workspace.
+     */
+    profile: SnackUser | null;
 };
 
 /* @chisel-passkeys */

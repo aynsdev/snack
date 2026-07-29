@@ -1,0 +1,62 @@
+import { cn } from '@/lib/utils';
+
+/**
+ * The Snack mark: a speech bubble with a bite taken out of its top-right
+ * corner and three dots for a conversation in progress.
+ *
+ * The path is inlined from `public/snack-icon.svg` rather than referenced as an
+ * `<img>`, so it inherits `currentColor` — the rail needs it in white, the
+ * marketing pages in brand orange, and a disabled state in muted grey. An
+ * `<img>` could not be recoloured, and would cost a request on every page.
+ *
+ * Keep this in sync with `public/snack-icon.svg`, which is the source of truth
+ * for the favicon and app icons.
+ */
+export function SnackLogoIcon({
+    className,
+    ...props
+}: React.SVGAttributes<SVGElement>) {
+    return (
+        <svg
+            viewBox="0 0 512 512"
+            fill="none"
+            role="presentation"
+            className={cn('size-8', className)}
+            {...props}
+        >
+            <path
+                fill="currentColor"
+                d="M217.99 0.405482C233.624 -0.488537 252.814 0.409929 268.75 0.173866C288.914 0.10318 309.077 0.364591 329.234 0.728689C340.542 0.932744 352.45 3.93178 363.4 4.38123C350.653 32.0331 356.98 64.8442 383.37 81.3847C397.643 90.3293 408.734 91.5363 425.066 91.5647C422.821 101.781 421.92 110.901 423.34 121.024C427.697 152.025 456.647 173.313 486.844 173.999C491.733 174.111 500.81 172.507 504.693 174.324C507.421 181.782 508.1 191.275 509.214 199.084C521.357 284.231 493.867 373.022 425.581 427.787C387.877 458.031 344.384 474.907 296.172 478.121C288.309 478.646 280.33 478.028 272.502 478.201C258.469 478.512 244.549 478.401 230.528 478.13C205.294 478.294 179.21 474.293 155.351 466.273C152.94 465.464 150.45 464.744 148.016 463.984C138.016 467.425 124.501 474.44 114.652 478.832C92.5734 488.782 70.3448 498.406 48.2072 508.222C45.672 509.183 43.0685 510.325 40.3781 510.779C34.5455 512.015 25.6818 507.938 23.8525 501.972C21.3164 493.699 26.0939 481.166 28.2941 473.035L36.5798 441.965C39.5293 430.664 42.5485 419.376 45.6378 408.111C46.7692 403.981 49.0457 394.707 50.7627 391.222C45.2496 383.033 39.5093 375.871 34.4195 367.238C-23.4416 269.123 -8.13298 129.561 78.6903 52.8819C117.152 18.914 166.454 2.41402 217.99 0.405482ZM355.289 283.2C371.958 281.857 384.461 267.357 383.37 250.637C382.278 233.918 367.996 221.173 351.296 222.016C340.269 222.573 330.397 229.04 325.463 238.936C320.53 248.833 321.299 260.626 327.477 269.795C333.655 278.963 344.282 284.086 355.289 283.2ZM249.695 283.191C266.471 281.959 279.102 267.378 277.959 250.562C276.817 233.746 262.33 221.015 245.542 222.074C228.631 223.14 215.813 237.785 216.964 254.723C218.115 271.662 232.797 284.431 249.695 283.191ZM144.645 283.018C161.513 281.708 174.089 266.886 172.667 249.995C171.246 233.103 156.371 220.601 139.523 222.139C122.834 223.661 110.5 238.395 111.908 255.128C113.316 271.86 127.937 284.317 144.645 283.018Z"
+            />
+        </svg>
+    );
+}
+
+/**
+ * The full lockup: mark, wordmark, and optionally the tagline.
+ */
+export function SnackLogo({
+    className,
+    showTagline = false,
+}: {
+    className?: string;
+    showTagline?: boolean;
+}) {
+    return (
+        <div className={cn('flex items-center gap-2.5', className)}>
+            <SnackLogoIcon className="size-9 shrink-0 text-brand" />
+
+            <div className="flex flex-col leading-none">
+                <span className="text-lg font-semibold tracking-tight">
+                    Snack
+                </span>
+
+                {showTagline && (
+                    <span className="mt-1.5 text-xs text-muted-foreground">
+                        Small chats. Big work.
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+}

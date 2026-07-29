@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Services\RegistrationGate;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -67,9 +68,21 @@ class FortifyServiceProvider extends ServiceProvider
             'status' => $request->session()->get('status'),
         ]));
 
-        Fortify::registerView(fn () => Inertia::render('auth/register', [
-            'passwordRules' => Password::defaults()->toPasswordRulesString(),
-        ]));
+        // Registration is invitation-first. The view 404s when the visitor has
+        // no live invitation, so a closed installation does not advertise a
+        // sign-up form; CreateNewUser enforces the same rule on POST.
+        // Fortify invokes view callbacks with the Request, so the gate is
+        // resolved from the container rather than type-hinted as a parameter.
+        Fortify::registerView(function (Request $request) {
+            $gate = app(RegistrationGate::class);
+
+            abort_unless($gate->isOpen(), 404);
+
+            return Inertia::render('auth/register', [
+                'passwordRules' => Password::defaults()->toPasswordRulesString(),
+                'invitedEmail' => $gate->requiredEmail(),
+            ]);
+        });
 
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/two-factor-challenge'));
 

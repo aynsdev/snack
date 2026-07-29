@@ -21,10 +21,25 @@
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="BROADCAST_CONNECTION" value="null"/>
+        <!--
+            Reverb rather than "null": broadcast channel callbacks are registered
+            against whichever driver is resolved at boot, and the null driver's
+            auth() is a no-op that would authorize every subscription. Using the
+            real Pusher-protocol broadcaster means the channel authorization
+            tests exercise the same path Echo does.
+        -->
+        <env name="BROADCAST_CONNECTION" value="reverb"/>
+        <env name="REVERB_APP_ID" value="snack-testing"/>
+        <env name="REVERB_APP_KEY" value="snack-testing-key"/>
+        <env name="REVERB_APP_SECRET" value="snack-testing-secret"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <!--
+            Snack relies on PostgreSQL-specific features (JSONB, citext, tsvector,
+            GIN + trigram + partial indexes), so the test suite runs against a real
+            PostgreSQL database rather than SQLite.
+        -->
+        <env name="DB_CONNECTION" value="pgsql"/>
+        <env name="DB_DATABASE" value="snack_testing"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
