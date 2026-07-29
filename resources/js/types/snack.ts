@@ -117,6 +117,63 @@ export type Channel = {
     created_at: string | null;
 };
 
+/**
+ * Mirrors App\Http\Resources\MessageResource.
+ *
+ * `body` is the author's source text, never HTML. It is rendered by tokenizing
+ * it into React elements — see lib/message-format.ts — so it is never handed to
+ * `dangerouslySetInnerHTML` and never parsed as markup.
+ */
+export type Message = {
+    id: number;
+    workspace_id: number;
+    channel_id: number | null;
+    conversation_id: number | null;
+    parent_message_id: number | null;
+    body: string;
+    type: MessageType;
+    /** Null for system messages and for users who have since been deleted. */
+    sender: SnackUser | null;
+    reply_count: number;
+    last_reply_at: string | null;
+    has_attachments: boolean;
+    is_edited: boolean;
+    edited_at: string | null;
+    created_at: string | null;
+    /**
+     * Absent on messages that arrived over the WebSocket: one broadcast reaches
+     * every subscriber, so it cannot carry per-viewer permissions. The timeline
+     * fills in a local hint for those; the server re-authorizes regardless.
+     */
+    can?: MessageAbilities;
+};
+
+export type MessageAbilities = {
+    update: boolean;
+    delete: boolean;
+};
+
+/**
+ * A message the user has sent that the server has not confirmed yet.
+ *
+ * Keyed by a client-generated nonce rather than an id, because it does not have
+ * one until the server replies.
+ */
+export type PendingMessage = {
+    nonce: string;
+    body: string;
+    created_at: string;
+    sender: SnackUser;
+    failed: boolean;
+};
+
+/** One page of cursor-paginated history. */
+export type MessagePage = {
+    messages: Message[];
+    has_more: boolean;
+    next_cursor: number | null;
+};
+
 /** Mirrors App\Http\Resources\WorkspaceMemberResource. */
 export type WorkspaceMember = {
     id: number;
@@ -217,6 +274,25 @@ export type ChannelCreatedEvent = {
         | 'is_private'
         | 'is_archived'
     > & { created_by: number | null };
+};
+
+/** Payload of the `message.sent` and `message.updated` broadcasts. */
+export type MessageEvent = {
+    message: Omit<Message, 'can'>;
+};
+
+/** Payload of the `message.deleted` broadcast. */
+export type MessageDeletedEvent = {
+    id: number;
+    channel_id: number | null;
+    conversation_id: number | null;
+    parent_message_id: number | null;
+};
+
+/** Payload of the `channel.read` broadcast, for syncing a user's own devices. */
+export type ChannelReadEvent = {
+    channel_id: number;
+    last_read_message_id: number | null;
 };
 
 /** Payload of the `workspace.member_joined` broadcast. */

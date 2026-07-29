@@ -2,7 +2,10 @@
 
 use App\Http\Controllers\Channels\ChannelController;
 use App\Http\Controllers\Channels\ChannelMembershipController;
+use App\Http\Controllers\Channels\ChannelReadController;
+use App\Http\Controllers\Channels\MessageController as ChannelMessageController;
 use App\Http\Controllers\InvitationAcceptanceController;
+use App\Http\Controllers\MessageController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\Workspaces\InvitationController;
 use App\Http\Controllers\Workspaces\MemberController;
@@ -79,6 +82,33 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->name('channels.membership.store');
         Route::delete('channels/{channel}/membership', [ChannelMembershipController::class, 'destroy'])
             ->name('channels.membership.destroy');
+
+        /*
+         * Messages.
+         *
+         * These answer with JSON, not Inertia responses: the timeline is a
+         * live client-owned list that merges paginated history, WebSocket
+         * arrivals, and optimistic sends. See Channels\MessageController.
+         */
+        Route::get('channels/{channel}/messages', [ChannelMessageController::class, 'index'])
+            ->middleware('throttle:message-reads')
+            ->name('channels.messages.index');
+        Route::post('channels/{channel}/messages', [ChannelMessageController::class, 'store'])
+            ->middleware('throttle:messages')
+            ->name('channels.messages.store');
+
+        Route::post('channels/{channel}/read', [ChannelReadController::class, 'store'])
+            ->middleware('throttle:message-reads')
+            ->name('channels.read.store');
+
+        // Edits and deletes address the message directly — a message id already
+        // names its container, and a route carrying both invites a request that
+        // names one channel and a message from another.
+        Route::patch('messages/{message}', [MessageController::class, 'update'])
+            ->middleware('throttle:messages')
+            ->name('messages.update');
+        Route::delete('messages/{message}', [MessageController::class, 'destroy'])
+            ->name('messages.destroy');
 
         // Members
         Route::get('members', [MemberController::class, 'index'])->name('members.index');

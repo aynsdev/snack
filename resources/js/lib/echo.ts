@@ -10,6 +10,21 @@ import { configureEcho } from '@laravel/echo-react';
  * Only the public app key reaches the browser. Every private and presence
  * subscription is still authorized server-side by routes/channels.php, so a
  * tampered client gains nothing.
+ *
+ * # The page protocol decides the socket protocol, not this config
+ *
+ * pusher-js computes `useTLS` as "page is https **or** forceTLS !== false". The
+ * page always wins: on an HTTPS page it dials `wss://` and uses `wssPort` no
+ * matter what `forceTLS` says here. Setting `forceTLS: false` does not opt out.
+ *
+ * So an HTTPS-served app needs Reverb reachable over TLS on `wssPort` — locally
+ * that means a secured proxy in front of it (`herd proxy ... --secure`), not
+ * plain `reverb:start` on 8080. Get this wrong and there is no error to find:
+ * the subscription is created, the connection sits at "unavailable", and
+ * messages simply never arrive.
+ *
+ * Both ports come from the same env var because Reverb is one server; whether
+ * it is spoken to over ws or wss is decided above, not by a second port.
  */
 configureEcho({
     broadcaster: 'reverb',
@@ -46,4 +61,8 @@ export const channels = {
 export const events = {
     channelCreated: '.channel.created',
     workspaceMemberJoined: '.workspace.member_joined',
+    messageSent: '.message.sent',
+    messageUpdated: '.message.updated',
+    messageDeleted: '.message.deleted',
+    channelRead: '.channel.read',
 } as const;

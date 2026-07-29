@@ -9,6 +9,7 @@ use App\Enums\PresenceStatus;
 use App\Enums\WorkspaceRole;
 use App\Models\Channel;
 use App\Models\ChannelMember;
+use App\Models\Message;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
@@ -19,9 +20,9 @@ use Illuminate\Support\Collection;
 /**
  * Builds the "Snack HQ" demo workspace for local development.
  *
- * Phase 1 seeds people, roles, and channels. Messages, threads, reactions,
- * mentions, files, and notifications are layered on by later phases' seeders so
- * that each phase stays independently runnable.
+ * Seeds people, roles, channels, and a few days of conversation. Threads,
+ * reactions, mentions, files, and notifications are layered on by later phases
+ * so that each phase stays independently runnable.
  *
  * Every account signs in with the password "password".
  */
@@ -52,6 +53,88 @@ class SnackHqSeeder extends Seeder
      */
     private const DEPARTMENTS = ['Engineering', 'Operations', 'Finance', 'Marketing', 'Support'];
 
+    /**
+     * Seeded conversation, per channel.
+     *
+     * Written by hand rather than generated, because faker prose makes it
+     * impossible to tell whether the timeline is rendering correctly — every
+     * message looks like every other one. These exercise the formatting the
+     * renderer supports, including a code block and a message that contains
+     * angle brackets.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private const SCRIPTS = [
+        'general' => [
+            'Morning everyone. Coffee machine on the third floor is fixed.',
+            'Heroic work. Who do we thank?',
+            'Facilities. I sent them a **thank you** on behalf of the whole floor.',
+            "Reminder that the all-hands moved to Thursday.\n\nSame link, one day later.",
+            'Is the recording going up afterwards? I have a conflict.',
+            'Always does — usually within the hour.',
+        ],
+        'announcements' => [
+            'We have signed the new office lease. Move is in October.',
+            'Q3 numbers are in and they are ahead of plan. Details in the deck.',
+            'Open enrolment for benefits closes at the end of the month.',
+        ],
+        'engineering' => [
+            'Deploy is out. Watching the dashboards.',
+            'Error rate looks flat, which is what we want.',
+            'Found the N+1 from yesterday. It was the policy check inside the serializer.',
+            'That one is always the culprit. Was it per row?',
+            "Per row. Fix was to share the container instance:\n```php\n\$messages->each(fn (\$m) => \$m->setRelation('channel', \$channel));\n```",
+            'One hundred and sixty queries down to eleven. Nice.',
+            'I want to add a test that pins the query count so it cannot come back.',
+            'Assert it is flat across page sizes rather than a fixed number — a ceiling either rots or is too loose to catch anything.',
+        ],
+        'product' => [
+            'Discovery notes from the customer calls are written up.',
+            'The theme I keep hearing is search. Everyone wants better search.',
+            'Noted for the next planning round.',
+        ],
+        'design' => [
+            'New empty states are in the file. Would love a critique.',
+            'The illustration on the third one is doing a lot of work. Can we simplify?',
+            'Agreed, it competes with the button. Let me try it flatter.',
+        ],
+        'operations' => [
+            'Vendor renewals are done for the quarter.',
+            'Anything we dropped?',
+            'Two tools nobody had logged into since March.',
+        ],
+        'marketing' => [
+            'Launch copy is drafted. Link in the doc.',
+            'Reads well. The second paragraph could lose a sentence.',
+            'Cutting it now.',
+        ],
+        'finance' => [
+            'Close is done for the month.',
+            'Anything unusual?',
+            'Only the one invoice we were expecting.',
+        ],
+        'random' => [
+            'Someone has left an entire cake in the kitchen. No note.',
+            'That is either very kind or a trap.',
+            'I have investigated. It is kind. It is also gone.',
+            'Devastating turn of events for those of us in meetings.',
+        ],
+        'help' => [
+            'How do I get access to the staging environment?',
+            'Ask in here and someone will add you — what is your username?',
+            'Sorted, you should have it now.',
+            'Works. Thank you.',
+            // Deliberately contains markup: it must render as characters, not
+            // as an element, and it is worth seeing that with your own eyes.
+            'Unrelated, but does the composer handle <script> tags safely?',
+            'It does — bodies are stored as source text and rendered as text nodes, never as markup.',
+        ],
+        'default' => [
+            'Setting this channel up now.',
+            'Looks good to me.',
+        ],
+    ];
+
     public function run(): void
     {
         $admin = $this->createAdmin();
@@ -61,6 +144,7 @@ class SnackHqSeeder extends Seeder
         $channels = $this->createChannels($workspace, $admin);
 
         $this->populateChannels($channels, $admin, $members);
+        $this->seedConversation($channels);
 
         $this->command->info("Seeded {$workspace->name} at /w/{$workspace->slug} — sign in as ada@snack.test / password");
     }
@@ -209,6 +293,59 @@ class SnackHqSeeder extends Seeder
                 'channel_id' => $channels['help']->id,
                 'user_id' => $guest->id,
             ]);
+        }
+    }
+
+    /**
+     * Fill the channels with something worth reading.
+     *
+     * Only the members of each channel speak in it, and messages are spread
+     * back across several days so the day dividers, grouping, and unread
+     * pointers all have something real to act on.
+     *
+     * The last-read pointer is deliberately left short of the newest message in
+     * a couple of channels, so the sidebar opens with genuine unread badges
+     * rather than an empty state that hides the feature.
+     *
+     * @param  Collection<string, Channel>  $channels
+     */
+    private function seedConversation(Collection $channels): void
+    {
+        foreach ($channels as $name => $channel) {
+            $speakers = $channel->users()->get();
+
+            if ($speakers->isEmpty()) {
+                continue;
+            }
+
+            $script = self::SCRIPTS[$name] ?? self::SCRIPTS['default'];
+            $posted = now()->subDays(3);
+            $lastId = null;
+
+            foreach ($script as $index => $line) {
+                // Walk forward in uneven steps so some messages group into a
+                // run and others fall far enough apart to stand alone.
+                $posted = $posted->addMinutes(random_int(1, 220));
+
+                $message = Message::factory()
+                    ->inChannel($channel)
+                    ->from($speakers[$index % $speakers->count()])
+                    ->withBody($line)
+                    ->create(['created_at' => $posted, 'updated_at' => $posted]);
+
+                $lastId = $message->id;
+            }
+
+            $channel->forceFill([
+                'message_count' => count($script),
+                'last_message_at' => $posted,
+            ])->save();
+
+            // Everyone is caught up except in the two busiest rooms.
+            if (! in_array($name, ['general', 'engineering'], true)) {
+                ChannelMember::where('channel_id', $channel->id)
+                    ->update(['last_read_message_id' => $lastId, 'last_read_at' => now()]);
+            }
         }
     }
 

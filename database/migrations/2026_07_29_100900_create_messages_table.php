@@ -12,8 +12,11 @@ use Illuminate\Support\Facades\Schema;
  * Design notes:
  *  - A message belongs to exactly one of channel/conversation, enforced by a
  *    CHECK rather than trusted to the application.
- *  - `body` holds sanitized rich text; `body_plaintext` is the flattened form
- *    used for search snippets, notification previews, and sidebar previews.
+ *  - `body` holds the author's source text — a small Markdown-like syntax that
+ *    the client tokenizes into elements — never HTML. See App\Services\MessageBody
+ *    for why storing source rather than markup is what makes XSS structurally
+ *    impossible here. `body_plaintext` is the flattened form used for search
+ *    snippets, notification previews, and sidebar previews.
  *  - `search_vector` is a real tsvector column (not a generated one) because it
  *    also folds in the sender name, channel name, and attachment filenames,
  *    which live in other tables. It is refreshed by a queued job in Phase 5.

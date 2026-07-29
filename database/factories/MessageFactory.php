@@ -8,6 +8,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\MessageBody;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -32,7 +33,8 @@ class MessageFactory extends Factory
             'channel_id' => Channel::factory(),
             'conversation_id' => null,
             'parent_message_id' => null,
-            'body' => '<p>'.e($text).'</p>',
+            // `body` is the author's source text, not HTML — see MessageBody.
+            'body' => $text,
             'body_plaintext' => $text,
             'type' => MessageType::Text,
             'metadata' => [],
@@ -97,9 +99,6 @@ class MessageFactory extends Factory
 
     public function withBody(string $text): static
     {
-        return $this->state(fn (): array => [
-            'body' => '<p>'.e($text).'</p>',
-            'body_plaintext' => $text,
-        ]);
+        return $this->state(fn (): array => MessageBody::fromInput($text)->toAttributes());
     }
 }

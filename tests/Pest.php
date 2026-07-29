@@ -5,9 +5,14 @@ use App\Enums\ChannelType;
 use App\Enums\MemberStatus;
 use App\Enums\WorkspaceRole;
 use App\Events\ChannelCreated;
+use App\Events\ChannelRead;
+use App\Events\MessageDeleted;
+use App\Events\MessageSent;
+use App\Events\MessageUpdated;
 use App\Events\WorkspaceMemberJoined;
 use App\Models\Channel;
 use App\Models\ChannelMember;
+use App\Models\Message;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
@@ -34,7 +39,14 @@ pest()->extend(TestCase::class)
         // Faking just these classes leaves model events and every other
         // listener untouched, and tests can still assert on dispatch with
         // Event::assertDispatched().
-        Event::fake([ChannelCreated::class, WorkspaceMemberJoined::class]);
+        Event::fake([
+            ChannelCreated::class,
+            ChannelRead::class,
+            MessageDeleted::class,
+            MessageSent::class,
+            MessageUpdated::class,
+            WorkspaceMemberJoined::class,
+        ]);
     })
     ->in('Feature');
 
@@ -148,4 +160,17 @@ function addToChannel(Channel $channel, User $user, ChannelRole $role = ChannelR
     $channel->unsetRelation('members');
 
     return $membership;
+}
+
+/**
+ * Post a message straight into a channel, bypassing the HTTP layer.
+ *
+ * For tests whose subject is what happens *around* a message — pagination,
+ * unread counts, deletion — rather than the act of sending one.
+ */
+function makeMessage(Channel $channel, User $sender, ?string $body = null): Message
+{
+    $factory = Message::factory()->inChannel($channel)->from($sender);
+
+    return ($body === null ? $factory : $factory->withBody($body))->create();
 }

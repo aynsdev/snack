@@ -18,6 +18,8 @@ use App\Models\Workspace;
  */
 class WorkspaceNavigator
 {
+    public function __construct(private readonly UnreadCounter $unread) {}
+
     /**
      * Every workspace the user belongs to, for the left-hand rail.
      *
@@ -89,6 +91,8 @@ class WorkspaceNavigator
      */
     public function payload(Workspace $workspace, User $user): array
     {
+        $channelUnread = $this->unread->forChannels($workspace, $user);
+
         return [
             'workspace' => (new WorkspaceResource($workspace))->resolve(request()),
             'channels' => $this->sidebarChannels($workspace, $user),
@@ -98,9 +102,12 @@ class WorkspaceNavigator
             'conversations' => [],
 
             'unread' => [
-                // Unread counts and mention badges are computed from the
-                // last-read pointers in Phase 2, once messages exist.
-                'channels' => (object) [],
+                // Cast so an empty PHP array serializes as `{}` rather than
+                // `[]`, keeping the client's Record<number, …> type honest.
+                'channels' => (object) $channelUnread,
+
+                // Mention and thread badges are written in Phase 4, alongside
+                // the mention parser and the thread panel.
                 'mentions' => 0,
                 'threads' => 0,
             ],

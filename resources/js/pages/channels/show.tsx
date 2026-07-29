@@ -1,35 +1,34 @@
 import { Deferred, Head, Link } from '@inertiajs/react';
-import { Info, MessageSquarePlus, Users } from 'lucide-react';
+import { Info, Users } from 'lucide-react';
 import { useState } from 'react';
 import { ChannelIcon } from '@/components/snack/channel-icon';
-import { EmptyState } from '@/components/snack/empty-state';
+import { MessageComposer } from '@/components/snack/message-composer';
+import { MessageList } from '@/components/snack/message-list';
 import { RightPanel } from '@/components/snack/right-panel';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useWorkspace } from '@/hooks/use-workspace';
+import { useChannelMessages } from '@/hooks/use-channel-messages';
+import { useNotificationSound } from '@/hooks/use-notification-sound';
+import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
 import { store as joinChannel } from '@/routes/channels/membership';
-import type { Channel, SnackUser } from '@/types';
+import type { Channel, MessagePage, SnackUser } from '@/types';
 
 type Props = {
     channel: Channel;
     canPost: boolean;
     canManage: boolean;
+    /** The newest page; older pages are fetched as the reader scrolls. */
+    history: MessagePage;
     /** Deferred: streams in after the channel paints. */
     members?: SnackUser[];
 };
 
-/**
- * A channel.
- *
- * Phase 1 ships the header, the details panel, and the empty timeline. The
- * message history, composer, and real-time subscription land in Phase 2 — the
- * layout is settled first so those drop in without reshaping anything.
- */
 export default function ChannelShow({
     channel,
     canPost,
     canManage,
+    history,
     members,
 }: Props) {
     const [detailsOpen, setDetailsOpen] = useState(false);
@@ -45,21 +44,17 @@ export default function ChannelShow({
                     onToggleDetails={() => setDetailsOpen((open) => !open)}
                 />
 
-                <div className="snack-scroll min-h-0 flex-1 overflow-y-auto">
-                    <ChannelIntro channel={channel} />
-
-                    <EmptyState
-                        icon={MessageSquarePlus}
-                        title="No messages yet"
-                        description={
-                            canPost
-                                ? 'This is the very beginning of the channel. Say something.'
-                                : 'Messages will appear here once the conversation starts.'
-                        }
-                    />
-                </div>
-
-                <ChannelComposer channel={channel} canPost={canPost} />
+                {/*
+                 * Keyed by channel so switching channels remounts the timeline.
+                 * Without it the hook would carry one channel's messages,
+                 * cursor, and pending sends into the next.
+                 */}
+                <ChannelTimeline
+                    key={channel.id}
+                    channel={channel}
+                    canPost={canPost}
+                    history={history}
+                />
             </div>
 
             {detailsOpen && (
@@ -69,6 +64,70 @@ export default function ChannelShow({
                 >
                     <ChannelDetails channel={channel} members={members} />
                 </RightPanel>
+            )}
+        </>
+    );
+}
+
+/**
+ * The live part of a channel: history, real-time arrivals, and the composer.
+ *
+ * Split from the page so it can be remounted per channel while the header and
+ * details panel above it are re-rendered rather than rebuilt.
+ */
+function ChannelTimeline({
+    channel,
+    canPost,
+    history,
+}: {
+    channel: Channel;
+    canPost: boolean;
+    history: MessagePage;
+}) {
+    const workspace = useWorkspace();
+    const currentUser = useCurrentUser();
+    const playArrival = useNotificationSound(!channel.is_muted);
+
+    const timeline = useChannelMessages({
+        channel,
+        workspaceSlug: workspace.slug,
+        initial: history,
+        currentUser,
+        onMessageReceived: playArrival,
+    });
+
+    return (
+        <>
+            <MessageList
+                messages={timeline.messages}
+                pending={timeline.pending}
+                hasMore={timeline.hasMore}
+                loadingOlder={timeline.loadingOlder}
+                currentUserId={currentUser?.id ?? null}
+                onLoadOlder={timeline.loadOlder}
+                onEdit={timeline.edit}
+                onDelete={timeline.remove}
+                onRetry={timeline.retry}
+                onDiscard={timeline.discard}
+                onReachBottom={timeline.markAsRead}
+                header={<ChannelIntro channel={channel} />}
+            />
+
+            {channel.is_member ? (
+                <MessageComposer
+                    channelName={`#${channel.slug}`}
+                    disabled={!canPost}
+                    disabledReason={
+                        canPost
+                            ? undefined
+                            : channel.is_archived
+                              ? 'This channel is archived.'
+                              : 'Only workspace admins can post in an announcement channel.'
+                    }
+                    onSend={timeline.send}
+                />
+            ) : (
+                <ChannelPreviewBar channel={channel} />
             )}
         </>
     );
@@ -144,8 +203,11 @@ function ChannelHeader({
 }
 
 /**
- * The masthead at the top of a channel's history, explaining what the room is
- * for. It scrolls away with the messages rather than sitting fixed.
+ * The masthead at the top of a channel's history.
+ *
+ * Rendered only once the whole history is loaded, since "this is the start of
+ * the channel" is a claim that is only true when there is nothing older left to
+ * fetch.
  */
 function ChannelIntro({ channel }: { channel: Channel }) {
     return (
@@ -167,53 +229,31 @@ function ChannelIntro({ channel }: { channel: Channel }) {
 }
 
 /**
- * The composer's footprint, reserved in Phase 1.
- *
- * Holding the space now keeps the message list's scroll height stable when the
- * real composer lands, so Phase 2's "stick to bottom" behaviour has a fixed box
- * to measure against.
+ * What someone previewing a channel sees instead of a composer.
  */
-function ChannelComposer({
-    channel,
-    canPost,
-}: {
-    channel: Channel;
-    canPost: boolean;
-}) {
+function ChannelPreviewBar({ channel }: { channel: Channel }) {
     const workspace = useWorkspace();
 
-    if (!channel.is_member) {
-        return (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/40 px-4 py-3">
-                <p className="text-sm text-muted-foreground">
-                    You are previewing #{channel.slug}.
-                </p>
-
-                {!workspace.abilities.is_guest && !channel.is_archived && (
-                    <Button asChild size="sm">
-                        <Link
-                            href={joinChannel({
-                                workspace: workspace.slug,
-                                channel: channel.slug,
-                            })}
-                            method="post"
-                            as="button"
-                        >
-                            Join channel
-                        </Link>
-                    </Button>
-                )}
-            </div>
-        );
-    }
-
     return (
-        <div className="border-t border-border p-4">
-            <div className="rounded-xl border border-input px-3.5 py-3 text-sm text-muted-foreground">
-                {canPost
-                    ? `Message #${channel.slug} — the composer arrives in Phase 2.`
-                    : 'Only workspace admins can post in an announcement channel.'}
-            </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/40 px-4 py-3">
+            <p className="text-sm text-muted-foreground">
+                You are previewing #{channel.slug}.
+            </p>
+
+            {!workspace.abilities.is_guest && !channel.is_archived && (
+                <Button asChild size="sm">
+                    <Link
+                        href={joinChannel({
+                            workspace: workspace.slug,
+                            channel: channel.slug,
+                        })}
+                        method="post"
+                        as="button"
+                    >
+                        Join channel
+                    </Link>
+                </Button>
+            )}
         </div>
     );
 }

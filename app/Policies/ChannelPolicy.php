@@ -150,6 +150,18 @@ class ChannelPolicy
      */
     public function post(User $user, Channel $channel): Response
     {
+        /*
+         * Visibility is settled first so the denial reason cannot say more than
+         * the viewer is entitled to know. Answering "join this channel to post
+         * in it" for a private channel would confirm that a channel by that
+         * name exists — the exact thing `view` returns a 404 to avoid.
+         */
+        $visible = $this->view($user, $channel);
+
+        if ($visible->denied()) {
+            return $visible;
+        }
+
         $role = $user->roleIn($channel->workspace);
 
         if ($role === null) {

@@ -9,6 +9,7 @@ use App\Http\Resources\ChannelResource;
 use App\Http\Resources\UserResource;
 use App\Models\Channel;
 use App\Models\Workspace;
+use App\Services\MessageHistory;
 use App\Services\WorkspaceNavigator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,7 +26,10 @@ use Inertia\Response;
  */
 class ChannelController extends Controller
 {
-    public function __construct(private readonly WorkspaceNavigator $navigator) {}
+    public function __construct(
+        private readonly WorkspaceNavigator $navigator,
+        private readonly MessageHistory $history,
+    ) {}
 
     /**
      * The channel browser.
@@ -64,9 +68,6 @@ class ChannelController extends Controller
 
     /**
      * The channel view.
-     *
-     * Phase 1 renders the header, details panel, and an empty timeline; the
-     * message history and composer are wired up in Phase 2.
      */
     public function show(Workspace $workspace, Channel $channel, Request $request): Response
     {
@@ -84,6 +85,17 @@ class ChannelController extends Controller
             'channel' => (new ChannelResource($channel))->resolve($request),
             'canPost' => $user->can('post', $channel),
             'canManage' => $user->can('update', $channel),
+
+            /*
+             * The newest page only. Older pages are fetched by the timeline as
+             * the reader scrolls, so opening a channel with ten years of
+             * history costs exactly the same as opening an empty one.
+             *
+             * Sent as a prop rather than fetched on mount so the channel paints
+             * with its conversation already in place — one round trip, no
+             * empty-then-populated flash.
+             */
+            'history' => $this->history->page($channel),
 
             // Deferred so the first paint is the conversation, not the roster.
             'members' => Inertia::defer(fn () => UserResource::collection(
