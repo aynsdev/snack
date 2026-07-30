@@ -1,5 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { UserPlus } from 'lucide-react';
+import { MessageSquare, UserPlus } from 'lucide-react';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
+import { store as startConversation } from '@/routes/conversations';
 import { update as updateMember } from '@/routes/members';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
 import type { WorkspaceMember, WorkspaceRole } from '@/types';
@@ -81,6 +82,18 @@ export default function WorkspaceMembers({ members, canManage }: Props) {
                                     member.role !== 'owner' &&
                                     member.user.id !== currentUser?.id
                                 }
+                                /*
+                                 * Opens the existing thread when there is one:
+                                 * the endpoint finds or creates, so this is
+                                 * "message them", not "start a second thread".
+                                 * Suspended members are unreachable, and you are
+                                 * not in your own picker.
+                                 */
+                                messageable={
+                                    workspace.abilities.start_conversations &&
+                                    member.status === 'active' &&
+                                    member.user.id !== currentUser?.id
+                                }
                             />
                         ))}
                     </ul>
@@ -96,10 +109,12 @@ function MemberRow({
     member,
     workspaceSlug,
     editable,
+    messageable,
 }: {
     member: WorkspaceMember;
     workspaceSlug: string;
     editable: boolean;
+    messageable: boolean;
 }) {
     const isSuspended = member.status === 'suspended';
 
@@ -134,6 +149,21 @@ function MemberRow({
                     {member.email && ` · ${member.email}`}
                 </p>
             </div>
+
+            {messageable && (
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                        router.post(startConversation.url(workspaceSlug), {
+                            participant_ids: [member.user.id],
+                        })
+                    }
+                >
+                    <MessageSquare aria-hidden="true" />
+                    Message
+                </Button>
+            )}
 
             {editable ? (
                 <div className="flex items-center gap-2">

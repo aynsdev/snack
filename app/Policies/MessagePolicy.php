@@ -36,6 +36,20 @@ class MessagePolicy
      */
     public function update(User $user, Message $message): Response
     {
+        /*
+         * Visibility is settled before anything else, and deliberately so.
+         * Answering "you can only edit your own messages" to someone who cannot
+         * see the container at all confirms the message exists — which for a
+         * private channel or a DM is precisely what the 404 elsewhere is
+         * protecting. Only once the container admits them do the cheaper,
+         * more specific refusals become safe to give.
+         */
+        $view = $this->containerResponse($user, $message, 'view');
+
+        if ($view->denied()) {
+            return $view;
+        }
+
         if (! $message->type->isAuthoredByUser()) {
             return Response::deny('System messages cannot be edited.');
         }

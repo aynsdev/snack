@@ -6,12 +6,17 @@ use App\Enums\MemberStatus;
 use App\Enums\WorkspaceRole;
 use App\Events\ChannelCreated;
 use App\Events\ChannelRead;
+use App\Events\ConversationActivity;
+use App\Events\ConversationRead;
+use App\Events\ConversationStarted;
+use App\Events\ConversationUpdated;
 use App\Events\MessageDeleted;
 use App\Events\MessageSent;
 use App\Events\MessageUpdated;
 use App\Events\WorkspaceMemberJoined;
 use App\Models\Channel;
 use App\Models\ChannelMember;
+use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
 use App\Models\Workspace;
@@ -42,6 +47,10 @@ pest()->extend(TestCase::class)
         Event::fake([
             ChannelCreated::class,
             ChannelRead::class,
+            ConversationActivity::class,
+            ConversationRead::class,
+            ConversationStarted::class,
+            ConversationUpdated::class,
             MessageDeleted::class,
             MessageSent::class,
             MessageUpdated::class,
@@ -171,6 +180,33 @@ function addToChannel(Channel $channel, User $user, ChannelRole $role = ChannelR
 function makeMessage(Channel $channel, User $sender, ?string $body = null): Message
 {
     $factory = Message::factory()->inChannel($channel)->from($sender);
+
+    return ($body === null ? $factory : $factory->withBody($body))->create();
+}
+
+/**
+ * A conversation between the given people, with their participant rows.
+ *
+ * Two participants produce a direct conversation, three or more a group — the
+ * same rule the application applies, so a test never ends up asserting against a
+ * shape the product cannot actually create.
+ *
+ * @param  array<int, User>  $users
+ */
+function makeConversation(Workspace $workspace, array $users, ?string $name = null): Conversation
+{
+    $factory = Conversation::factory()->between($users);
+
+    return ($name === null ? $factory : $factory->group($name))
+        ->create(['workspace_id' => $workspace->id]);
+}
+
+/**
+ * Post a message straight into a conversation, bypassing the HTTP layer.
+ */
+function makeConversationMessage(Conversation $conversation, User $sender, ?string $body = null): Message
+{
+    $factory = Message::factory()->inConversation($conversation)->from($sender);
 
     return ($body === null ? $factory : $factory->withBody($body))->create();
 }

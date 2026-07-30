@@ -61,7 +61,7 @@ class MessageResource extends JsonResource
             'id' => $message->id,
             'workspace_id' => $message->workspace_id,
             'channel_id' => $message->channel_id,
-            'conversation_id' => $message->conversation_id,
+            'conversation_id' => $message->conversation?->public_id,
             'parent_message_id' => $message->parent_message_id,
             'body' => $message->body,
             'type' => $message->type->value,

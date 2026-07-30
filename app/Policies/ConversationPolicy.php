@@ -48,15 +48,30 @@ class ConversationPolicy
             : Response::deny('Guests cannot start new conversations.');
     }
 
+    /**
+     * Posting distinguishes two denials that look identical from the outside but
+     * must not be answered the same way.
+     *
+     * Someone who *left* a group already knows it exists and can still read it,
+     * so a 403 tells them nothing new. Someone who was never in it must get the
+     * same 404 `view()` gives them — a 403 on a conversation id confirms both
+     * that the thread exists and that those particular people are talking.
+     */
     public function post(User $user, Conversation $conversation): Response
     {
         if (! $user->belongsToWorkspace($conversation->workspace)) {
             return Response::denyAsNotFound();
         }
 
-        return $conversation->hasActiveParticipant($user)
-            ? Response::allow()
-            : Response::deny('You are no longer part of this conversation.');
+        $participant = $conversation->participantFor($user);
+
+        if ($participant === null) {
+            return Response::denyAsNotFound();
+        }
+
+        return $participant->hasLeft()
+            ? Response::deny('You are no longer part of this conversation.')
+            : Response::allow();
     }
 
     /**

@@ -4,6 +4,12 @@ use App\Http\Controllers\Channels\ChannelController;
 use App\Http\Controllers\Channels\ChannelMembershipController;
 use App\Http\Controllers\Channels\ChannelReadController;
 use App\Http\Controllers\Channels\MessageController as ChannelMessageController;
+use App\Http\Controllers\Conversations\ConversationController;
+use App\Http\Controllers\Conversations\ConversationPreferenceController;
+use App\Http\Controllers\Conversations\ConversationReadController;
+use App\Http\Controllers\Conversations\DirectoryController;
+use App\Http\Controllers\Conversations\MessageController as ConversationMessageController;
+use App\Http\Controllers\Conversations\ParticipantController;
 use App\Http\Controllers\InvitationAcceptanceController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\WorkspaceController;
@@ -100,6 +106,48 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::post('channels/{channel}/read', [ChannelReadController::class, 'store'])
             ->middleware('throttle:message-reads')
             ->name('channels.read.store');
+
+        /*
+         * Direct and group conversations.
+         *
+         * Bound by id rather than by a slug: a conversation has no name of its
+         * own to slug — an unnamed DM is titled by whoever is in it, which is a
+         * different string for each participant — and its id is meaningless to
+         * anyone the scoped binding does not let in.
+         *
+         * "dms" rather than "conversations" so the URL a person sees is the word
+         * they use for the thing.
+         */
+        Route::get('dms/directory', [DirectoryController::class, 'index'])
+            ->middleware('throttle:message-reads')
+            ->name('conversations.directory.index');
+
+        Route::post('dms', [ConversationController::class, 'store'])
+            ->middleware('throttle:messages')
+            ->name('conversations.store');
+        Route::get('dms/{conversation}', [ConversationController::class, 'show'])
+            ->name('conversations.show');
+        Route::patch('dms/{conversation}', [ConversationController::class, 'update'])
+            ->name('conversations.update');
+
+        Route::get('dms/{conversation}/messages', [ConversationMessageController::class, 'index'])
+            ->middleware('throttle:message-reads')
+            ->name('conversations.messages.index');
+        Route::post('dms/{conversation}/messages', [ConversationMessageController::class, 'store'])
+            ->middleware('throttle:messages')
+            ->name('conversations.messages.store');
+
+        Route::post('dms/{conversation}/read', [ConversationReadController::class, 'store'])
+            ->middleware('throttle:message-reads')
+            ->name('conversations.read.store');
+
+        Route::post('dms/{conversation}/participants', [ParticipantController::class, 'store'])
+            ->name('conversations.participants.store');
+        Route::delete('dms/{conversation}/participants', [ParticipantController::class, 'destroy'])
+            ->name('conversations.participants.destroy');
+
+        Route::patch('dms/{conversation}/preferences', [ConversationPreferenceController::class, 'update'])
+            ->name('conversations.preferences.update');
 
         // Edits and deletes address the message directly — a message id already
         // names its container, and a route carrying both invites a request that

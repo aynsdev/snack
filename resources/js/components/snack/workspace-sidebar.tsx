@@ -13,6 +13,9 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { ChannelListItem } from '@/components/snack/channel-list-item';
+import { ConversationListItem } from '@/components/snack/conversation-list-item';
+import { NewMessageDialog } from '@/components/snack/new-message-dialog';
+import { NotificationPermissionPrompt } from '@/components/snack/notification-permission-prompt';
 import {
     Collapsible,
     CollapsibleContent,
@@ -25,10 +28,15 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useActiveChannelSlug } from '@/hooks/use-active-channel';
 import {
+    useActiveChannelSlug,
+    useActiveConversationId,
+} from '@/hooks/use-active-channel';
+import {
+    useCurrentUser,
     useCurrentWorkspace,
     useSidebarChannels,
+    useSidebarConversations,
     useUnreadState,
     useWorkspace,
 } from '@/hooks/use-workspace';
@@ -36,7 +44,7 @@ import { cn } from '@/lib/utils';
 import { index as browseChannels } from '@/routes/channels';
 import { index as workspaceMembers } from '@/routes/members';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
-import type { Channel } from '@/types';
+import type { Channel, Conversation } from '@/types';
 
 /**
  * The second column: workspace identity, global navigation, and the channel
@@ -53,13 +61,25 @@ export function WorkspaceSidebar({
 }) {
     const workspace = useWorkspace();
     const current = useCurrentWorkspace();
+    const currentUser = useCurrentUser();
     const { channels, muted } = useSidebarChannels();
+    const { conversations, muted: mutedConversations } =
+        useSidebarConversations();
     const unread = useUnreadState();
     const activeChannelSlug = useActiveChannelSlug();
+    const activeConversationId = useActiveConversationId();
+
+    const [composing, setComposing] = useState(false);
 
     return (
         <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-            <SidebarHeader />
+            <SidebarHeader onCompose={() => setComposing(true)} />
+
+            <NewMessageDialog
+                workspaceSlug={workspace.slug}
+                open={composing}
+                onOpenChange={setComposing}
+            />
 
             <div className="px-3 pb-2">
                 <SearchButton />
@@ -137,18 +157,54 @@ export function WorkspaceSidebar({
                     )}
                 </SidebarSection>
 
-                <SidebarSection title="Direct messages">
-                    {/* Conversations arrive in Phase 3. */}
-                    <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                        Direct messages land in the next phase.
-                    </p>
+                <SidebarSection
+                    title="Direct messages"
+                    action={
+                        workspace.abilities.start_conversations ? (
+                            <button
+                                type="button"
+                                onClick={() => setComposing(true)}
+                                className="rounded-md p-1 hover:bg-sidebar-accent"
+                            >
+                                <Plus aria-hidden="true" className="size-4" />
+                                <span className="sr-only">
+                                    Start a new message
+                                </span>
+                            </button>
+                        ) : null
+                    }
+                >
+                    {conversations.length === 0 ? (
+                        <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                            {workspace.abilities.start_conversations
+                                ? 'No conversations yet. Start one with the + above.'
+                                : 'You have no direct messages.'}
+                        </p>
+                    ) : (
+                        <ul className="space-y-0.5">
+                            {conversations.map((conversation) => (
+                                <li key={conversation.id}>
+                                    <ConversationRow
+                                        conversation={conversation}
+                                        workspaceSlug={workspace.slug}
+                                        viewerId={currentUser?.id ?? null}
+                                        isActive={
+                                            conversation.id ===
+                                            activeConversationId
+                                        }
+                                        onNavigate={onNavigate}
+                                    />
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </SidebarSection>
 
-                {muted.length > 0 && (
+                {(muted.length > 0 || mutedConversations.length > 0) && (
                     <SidebarSection title="Muted" defaultOpen={false}>
                         <ul className="space-y-0.5">
                             {muted.map((channel) => (
-                                <li key={channel.id}>
+                                <li key={`channel-${channel.id}`}>
                                     <ChannelRow
                                         channel={channel}
                                         workspaceSlug={workspace.slug}
@@ -159,10 +215,27 @@ export function WorkspaceSidebar({
                                     />
                                 </li>
                             ))}
+
+                            {mutedConversations.map((conversation) => (
+                                <li key={`conversation-${conversation.id}`}>
+                                    <ConversationRow
+                                        conversation={conversation}
+                                        workspaceSlug={workspace.slug}
+                                        viewerId={currentUser?.id ?? null}
+                                        isActive={
+                                            conversation.id ===
+                                            activeConversationId
+                                        }
+                                        onNavigate={onNavigate}
+                                    />
+                                </li>
+                            ))}
                         </ul>
                     </SidebarSection>
                 )}
             </nav>
+
+            <NotificationPermissionPrompt />
         </div>
     );
 }
@@ -194,7 +267,36 @@ function ChannelRow({
     );
 }
 
-function SidebarHeader() {
+function ConversationRow({
+    conversation,
+    workspaceSlug,
+    viewerId,
+    isActive,
+    onNavigate,
+}: {
+    conversation: Conversation;
+    workspaceSlug: string;
+    viewerId: number | null;
+    isActive: boolean;
+    onNavigate?: () => void;
+}) {
+    const unread = useUnreadState();
+    const counts = unread.conversations[conversation.id];
+
+    return (
+        <div onClick={onNavigate}>
+            <ConversationListItem
+                conversation={conversation}
+                workspaceSlug={workspaceSlug}
+                viewerId={viewerId}
+                isActive={isActive}
+                unreadMessages={counts?.messages ?? 0}
+            />
+        </div>
+    );
+}
+
+function SidebarHeader({ onCompose }: { onCompose: () => void }) {
     const workspace = useWorkspace();
 
     return (
@@ -242,8 +344,13 @@ function SidebarHeader() {
 
             <button
                 type="button"
-                disabled
-                title="New message — arriving in Phase 3"
+                onClick={onCompose}
+                disabled={!workspace.abilities.start_conversations}
+                title={
+                    workspace.abilities.start_conversations
+                        ? 'New message'
+                        : 'Guests cannot start conversations'
+                }
                 className="rounded-lg p-2 transition-colors hover:bg-sidebar-accent disabled:opacity-40"
             >
                 <SquarePen aria-hidden="true" className="size-[1.125rem]" />

@@ -2,11 +2,12 @@ import { router } from '@inertiajs/react';
 import { PanelLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
+import { ConversationSync } from '@/components/snack/conversation-sync';
 import { WorkspaceRail } from '@/components/snack/workspace-rail';
 import { WorkspaceSidebar } from '@/components/snack/workspace-sidebar';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useCurrentWorkspace } from '@/hooks/use-workspace';
+import { useCurrentUser, useCurrentWorkspace } from '@/hooks/use-workspace';
 
 export type WorkspaceLayoutProps = {
     children: ReactNode;
@@ -28,6 +29,7 @@ export type WorkspaceLayoutProps = {
  */
 export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     const current = useCurrentWorkspace();
+    const currentUser = useCurrentUser();
     const isMobile = useIsMobile();
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -46,6 +48,16 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
 
     return (
         <div className="flex h-dvh overflow-hidden bg-background">
+            {/*
+             * Mounted once, here, so the DM list and its badges stay current
+             * while the reader is somewhere else in the workspace. Rendered
+             * inside this branch because it needs a signed-in user, and not
+             * inside the sidebar because that is mounted twice on mobile.
+             */}
+            {currentUser !== null && (
+                <ConversationSync userId={currentUser.id} />
+            )}
+
             <div className="hidden md:flex">
                 <WorkspaceRail currentWorkspaceSlug={current.workspace.slug} />
             </div>

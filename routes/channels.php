@@ -89,7 +89,9 @@ Broadcast::channel('channel.{channelId}', function (User $user, string $channelI
  * A direct or group conversation's message stream and typing indicators.
  */
 Broadcast::channel('conversation.{conversationId}', function (User $user, string $conversationId): array|bool {
-    $conversation = Conversation::with('workspace')->find((int) $conversationId);
+    // Looked up by the opaque public id, which is the only conversation
+    // identifier a client is ever given.
+    $conversation = Conversation::with('workspace')->where('public_id', $conversationId)->first();
 
     if ($conversation === null || Gate::forUser($user)->denies('view', $conversation)) {
         return false;

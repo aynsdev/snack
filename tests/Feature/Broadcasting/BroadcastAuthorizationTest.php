@@ -100,6 +100,54 @@ it('lets a guest subscribe to a channel they were added to', function () {
     subscribeAs($guest, "presence-channel.{$channel->id}")->assertOk();
 });
 
+it('lets a participant subscribe to their conversation feed', function () {
+    [$workspace] = makeWorkspaceWithOwner();
+    $ada = joinWorkspace($workspace);
+    $bo = joinWorkspace($workspace);
+    $conversation = makeConversation($workspace, [$ada, $bo]);
+
+    subscribeAs($ada, "presence-conversation.{$conversation->public_id}")->assertOk();
+});
+
+it('refuses a conversation feed to a workspace member who is not in it', function () {
+    [$workspace] = makeWorkspaceWithOwner();
+    $ada = joinWorkspace($workspace);
+    $bo = joinWorkspace($workspace);
+    $nosy = joinWorkspace($workspace);
+    $conversation = makeConversation($workspace, [$ada, $bo]);
+
+    // A subscription is a read grant that lives for the whole session. Getting
+    // this wrong would hand someone a live feed of a private conversation they
+    // cannot open in the UI.
+    subscribeAs($nosy, "presence-conversation.{$conversation->public_id}")->assertForbidden();
+});
+
+it('refuses a conversation feed to someone from another workspace', function () {
+    [$workspace] = makeWorkspaceWithOwner();
+    $ada = joinWorkspace($workspace);
+    $bo = joinWorkspace($workspace);
+    $conversation = makeConversation($workspace, [$ada, $bo]);
+
+    [$otherWorkspace] = makeWorkspaceWithOwner();
+    $outsider = joinWorkspace($otherWorkspace);
+
+    subscribeAs($outsider, "presence-conversation.{$conversation->public_id}")->assertForbidden();
+});
+
+it('still lets someone who left a group follow its feed', function () {
+    [$workspace] = makeWorkspaceWithOwner();
+    $ada = joinWorkspace($workspace);
+    $bo = joinWorkspace($workspace);
+    $cy = joinWorkspace($workspace);
+    $conversation = makeConversation($workspace, [$ada, $bo, $cy]);
+
+    $conversation->participants()->where('user_id', $cy->id)->update(['left_at' => now()]);
+
+    // Consistent with the policy: they keep read access to the thread, so the
+    // live view of it must not contradict the page they can still open.
+    subscribeAs($cy, "presence-conversation.{$conversation->public_id}")->assertOk();
+});
+
 it('only lets a user subscribe to their own side channel', function () {
     $user = User::factory()->create();
     $other = User::factory()->create();

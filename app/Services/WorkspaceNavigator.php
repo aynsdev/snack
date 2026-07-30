@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Http\Resources\ChannelResource;
+use App\Http\Resources\ConversationResource;
 use App\Http\Resources\WorkspaceResource;
 use App\Models\Channel;
 use App\Models\User;
@@ -85,6 +86,39 @@ class WorkspaceNavigator
     }
 
     /**
+     * The user's conversations, most recently active first.
+     *
+     * Both relations are eager-loaded and each serves one purpose:
+     * `activeUsers` is the roster the row renders, and `participants` is
+     * constrained to this user so ConversationResource can read their own mute
+     * flag and read pointer. Loading either lazily would be an N+1 across the
+     * whole DM list.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function sidebarConversations(Workspace $workspace, User $user): array
+    {
+        $conversations = $workspace->conversations()
+            ->visibleTo($user)
+            ->with([
+                'activeUsers',
+                'participants' => fn ($query) => $query->where('user_id', $user->id),
+            ])
+            /*
+             * NULLS LAST is the point of the raw ordering: a conversation that
+             * was just started has no `last_message_at`, and Postgres sorts
+             * NULLs first on DESC — which would pin every empty thread above
+             * every live one.
+             */
+            ->orderByRaw('last_message_at DESC NULLS LAST')
+            ->orderByDesc('id')
+            ->limit((int) config('snack.conversations.sidebar_limit', 30))
+            ->get();
+
+        return ConversationResource::collection($conversations)->resolve(request());
+    }
+
+    /**
      * The full navigation payload for a workspace page.
      *
      * @return array<string, mixed>
@@ -92,23 +126,28 @@ class WorkspaceNavigator
     public function payload(Workspace $workspace, User $user): array
     {
         $channelUnread = $this->unread->forChannels($workspace, $user);
+        $conversationUnread = $this->unread->forConversations($workspace, $user);
 
         return [
             'workspace' => (new WorkspaceResource($workspace))->resolve(request()),
             'channels' => $this->sidebarChannels($workspace, $user),
-
-            // Direct and group conversations arrive in Phase 3; the key is
-            // present now so the sidebar component's contract does not change.
-            'conversations' => [],
+            'conversations' => $this->sidebarConversations($workspace, $user),
 
             'unread' => [
                 // Cast so an empty PHP array serializes as `{}` rather than
                 // `[]`, keeping the client's Record<number, …> type honest.
                 'channels' => (object) $channelUnread,
+                'conversations' => (object) $conversationUnread,
 
-                // Mention and thread badges are written in Phase 4, alongside
-                // the mention parser and the thread panel.
-                'mentions' => 0,
+                /*
+                 * Every message in a conversation you are in is addressed to
+                 * you, so unread DMs count toward the global mention badge.
+                 * Channel mentions join them in Phase 4, when the mention parser
+                 * starts writing mention rows.
+                 */
+                'mentions' => array_sum(array_column($conversationUnread, 'mentions')),
+
+                // Thread badges are written in Phase 4, alongside the thread panel.
                 'threads' => 0,
             ],
         ];

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\MemberStatus;
 use App\Enums\WorkspaceRole;
+use App\Http\Middleware\ResolveWorkspace;
 use Database\Factories\WorkspaceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
@@ -67,6 +68,12 @@ class Workspace extends Model
     }
 
     /**
+     * Everyone with a membership row, including suspended members.
+     *
+     * Prefer {@see activeUsers()} for anything a member can act on. Suspended
+     * people still appear here because the admin roster has to show them in
+     * order to reinstate them.
+     *
      * @return BelongsToMany<User, $this, WorkspaceMember>
      */
     public function users(): BelongsToMany
@@ -75,6 +82,22 @@ class Workspace extends Model
             ->using(WorkspaceMember::class)
             ->withPivot(['role', 'status', 'joined_at'])
             ->withTimestamps();
+    }
+
+    /**
+     * The people who can currently be interacted with.
+     *
+     * A suspended member is treated exactly like a non-member everywhere in
+     * Snack — {@see ResolveWorkspace} closes every door on
+     * them — so anything that offers or resolves *people* must use this rather
+     * than {@see users()}. Offering a suspended colleague in a picker produces a
+     * choice the server then refuses, which reads as a broken feature.
+     *
+     * @return BelongsToMany<User, $this, WorkspaceMember>
+     */
+    public function activeUsers(): BelongsToMany
+    {
+        return $this->users()->wherePivot('status', MemberStatus::Active->value);
     }
 
     /**

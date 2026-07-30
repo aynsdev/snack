@@ -3,11 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     useCurrentWorkspace,
     useSidebarChannels,
+    useSidebarConversations,
     useUnreadState,
     useWorkspace,
     useWorkspaceAbilities,
 } from '@/hooks/use-workspace';
-import type { Channel, CurrentWorkspace } from '@/types';
+import type { Channel, Conversation, CurrentWorkspace } from '@/types';
 
 const usePage = vi.hoisted(() => vi.fn());
 
@@ -34,7 +35,27 @@ function makeChannel(overrides: Partial<Channel> = {}): Channel {
     };
 }
 
-function makeCurrent(channels: Channel[] = []): CurrentWorkspace {
+function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
+    return {
+        id: 'conv_01HZX',
+        type: 'direct',
+        name: null,
+        display_name: 'Bo Diddley',
+        participants: [],
+        last_message_at: null,
+        is_muted: false,
+        notification_level: 'all',
+        last_read_message_id: null,
+        has_left: false,
+        created_at: null,
+        ...overrides,
+    };
+}
+
+function makeCurrent(
+    channels: Channel[] = [],
+    conversations: Conversation[] = [],
+): CurrentWorkspace {
     return {
         workspace: {
             id: 1,
@@ -57,9 +78,10 @@ function makeCurrent(channels: Channel[] = []): CurrentWorkspace {
             },
         },
         channels,
-        conversations: [],
+        conversations,
         unread: {
             channels: { 1: { messages: 3, mentions: 1 } },
+            conversations: { conv_01HZX: { messages: 2, mentions: 2 } },
             mentions: 1,
             threads: 0,
         },
@@ -155,6 +177,19 @@ describe('useUnreadState', () => {
         expect(result.current.mentions).toBe(1);
     });
 
+    it('exposes per-conversation counts', () => {
+        mockPage(makeCurrent([], [makeConversation()]));
+
+        const { result } = renderHook(() => useUnreadState());
+
+        // A DM's mention count tracks its message count: everything said in a
+        // conversation you are in is addressed to you.
+        expect(result.current.conversations.conv_01HZX).toEqual({
+            messages: 2,
+            mentions: 2,
+        });
+    });
+
     it('falls back to a zeroed state outside a workspace', () => {
         mockPage(null);
 
@@ -162,8 +197,38 @@ describe('useUnreadState', () => {
 
         expect(result.current).toEqual({
             channels: {},
+            conversations: {},
             mentions: 0,
             threads: 0,
         });
+    });
+});
+
+describe('useSidebarConversations', () => {
+    it('separates muted conversations from the rest', () => {
+        mockPage(
+            makeCurrent(
+                [],
+                [
+                    makeConversation({ id: 'conv_a' }),
+                    makeConversation({ id: 'conv_b', is_muted: true }),
+                ],
+            ),
+        );
+
+        const { result } = renderHook(() => useSidebarConversations());
+
+        expect(result.current.conversations.map((c) => c.id)).toEqual([
+            'conv_a',
+        ]);
+        expect(result.current.muted.map((c) => c.id)).toEqual(['conv_b']);
+    });
+
+    it('returns empty lists outside a workspace', () => {
+        mockPage(null);
+
+        const { result } = renderHook(() => useSidebarConversations());
+
+        expect(result.current).toEqual({ conversations: [], muted: [] });
     });
 });

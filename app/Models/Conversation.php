@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ConversationType;
+use App\Policies\ConversationPolicy;
 use Database\Factories\ConversationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,11 +14,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 /**
  * A direct or group message thread.
  *
  * @property int $id
+ * @property string $public_id
  * @property int $workspace_id
  * @property int|null $created_by
  * @property ConversationType $type
@@ -28,7 +31,7 @@ use Illuminate\Support\Collection;
  * @property Carbon|null $updated_at
  * @property-read Workspace $workspace
  */
-#[Fillable(['workspace_id', 'created_by', 'type', 'name', 'participants_hash', 'last_message_at'])]
+#[Fillable(['workspace_id', 'created_by', 'public_id', 'type', 'name', 'participants_hash', 'last_message_at'])]
 class Conversation extends Model
 {
     /** @use HasFactory<ConversationFactory> */
@@ -43,6 +46,30 @@ class Conversation extends Model
             'type' => ConversationType::class,
             'last_message_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // Assigned here rather than left to callers, so there is no path — a
+        // factory, a seeder, a future action — that can create a conversation
+        // the router cannot address.
+        static::creating(function (self $conversation): void {
+            $conversation->public_id ??= (string) Str::ulid();
+        });
+    }
+
+    /**
+     * Conversations are addressed by their opaque `public_id`, never by their
+     * primary key.
+     *
+     * `/dms/1` would advertise that `/dms/2` exists and let anyone measure how
+     * many private conversations the deployment holds. Every such request is
+     * refused by {@see ConversationPolicy}, but the count is a
+     * fact worth not publishing in the first place.
+     */
+    public function getRouteKeyName(): string
+    {
+        return 'public_id';
     }
 
     /**
@@ -94,6 +121,8 @@ class Conversation extends Model
     }
 
     /**
+     * Everyone who has ever been in the conversation, including those who left.
+     *
      * @return BelongsToMany<User, $this, ConversationParticipant>
      */
     public function users(): BelongsToMany
@@ -102,6 +131,23 @@ class Conversation extends Model
             ->using(ConversationParticipant::class)
             ->withPivot(['notification_level', 'is_muted', 'last_read_message_id', 'joined_at', 'left_at'])
             ->withTimestamps();
+    }
+
+    /**
+     * The current roster, which is what every header, title, and avatar stack
+     * renders.
+     *
+     * A separate relation from {@see participants()} on purpose. `participants`
+     * is frequently loaded constrained to one viewer — that is what keeps the
+     * policy checks over a page of messages from becoming an N+1 — so reading a
+     * roster from it would silently yield a conversation with one person in it.
+     * Anything that displays *who is here* asks for this instead.
+     *
+     * @return BelongsToMany<User, $this, ConversationParticipant>
+     */
+    public function activeUsers(): BelongsToMany
+    {
+        return $this->users()->wherePivotNull('left_at');
     }
 
     /**
@@ -159,11 +205,15 @@ class Conversation extends Model
     /**
      * Everyone except the viewer, used to title a conversation in the sidebar.
      *
+     * Reads the loaded {@see activeUsers()} relation, so callers are expected to
+     * have eager-loaded it; resolving it here per conversation would be an N+1
+     * across the whole DM list.
+     *
      * @return Collection<int, User>
      */
     public function counterparts(User $viewer): Collection
     {
-        return $this->users->reject(fn (User $user): bool => $user->id === $viewer->id)->values();
+        return $this->activeUsers->reject(fn (User $user): bool => $user->id === $viewer->id)->values();
     }
 
     /**

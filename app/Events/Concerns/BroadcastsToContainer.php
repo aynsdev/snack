@@ -30,7 +30,7 @@ trait BroadcastsToContainer
 
         $name = $message->isInChannel()
             ? 'channel.'.$message->channel_id
-            : 'conversation.'.$message->conversation_id;
+            : 'conversation.'.$message->conversation->public_id;
 
         return [new PresenceChannel($name)];
     }

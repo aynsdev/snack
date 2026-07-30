@@ -47,7 +47,9 @@ configureEcho({
 export const channels = {
     workspace: (workspaceId: number) => `workspace.${workspaceId}`,
     channel: (channelId: number) => `channel.${channelId}`,
-    conversation: (conversationId: number) => `conversation.${conversationId}`,
+    // Named by the conversation's opaque public id, matching the binding in
+    // routes/channels.php — the primary key is never sent to the client.
+    conversation: (conversationId: string) => `conversation.${conversationId}`,
     thread: (messageId: number) => `thread.${messageId}`,
     user: (userId: number) => `user.${userId}`,
     notifications: (userId: number) => `App.Models.User.${userId}`,
@@ -65,4 +67,8 @@ export const events = {
     messageUpdated: '.message.updated',
     messageDeleted: '.message.deleted',
     channelRead: '.channel.read',
+    conversationStarted: '.conversation.started',
+    conversationActivity: '.conversation.activity',
+    conversationRead: '.conversation.read',
+    conversationUpdated: '.conversation.updated',
 } as const;

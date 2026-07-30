@@ -4,11 +4,12 @@ namespace App\Services;
 
 use App\Http\Resources\MessageResource;
 use App\Models\Channel;
+use App\Models\Conversation;
 use App\Models\Message;
 use Illuminate\Support\Collection;
 
 /**
- * Cursor-paginated channel history.
+ * Cursor-paginated history for a channel or a conversation.
  *
  * # Why a cursor and not a page number
  *
@@ -21,6 +22,15 @@ use Illuminate\Support\Collection;
  * page 100 costs the same as page 1.
  *
  * The full history is never loaded. Each request reads one page and stops.
+ *
+ * # One implementation for both containers
+ *
+ * Channels and conversations differ in *who may read them*, not in how their
+ * history is shaped: both are a stream of root-level messages keyed by a
+ * monotonic id, and both have their own partial index supporting exactly this
+ * walk. Sharing the implementation is what keeps a DM from quietly drifting
+ * into loading its history differently from a channel. The difference that does
+ * matter — authorization — is settled by the caller before this is reached.
  */
 class MessageHistory
 {
@@ -35,16 +45,16 @@ class MessageHistory
      *
      * @return array{messages: array<int, array<string, mixed>>, has_more: bool, next_cursor: int|null}
      */
-    public function page(Channel $channel, ?int $before = null): array
+    public function page(Channel|Conversation $container, ?int $before = null): array
     {
         $size = (int) config('snack.messages.page_size', 50);
 
         /*
          * One row more than the page size, purely to answer "is there another
-         * page?" without a second COUNT over the whole channel — which is the
+         * page?" without a second COUNT over the whole history — which is the
          * expensive question, not the page itself.
          */
-        $rows = $channel->messages()
+        $rows = $container->messages()
             ->rootLevel()
             ->before($before)
             ->withTimelineRelations()
@@ -58,7 +68,7 @@ class MessageHistory
         // renders oldest at the top.
         $messages = $rows->take($size)->reverse()->values();
 
-        $this->shareContainer($channel, $messages);
+        $this->shareContainer($container, $messages);
 
         return [
             'messages' => $messages
@@ -70,13 +80,13 @@ class MessageHistory
     }
 
     /**
-     * Give every message the one channel instance they all belong to.
+     * Give every message the one container instance they all belong to.
      *
      * MessageResource asks the policy what this viewer may do with each
      * message, and MessagePolicy answers by consulting the message's container.
-     * Left alone, that lazy-loads the channel, its workspace, and its
-     * membership rows *per message* — an N+1 that scales with page size and is
-     * invisible until a channel has real history in it.
+     * Left alone, that lazy-loads the channel or conversation, its workspace,
+     * and its membership rows *per message* — an N+1 that scales with page size
+     * and is invisible until there is real history to page through.
      *
      * Sharing one already-hydrated instance turns every one of those lookups
      * into an in-memory read. The membership is constrained to the viewer,
@@ -84,17 +94,26 @@ class MessageHistory
      *
      * @param  Collection<int, Message>  $messages
      */
-    private function shareContainer(Channel $channel, $messages): void
+    private function shareContainer(Channel|Conversation $container, Collection $messages): void
     {
         $viewer = request()->user();
 
-        $channel->loadMissing([
+        $isChannel = $container instanceof Channel;
+
+        /*
+         * The relation is loaded *empty* rather than skipped for an
+         * unauthenticated request. An unloaded relation is re-queried by every
+         * policy check, which is the N+1 this method exists to prevent.
+         */
+        $container->loadMissing([
             'workspace',
-            'members' => fn ($query) => $viewer === null
+            ($isChannel ? 'members' : 'participants') => fn ($query) => $viewer === null
                 ? $query->whereRaw('1 = 0')
                 : $query->where('user_id', $viewer->id),
         ]);
 
-        $messages->each(fn (Message $message) => $message->setRelation('channel', $channel));
+        $relation = $isChannel ? 'channel' : 'conversation';
+
+        $messages->each(fn (Message $message) => $message->setRelation($relation, $container));
     }
 }

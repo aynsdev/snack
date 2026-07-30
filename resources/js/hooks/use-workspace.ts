@@ -2,6 +2,7 @@ import { usePage } from '@inertiajs/react';
 import { useMemo } from 'react';
 import type {
     Channel,
+    Conversation,
     CurrentWorkspace,
     SnackUser,
     UnreadState,
@@ -88,5 +89,36 @@ export function useSidebarChannels(): {
 export function useUnreadState(): UnreadState {
     const current = useCurrentWorkspace();
 
-    return current?.unread ?? { channels: {}, mentions: 0, threads: 0 };
+    return (
+        current?.unread ?? {
+            channels: {},
+            conversations: {},
+            mentions: 0,
+            threads: 0,
+        }
+    );
+}
+
+/**
+ * The user's conversations, split the way the sidebar renders them.
+ *
+ * Ordering is decided server-side — most recently active first, with NULLS LAST
+ * so a thread that was just started does not outrank a live one — so this only
+ * partitions. The memo exists to keep the array identities stable across
+ * re-renders.
+ */
+export function useSidebarConversations(): {
+    conversations: Conversation[];
+    muted: Conversation[];
+} {
+    const current = useCurrentWorkspace();
+
+    return useMemo(() => {
+        const all = current?.conversations ?? [];
+
+        return {
+            conversations: all.filter((conversation) => !conversation.is_muted),
+            muted: all.filter((conversation) => conversation.is_muted),
+        };
+    }, [current?.conversations]);
 }

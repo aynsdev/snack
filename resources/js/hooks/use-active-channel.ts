@@ -16,3 +16,20 @@ export function useActiveChannelSlug(): string | null {
 
     return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
+
+/**
+ * The conversation id in the current URL, or null when the page is not one.
+ *
+ * Derived from the URL for the same reason as the channel slug above. A
+ * conversation is addressed by an opaque public id rather than by a slug — an
+ * unnamed DM has no name of its own to slug, since it is titled by whoever is
+ * in it.
+ */
+export function useActiveConversationId(): string | null {
+    const { currentUrl } = useCurrentUrl();
+
+    // /w/{workspace}/dms/{conversation}, where the id is an opaque ULID.
+    const match = currentUrl.match(/^\/w\/[^/]+\/dms\/([^/?#]+)/);
+
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+}

@@ -128,7 +128,8 @@ export type Message = {
     id: number;
     workspace_id: number;
     channel_id: number | null;
-    conversation_id: number | null;
+    /** The conversation's opaque public id — see `Conversation.id`. */
+    conversation_id: string | null;
     parent_message_id: number | null;
     body: string;
     type: MessageType;
@@ -201,18 +202,34 @@ export type WorkspaceInvitation = {
 };
 
 /**
- * Direct and group conversations. Populated in Phase 3; the type is declared
- * now so the sidebar's contract does not change when it lands.
+ * Mirrors App\Http\Resources\ConversationResource.
+ *
+ * Almost every field is viewer-specific. `display_name` in particular is *not* a
+ * property of the row: an unnamed conversation is titled by the other people in
+ * it, which is a different string for each participant. That is why no broadcast
+ * payload ever carries this shape.
  */
 export type Conversation = {
-    id: number;
+    /**
+     * An opaque ULID, not the database key. `/dms/1` would advertise that
+     * `/dms/2` exists and let anyone measure how many private conversations
+     * the deployment holds, so the primary key never leaves the server.
+     */
+    id: string;
     type: ConversationType;
+    /** Group conversations may be named; direct ones never are. */
     name: string | null;
+    /** The group's name, or the other participants' names. */
     display_name: string;
+    /** The current roster, the viewer included. */
     participants: SnackUser[];
     last_message_at: string | null;
     is_muted: boolean;
+    notification_level: NotificationLevel | null;
     last_read_message_id: number | null;
+    /** Left a group: history stays readable, the composer does not render. */
+    has_left: boolean;
+    created_at: string | null;
 };
 
 // -- Shared Inertia props ----------------------------------------------------
@@ -225,9 +242,20 @@ export type Conversation = {
  * matter how long the history is.
  */
 export type UnreadState = {
-    channels: Record<number, { messages: number; mentions: number }>;
+    channels: Record<number, UnreadCounts>;
+    /**
+     * Keyed by conversation id. `mentions` tracks `messages` here rather than
+     * staying at zero: everything said in a conversation you are in is addressed
+     * to you, so the sidebar treats it as loudly as a real @-mention.
+     */
+    conversations: Record<string, UnreadCounts>;
     mentions: number;
     threads: number;
+};
+
+export type UnreadCounts = {
+    messages: number;
+    mentions: number;
 };
 
 /** The navigation payload for the workspace the user is currently inside. */
@@ -285,7 +313,7 @@ export type MessageEvent = {
 export type MessageDeletedEvent = {
     id: number;
     channel_id: number | null;
-    conversation_id: number | null;
+    conversation_id: string | null;
     parent_message_id: number | null;
 };
 
@@ -293,6 +321,35 @@ export type MessageDeletedEvent = {
 export type ChannelReadEvent = {
     channel_id: number;
     last_read_message_id: number | null;
+};
+
+/**
+ * Payload of the `conversation.started` and `conversation.activity` broadcasts,
+ * both delivered to a participant's own private channel.
+ *
+ * Deliberately just an id. These reach people who are *not* looking at the
+ * conversation, so they carry no message content — and the client re-reads its
+ * counts from the server rather than trusting a number off the wire.
+ */
+export type ConversationSignalEvent = {
+    conversation_id: string;
+};
+
+/** Payload of the `conversation.read` broadcast, for a user's own devices. */
+export type ConversationReadEvent = {
+    conversation_id: string;
+    last_read_message_id: number | null;
+};
+
+/**
+ * Payload of the `conversation.updated` broadcast: a rename, or a change to who
+ * is in the conversation.
+ *
+ * Omits `display_name` because one broadcast reaches every subscriber and that
+ * field differs per viewer. The client derives its own.
+ */
+export type ConversationUpdatedEvent = {
+    conversation: Pick<Conversation, 'id' | 'type' | 'name' | 'participants'>;
 };
 
 /** Payload of the `workspace.member_joined` broadcast. */

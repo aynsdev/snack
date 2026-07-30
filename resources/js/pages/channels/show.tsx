@@ -9,8 +9,9 @@ import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useChannelMessages } from '@/hooks/use-channel-messages';
-import { useNotificationSound } from '@/hooks/use-notification-sound';
+import { useMessageAlert } from '@/hooks/use-message-alert';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
+import { show as showChannel } from '@/routes/channels';
 import { store as joinChannel } from '@/routes/channels/membership';
 import type { Channel, MessagePage, SnackUser } from '@/types';
 
@@ -86,14 +87,22 @@ function ChannelTimeline({
 }) {
     const workspace = useWorkspace();
     const currentUser = useCurrentUser();
-    const playArrival = useNotificationSound(!channel.is_muted);
+    const alert = useMessageAlert({
+        enabled: !channel.is_muted && channel.notification_level !== 'nothing',
+        title: (senderName) => `${senderName} in #${channel.name}`,
+        tag: `channel:${channel.id}`,
+        href: showChannel.url({
+            workspace: workspace.slug,
+            channel: channel.slug,
+        }),
+    });
 
     const timeline = useChannelMessages({
         channel,
         workspaceSlug: workspace.slug,
         initial: history,
         currentUser,
-        onMessageReceived: playArrival,
+        onMessageReceived: alert,
     });
 
     return (

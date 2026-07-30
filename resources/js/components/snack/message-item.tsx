@@ -59,6 +59,10 @@ export function MessageItem({
     const canEdit = message.can?.update ?? isOwn;
     const canDelete = message.can?.delete ?? isOwn;
 
+    if (message.type === 'system') {
+        return <SystemMessage message={message} />;
+    }
+
     return (
         <article
             className={cn(
@@ -133,6 +137,41 @@ export function MessageItem({
                 />
             )}
         </article>
+    );
+}
+
+/**
+ * Something Snack did rather than something a person said: "Ada added Bo".
+ *
+ * Deliberately quieter than a message and without an avatar, because it has no
+ * author — the row genuinely has no sender. It still sits in the timeline in
+ * posting order, since its whole purpose is to explain, later, why the
+ * participant list changed when it did.
+ *
+ * No hover actions: a system notice cannot be edited, deleted, or reacted to,
+ * which {@see App\Enums\MessageType::isAuthoredByUser()} enforces server-side.
+ */
+function SystemMessage({ message }: { message: Message }) {
+    return (
+        <div className="flex gap-2.5 px-4 py-1">
+            <span aria-hidden="true" className="w-9 shrink-0" />
+
+            <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+                <MessageText body={message.body} />
+
+                <time
+                    dateTime={message.created_at ?? undefined}
+                    title={
+                        message.created_at === null
+                            ? undefined
+                            : FULL.format(new Date(message.created_at))
+                    }
+                    className="ml-1.5 text-[0.625rem] tabular-nums"
+                >
+                    {formatTime(message.created_at)}
+                </time>
+            </p>
+        </div>
     );
 }
 

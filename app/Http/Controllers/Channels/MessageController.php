@@ -51,7 +51,7 @@ class MessageController extends Controller
         SendMessage $sendMessage,
     ): JsonResponse {
         $message = $sendMessage->handle(
-            channel: $channel,
+            container: $channel,
             sender: $request->user(),
             body: $request->messageBody(),
         );

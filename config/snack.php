@@ -67,6 +67,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Conversations
+    |--------------------------------------------------------------------------
+    |
+    | Direct and group messages. "sidebar_limit" bounds the DM list that ships
+    | with every workspace page: someone with hundreds of conversations should
+    | not pay for all of them on every request, and a sidebar that long is
+    | navigated by search rather than by scrolling.
+    |
+    */
+
+    'conversations' => [
+        'sidebar_limit' => 30,
+        'max_participants' => 50,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Messages
     |--------------------------------------------------------------------------
     */
