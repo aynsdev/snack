@@ -90,40 +90,80 @@ export function useThread({
     const newestSeen = useRef<number | null>(null);
 
     /**
+     * Every reply id this panel has ever displayed.
+     *
+     * Distinguishes a genuinely new reply from a redelivery, which decides
+     * whether the root's tally moves. The author's own reply arrives twice — the
+     * POST response and their own broadcast — and an edit re-delivers a reply
+     * that was already counted, so counting on arrival would inflate it.
+     */
+    const seenReplies = useRef(new Set<number>());
+
+    /**
+     * Move the root's reply tally, which the panel renders above the list.
+     *
+     * The panel has to do this itself: `ThreadActivity` — the event that carries
+     * a new count — is addressed to the *container*, because its audience is
+     * everyone looking at the channel. Nobody sends it to the thread, so a panel
+     * that waited for one would sit on "No replies yet" with a reply beneath it.
+     */
+    const countReply = useCallback((delta: number, newest: Message | null) => {
+        setRoot((current) =>
+            current === null
+                ? current
+                : {
+                      ...current,
+                      reply_count: Math.max(current.reply_count + delta, 0),
+                      last_reply_at:
+                          newest?.created_at ?? current.last_reply_at,
+                      last_reply_id: newest?.id ?? current.last_reply_id,
+                  },
+        );
+    }, []);
+
+    /**
      * Insert or replace a reply, keeping the list ordered by id.
      *
      * By id rather than timestamp for the same reason the timeline does it: ids
      * are monotonic and assigned by one authority, while two replies a
      * millisecond apart can carry the same timestamp.
      */
-    const upsert = useCallback((incoming: Message) => {
-        setReplies((current) => {
-            const index = current.findIndex((m) => m.id === incoming.id);
-
-            if (index !== -1) {
-                const next = [...current];
-                // A broadcast cannot carry per-viewer abilities, so the ones
-                // from the HTTP copy are kept — otherwise the author's own edit
-                // controls vanish when their reply echoes back.
-                next[index] = {
-                    ...incoming,
-                    can: incoming.can ?? current[index].can,
-                };
-
-                return next;
+    const upsert = useCallback(
+        (incoming: Message) => {
+            if (!seenReplies.current.has(incoming.id)) {
+                seenReplies.current.add(incoming.id);
+                countReply(1, incoming);
             }
 
-            if (incoming.id > (newestSeen.current ?? 0)) {
-                newestSeen.current = incoming.id;
-            }
+            setReplies((current) => {
+                const index = current.findIndex((m) => m.id === incoming.id);
 
-            const at = current.findIndex((m) => m.id > incoming.id);
+                if (index !== -1) {
+                    const next = [...current];
+                    // A broadcast cannot carry per-viewer abilities, so the
+                    // ones from the HTTP copy are kept — otherwise the author's
+                    // own edit controls vanish when their reply echoes back.
+                    next[index] = {
+                        ...incoming,
+                        can: incoming.can ?? current[index].can,
+                    };
 
-            return at === -1
-                ? [...current, incoming]
-                : [...current.slice(0, at), incoming, ...current.slice(at)];
-        });
-    }, []);
+                    return next;
+                }
+
+                if (incoming.id > (newestSeen.current ?? 0)) {
+                    newestSeen.current = incoming.id;
+                }
+
+                const at = current.findIndex((m) => m.id > incoming.id);
+
+                return at === -1
+                    ? [...current, incoming]
+                    : [...current.slice(0, at), incoming, ...current.slice(at)];
+            });
+        },
+        [countReply],
+    );
 
     // -- Loading -------------------------------------------------------------
 
@@ -142,6 +182,12 @@ export function useThread({
                 setHasMore(page.has_more);
                 setCursor(page.next_cursor);
                 newestSeen.current = page.replies.at(-1)?.id ?? null;
+
+                // Seeded, not counted: the root already arrived with the real
+                // tally, so these must not be added to it again.
+                page.replies.forEach((reply) =>
+                    seenReplies.current.add(reply.id),
+                );
             })
             .catch((cause: unknown) => {
                 // An aborted request is the panel closing, not a failure.
@@ -217,9 +263,14 @@ export function useThread({
     useEcho<MessageDeletedEvent>(
         channels.thread(resolvedRootId),
         events.messageDeleted,
-        (payload) =>
-            setReplies((current) => current.filter((m) => m.id !== payload.id)),
-        [resolvedRootId],
+        (payload) => {
+            if (seenReplies.current.delete(payload.id)) {
+                countReply(-1, null);
+            }
+
+            setReplies((current) => current.filter((m) => m.id !== payload.id));
+        },
+        [resolvedRootId, countReply],
     );
 
     /*
@@ -377,6 +428,10 @@ export function useThread({
         async (id: number) => {
             const previous = replies.find((m) => m.id === id);
 
+            if (seenReplies.current.delete(id)) {
+                countReply(-1, null);
+            }
+
             setReplies((current) => current.filter((m) => m.id !== id));
 
             try {
@@ -391,13 +446,15 @@ export function useThread({
                 // looks deleted but is not is one the author thinks they took
                 // back.
                 if (previous !== undefined) {
+                    // upsert re-adds it to `seenReplies`, which restores the
+                    // tally the optimistic removal just took off.
                     upsert(previous);
                 }
 
                 throw cause;
             }
         },
-        [replies, upsert, workspaceSlug],
+        [countReply, replies, upsert, workspaceSlug],
     );
 
     const setFollowing = useCallback(

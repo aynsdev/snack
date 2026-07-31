@@ -32,7 +32,13 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
 
     return (
-        <div className="px-4 py-6">
+        /*
+         * Owns its scrolling. The workspace shell is `h-dvh overflow-hidden`
+         * and its <main> does not scroll — every page inside it brings its own
+         * scroll region, the way a channel timeline does. Without this, settings
+         * below the fold would simply be unreachable.
+         */
+        <div className="snack-scroll min-h-0 flex-1 overflow-y-auto px-4 py-6">
             <Heading
                 title="Settings"
                 description="Manage your profile and account settings"

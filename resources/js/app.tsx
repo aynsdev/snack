@@ -2,7 +2,6 @@ import { createInertiaApp } from '@inertiajs/react';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
-import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import WorkspaceLayout from '@/layouts/workspace-layout';
@@ -14,40 +13,40 @@ import '@/lib/echo';
 const appName = import.meta.env.VITE_APP_NAME || 'Snack';
 
 /**
- * Pages that render inside the three-column workspace shell.
+ * Pages that do *not* render inside the workspace shell.
  *
- * The workspace picker and the create-workspace form are excluded: neither has
- * a workspace to build a rail and sidebar from.
+ * # Why this is a denylist
+ *
+ * It used to be the opposite — an allowlist of prefixes that got the shell,
+ * with everything else falling through to the starter kit's generic layout.
+ * That fails silently and in the worst possible way: a new page renders
+ * perfectly, just wearing a different sidebar, and nothing warns you. Threads,
+ * Mentions, and Saved all shipped that way.
+ *
+ * Snack is a workspace application, so the shell is the default and the
+ * exceptions are the short, closed list below — the pages that genuinely have
+ * no workspace to build a rail and sidebar from. A new page inside a workspace
+ * now gets the right chrome by doing nothing at all.
  */
-function usesWorkspaceShell(name: string): boolean {
-    if (name === 'workspace/index' || name === 'workspace/create') {
-        return false;
-    }
-
-    return (
-        name.startsWith('channels/') ||
-        name.startsWith('conversations/') ||
-        name.startsWith('workspace/') ||
-        name.startsWith('admin/')
-    );
-}
+const STANDALONE_PAGES = ['welcome', 'workspace/index', 'workspace/create'];
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
     layout: (name) => {
         switch (true) {
-            case name === 'welcome':
-            case name === 'workspace/index':
-            case name === 'workspace/create':
+            case STANDALONE_PAGES.includes(name):
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;
-            case usesWorkspaceShell(name):
-                return WorkspaceLayout;
+            /*
+             * Settings keeps its own sub-navigation, but nests inside the
+             * workspace shell rather than replacing it — walking into settings
+             * should not feel like leaving the workspace.
+             */
             case name.startsWith('settings/'):
-                return [AppLayout, SettingsLayout];
+                return [WorkspaceLayout, SettingsLayout];
             default:
-                return AppLayout;
+                return WorkspaceLayout;
         }
     },
     strictMode: true,

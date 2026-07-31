@@ -3,6 +3,8 @@
 namespace App\Http\Middleware;
 
 use App\Http\Resources\UserResource;
+use App\Models\User;
+use App\Models\Workspace;
 use App\Services\WorkspaceNavigator;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\Request;
@@ -88,11 +90,54 @@ class HandleInertiaRequests extends Middleware
             return ['workspaces' => [], 'current' => null];
         }
 
+        $workspace = $this->context->isResolved()
+            ? $this->context->workspace()
+            : $this->lastVisitedWorkspace($request, $user);
+
         return [
             'workspaces' => $this->navigator->rail($user),
-            'current' => $this->context->isResolved()
-                ? $this->navigator->payload($this->context->workspace(), $user)
-                : null,
+            'current' => $workspace === null
+                ? null
+                : $this->navigator->payload($workspace, $user),
         ];
+    }
+
+    /**
+     * The workspace to dress a page that is not itself workspace-scoped.
+     *
+     * Settings live at `/settings/*`, outside the `/w/{workspace}` prefix, so
+     * ResolveWorkspace never runs for them and nothing binds a tenant. Without a
+     * fallback the shell renders with no rail and no sidebar, and walking into
+     * settings feels like being thrown out of the workspace.
+     *
+     * ResolveWorkspace already records where the user last was, so that is what
+     * dresses these pages.
+     *
+     * # The session value is not trusted
+     *
+     * It is re-resolved and the membership re-checked on every request. A
+     * session outlives being removed from a workspace — or having the
+     * membership suspended — and honouring a stale slug would rebuild that
+     * workspace's channel list and unread counts for somebody who is no longer
+     * in it. This is the same rule the rest of Snack applies to any identifier
+     * that did not come from the current request's authorization.
+     */
+    private function lastVisitedWorkspace(Request $request, User $user): ?Workspace
+    {
+        $slug = $request->session()->get('snack.current_workspace');
+
+        if (! is_string($slug) || $slug === '') {
+            return null;
+        }
+
+        $workspace = Workspace::query()->where('slug', $slug)->first();
+
+        if ($workspace === null) {
+            return null;
+        }
+
+        $membership = $user->membershipIn($workspace);
+
+        return $membership?->isActive() === true ? $workspace : null;
     }
 }

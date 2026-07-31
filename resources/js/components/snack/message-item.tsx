@@ -14,6 +14,11 @@ import { useState } from 'react';
 import { MessageText } from '@/components/snack/message-text';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
 import { REACTION_SHORTCODES, emojiGlyph, reactionTooltip } from '@/lib/emoji';
 import { cn } from '@/lib/utils';
@@ -444,57 +449,48 @@ function ReactionBar({
  * into a task gets used once. The full set is small enough to show at once.
  */
 function ReactionPicker({ onPick }: { onPick: (emoji: string) => void }) {
-    const [open, setOpen] = useState(false);
-
     return (
-        <div className="relative">
-            <button
-                type="button"
-                onClick={() => setOpen((current) => !current)}
-                aria-expanded={open}
-                className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                    <SmilePlus aria-hidden="true" className="size-3.5" />
+                    <span className="sr-only">Add reaction</span>
+                </button>
+            </DropdownMenuTrigger>
+
+            {/*
+             * Rendered through the project's dropdown primitive rather than as a
+             * positioned div, because it has to escape the timeline's
+             * `overflow-y-auto`. An absolutely-positioned popover is clipped by
+             * any scrolling ancestor no matter how high its z-index — z-index
+             * does not lift an element out of an overflow box — so the picker
+             * was cut off for every message near the edge of the viewport.
+             *
+             * The primitive portals to the body and flips side automatically
+             * when there is no room below, which also removes the hand-rolled
+             * click-outside backdrop this used to need.
+             */}
+            <DropdownMenuContent
+                align="end"
+                className="flex w-56 flex-wrap gap-0.5 p-1.5"
             >
-                <SmilePlus aria-hidden="true" className="size-3.5" />
-                <span className="sr-only">Add reaction</span>
-            </button>
-
-            {open && (
-                <>
-                    {/*
-                     * A click anywhere else closes the picker. Rendered behind
-                     * it rather than bound to document, so the listener cannot
-                     * outlive the component.
-                     */}
+                {REACTION_SHORTCODES.map((shortcode) => (
                     <button
+                        key={shortcode}
                         type="button"
-                        aria-hidden="true"
-                        tabIndex={-1}
-                        onClick={() => setOpen(false)}
-                        className="fixed inset-0 z-40 cursor-default"
-                    />
-
-                    <div className="absolute top-full right-0 z-50 mt-1 flex w-56 flex-wrap gap-0.5 rounded-lg border border-border bg-background p-1.5 shadow-md">
-                        {REACTION_SHORTCODES.map((shortcode) => (
-                            <button
-                                key={shortcode}
-                                type="button"
-                                title={`:${shortcode}:`}
-                                onClick={() => {
-                                    onPick(shortcode);
-                                    setOpen(false);
-                                }}
-                                className="rounded p-1 text-base transition-colors hover:bg-accent"
-                            >
-                                <span aria-hidden="true">
-                                    {emojiGlyph(shortcode)}
-                                </span>
-                                <span className="sr-only">{shortcode}</span>
-                            </button>
-                        ))}
-                    </div>
-                </>
-            )}
-        </div>
+                        title={`:${shortcode}:`}
+                        onClick={() => onPick(shortcode)}
+                        className="rounded p-1 text-base transition-colors hover:bg-accent"
+                    >
+                        <span aria-hidden="true">{emojiGlyph(shortcode)}</span>
+                        <span className="sr-only">{shortcode}</span>
+                    </button>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }
 

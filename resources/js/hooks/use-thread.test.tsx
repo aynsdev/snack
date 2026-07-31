@@ -205,6 +205,81 @@ describe('useThread', () => {
         expect(result.current.replies[0].can?.update).toBe(true);
     });
 
+    it('counts a new reply into the root tally', async () => {
+        const { result } = mount();
+
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        // The page loaded with one reply already counted by the root.
+        expect(result.current.root?.reply_count).toBe(1);
+
+        api.post.mockResolvedValue({
+            message: makeMessage(12, { parent_message_id: 10 }),
+        });
+
+        await act(async () => {
+            await result.current.reply('Snack.');
+        });
+
+        /*
+         * The panel has to do this itself: ThreadActivity is addressed to the
+         * container, so nothing tells the thread its count moved. Without it the
+         * divider reads "No replies yet" with a reply sitting under it.
+         */
+        expect(result.current.root?.reply_count).toBe(2);
+    });
+
+    it('does not double-count a reply delivered twice', async () => {
+        const { result } = mount();
+
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        const reply = makeMessage(12, { parent_message_id: 10 });
+        api.post.mockResolvedValue({ message: reply });
+
+        await act(async () => {
+            await result.current.reply('Snack.');
+        });
+
+        // The author's own reply comes back over the socket as well.
+        act(() => {
+            listeners.get('.message.sent')?.({ message: reply });
+        });
+
+        expect(result.current.root?.reply_count).toBe(2);
+    });
+
+    it('does not count an edit as a new reply', async () => {
+        const { result } = mount();
+
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        act(() => {
+            listeners.get('.message.updated')?.({
+                message: makeMessage(11, { body: 'Edited.' }),
+            });
+        });
+
+        expect(result.current.root?.reply_count).toBe(1);
+    });
+
+    it('takes a deleted reply back out of the tally', async () => {
+        const { result } = mount();
+
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        act(() => {
+            listeners.get('.message.deleted')?.({
+                id: 11,
+                channel_id: 7,
+                conversation_id: null,
+                parent_message_id: 10,
+            });
+        });
+
+        expect(result.current.root?.reply_count).toBe(0);
+    });
+
     it('removes a reply that was deleted elsewhere', async () => {
         const { result } = mount();
 
