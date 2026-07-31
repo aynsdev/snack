@@ -119,4 +119,18 @@ class ChannelMember extends Pivot
     {
         return $this->notification_level->notifiesOnMention();
     }
+
+    /**
+     * Whether a reply in a thread this member follows should notify them.
+     *
+     * Deliberately not gated on {@see NotificationLevel::notifiesOnEveryMessage()}:
+     * subscribing to a thread is a narrower, explicit opt-in than the channel's
+     * level, so someone set to "mentions only" still hears about the one
+     * conversation they chose to follow. Muting the channel does silence it —
+     * a mute is a statement about the whole room.
+     */
+    public function wantsNotificationForThreadReply(): bool
+    {
+        return ! $this->is_muted && $this->notification_level->notifiesOnMention();
+    }
 }

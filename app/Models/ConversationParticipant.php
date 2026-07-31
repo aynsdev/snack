@@ -113,4 +113,17 @@ class ConversationParticipant extends Pivot
     {
         return ! $this->hasLeft() && $this->notification_level->notifiesOnMention();
     }
+
+    /**
+     * Whether a reply in a thread this participant follows should notify them.
+     *
+     * Mirrors {@see ChannelMember::wantsNotificationForThreadReply()}: following
+     * a thread outranks the container's broad level, but not a mute.
+     */
+    public function wantsNotificationForThreadReply(): bool
+    {
+        return ! $this->is_muted
+            && ! $this->hasLeft()
+            && $this->notification_level->notifiesOnMention();
+    }
 }

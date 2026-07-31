@@ -1,7 +1,8 @@
 import { Deferred, Head, Link } from '@inertiajs/react';
-import { Info, Users } from 'lucide-react';
+import { Info, Settings, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ChannelIcon } from '@/components/snack/channel-icon';
+import { ChannelSettingsDialog } from '@/components/snack/channel-settings-dialog';
 import type { MentionSource } from '@/components/snack/mention-picker';
 import { MessageComposer } from '@/components/snack/message-composer';
 import { MessageList } from '@/components/snack/message-list';
@@ -58,6 +59,8 @@ export default function ChannelShow({
         { kind: 'details' } | { kind: 'thread'; rootId: number } | null
     >(null);
 
+    const [editing, setEditing] = useState(false);
+
     return (
         <>
             <Head title={`#${channel.slug}`} />
@@ -73,7 +76,18 @@ export default function ChannelShow({
                                 : { kind: 'details' },
                         )
                     }
+                    onEdit={() => setEditing(true)}
                 />
+
+                {canManage && (
+                    <ChannelSettingsDialog
+                        channel={channel}
+                        workspaceSlug={workspace.slug}
+                        canAdministerWorkspace={workspace.abilities.administer}
+                        open={editing}
+                        onOpenChange={setEditing}
+                    />
+                )}
 
                 {/*
                  * Keyed by channel so switching channels remounts the timeline.
@@ -280,10 +294,12 @@ function ChannelHeader({
     channel,
     canManage,
     onToggleDetails,
+    onEdit,
 }: {
     channel: Channel;
     canManage: boolean;
     onToggleDetails: () => void;
+    onEdit: () => void;
 }) {
     return (
         <header className="flex items-center gap-3 border-b border-border px-4 py-3">
@@ -330,15 +346,29 @@ function ChannelHeader({
                     </button>
                 )}
 
+                {/*
+                 * Separate from the details panel: that is a read-only roster
+                 * anyone can open, this changes the channel for everybody and
+                 * only renders for people who may.
+                 */}
+                {canManage && (
+                    <button
+                        type="button"
+                        onClick={onEdit}
+                        className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                        <Settings aria-hidden="true" className="size-4" />
+                        <span className="sr-only">Channel settings</span>
+                    </button>
+                )}
+
                 <button
                     type="button"
                     onClick={onToggleDetails}
                     className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
                     <Info aria-hidden="true" className="size-4" />
-                    <span className="sr-only">
-                        {canManage ? 'Channel settings' : 'Channel details'}
-                    </span>
+                    <span className="sr-only">Channel details</span>
                 </button>
             </div>
         </header>

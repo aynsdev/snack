@@ -34,6 +34,16 @@ export type MentionType = 'user' | 'channel' | 'everyone' | 'here';
 /** Mirrors App\Enums\NotificationLevel. */
 export type NotificationLevel = 'all' | 'mentions' | 'nothing';
 
+/**
+ * Mirrors App\Enums\NotificationReason, which is also the `type` column of a
+ * stored notification.
+ *
+ * There is deliberately no case for an ordinary channel message: that level
+ * alerts the reader and can email them, but writes no inbox row. See the PHP
+ * enum for why one row per member per message is the shape Snack does not store.
+ */
+export type NotificationReason = 'mention' | 'direct_message' | 'thread_reply';
+
 /** Mirrors App\Enums\PresenceStatus. */
 export type PresenceStatus = 'online' | 'away' | 'offline' | 'do_not_disturb';
 
@@ -281,6 +291,94 @@ export type ThreadContainer =
       }
     | { kind: 'conversation'; id: string; type: ConversationType };
 
+// -- Notifications -----------------------------------------------------------
+
+/**
+ * One row of the notification centre.
+ *
+ * Mirrors App\Http\Resources\NotificationResource — and, deliberately, the
+ * broadcast payload too, so an arriving notification can be prepended to the
+ * rendered list without a second type to convert between.
+ *
+ * `preview` and `actor` are a snapshot of the message as it was when the
+ * notification was raised, not a live read of it. That is what lets a
+ * notification render without the message still existing; the inbox separately
+ * drops rows whose message has since been deleted.
+ */
+export type NotificationEntry = {
+    /** A uuid, not a number: this is Laravel's notifications table. */
+    id: string;
+    type: NotificationReason;
+    is_read: boolean;
+    read_at: string | null;
+    created_at: string | null;
+    message_id: number | null;
+    /** Set when the notification is about a thread reply. */
+    thread_root_id: number | null;
+    preview: string;
+    actor: NotificationActor | null;
+    container: ThreadContainer | null;
+};
+
+/** Just enough of the person who caused a notification to render its row. */
+export type NotificationActor = {
+    id: number;
+    name: string;
+    username: string;
+    initials: string;
+    avatar_url: string | null;
+};
+
+/**
+ * A member's notification defaults for one workspace. Mirrors
+ * WorkspaceMember::notificationSettings().
+ */
+export type NotificationPreferences = {
+    /** The level a newly joined channel starts at. */
+    default_level: NotificationLevel;
+    email_enabled: boolean;
+    digest_enabled: boolean;
+    /** Quiet hours in the member's own timezone, or null when turned off. */
+    do_not_disturb: { start: string; end: string } | null;
+};
+
+// -- Administration ----------------------------------------------------------
+
+/**
+ * One entry in the workspace audit log. Mirrors
+ * App\Http\Resources\AuditLogResource.
+ *
+ * `actor` is null when the person who performed the action has since been
+ * deleted — the entry deliberately outlives them, which is precisely when an
+ * audit trail matters most.
+ *
+ * The two value bags have no fixed schema: a rename carries a name, a role
+ * change carries a role. They are rendered as key/value pairs rather than
+ * pretending otherwise.
+ */
+export type AuditEntry = {
+    id: number;
+    /** The full `subject.verb` value, e.g. "member.role_changed". */
+    action: string;
+    /** Resolved server-side from the PHP enum, so this file holds no copy. */
+    action_label: string;
+    /** The `subject` prefix, which is what the filter works on. */
+    subject: string;
+    actor: SnackUser | null;
+    old_values: Record<string, unknown> | null;
+    new_values: Record<string, unknown> | null;
+    ip_address: string | null;
+    created_at: string | null;
+};
+
+/** The workspace's own settings, as the admin screen renders them. */
+export type WorkspaceSettings = {
+    /** Whether admins may currently invite anybody at all. */
+    allow_invitations: boolean;
+    /** Off makes every channel effectively invite-only. */
+    allow_self_serve_joins: boolean;
+};
+
 // -- Files -------------------------------------------------------------------
 
 /** How the client renders a file. Mirrors MessageAttachment::kind(). */
@@ -463,6 +561,13 @@ export type UnreadState = {
     conversations: Record<string, UnreadCounts>;
     mentions: number;
     threads: number;
+    /**
+     * The notification centre's badge. Not a sum of the two above: those count
+     * what is waiting inside a container, this counts what has been raised to
+     * you, and the two diverge as soon as a mention is read from the channel
+     * without its notification being opened.
+     */
+    notifications: number;
 };
 
 export type UnreadCounts = {

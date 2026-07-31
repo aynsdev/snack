@@ -6,6 +6,7 @@ use App\Actions\Attachments\LinkAttachments;
 use App\Enums\MessageType;
 use App\Events\MessageSent;
 use App\Events\ThreadActivity;
+use App\Jobs\DeliverMessageNotifications;
 use App\Jobs\IndexMessage;
 use App\Models\Channel;
 use App\Models\Conversation;
@@ -146,6 +147,13 @@ class SendMessage
 
         // The vector folds in the filenames, so it is queued after the claim.
         IndexMessage::dispatch($message->id);
+
+        /*
+         * Queued after the mentions are materialized, because that is what the
+         * fan-out reads to decide who was addressed by name — dispatching it
+         * before would race the rows it depends on and silently notify nobody.
+         */
+        DeliverMessageNotifications::dispatch($message->id);
 
         MessageSent::dispatch($message);
 

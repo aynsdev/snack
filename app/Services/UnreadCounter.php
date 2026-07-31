@@ -168,6 +168,29 @@ class UnreadCounter
     }
 
     /**
+     * How many unread entries sit in the notification centre.
+     *
+     * One count over `notifications_unread_index`, which is partial on
+     * `read_at IS NULL` and ordered `(notifiable, workspace_id, created_at)` —
+     * so this reads only what is actually unread rather than the user's whole
+     * notification history.
+     *
+     * Deliberately not a sum over the mention and thread badges. Those answer
+     * "what is waiting in this container"; this answers "what has been raised to
+     * me", and the two diverge the moment a mention is read from the channel
+     * without the notification being opened.
+     */
+    public function notificationCount(Workspace $workspace, User $user): int
+    {
+        return DB::table('notifications')
+            ->where('notifiable_type', $user->getMorphClass())
+            ->where('notifiable_id', $user->getKey())
+            ->where('workspace_id', $workspace->id)
+            ->whereNull('read_at')
+            ->count();
+    }
+
+    /**
      * Unread counts keyed by conversation id, for every conversation the user is
      * an active participant in.
      *

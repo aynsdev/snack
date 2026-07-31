@@ -1,12 +1,14 @@
 import { Link, router } from '@inertiajs/react';
 import {
     AtSign,
+    Bell,
     Bookmark,
     ChevronDown,
     Compass,
     Folder,
     MessagesSquare,
     Plus,
+    ScrollText,
     Search,
     Settings,
     SquarePen,
@@ -34,6 +36,7 @@ import {
     useActiveConversationId,
     useIsFilesView,
     useIsMentionsView,
+    useIsNotificationsView,
     useIsSavedView,
     useIsThreadsView,
 } from '@/hooks/use-active-channel';
@@ -46,14 +49,18 @@ import {
     useWorkspace,
 } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
+import { index as auditIndex } from '@/routes/audit';
 import { index as browseChannels } from '@/routes/channels';
 import { index as filesIndex } from '@/routes/files';
 import { index as workspaceMembers } from '@/routes/members';
 import { index as mentionsIndex } from '@/routes/mentions';
+import { edit as notificationPreferences } from '@/routes/notification-preferences';
+import { index as notificationsIndex } from '@/routes/notifications';
 import { index as savedIndex } from '@/routes/saved';
 import { index as searchIndex } from '@/routes/search';
 import { index as threadsIndex } from '@/routes/threads';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
+import { edit as workspaceSettings } from '@/routes/workspace-settings';
 import type { Channel, Conversation } from '@/types';
 
 /**
@@ -80,6 +87,7 @@ export function WorkspaceSidebar({
     const activeConversationId = useActiveConversationId();
     const isThreadsView = useIsThreadsView();
     const isMentionsView = useIsMentionsView();
+    const isNotificationsView = useIsNotificationsView();
     const isSavedView = useIsSavedView();
     const isFilesView = useIsFilesView();
 
@@ -118,6 +126,19 @@ export function WorkspaceSidebar({
                         badge={unread.mentions}
                         href={mentionsIndex.url(workspace.slug)}
                         active={isMentionsView}
+                        onNavigate={onNavigate}
+                    />
+                    {/*
+                     * Above Saved and below Mentions: the three are ordered by
+                     * how much they are asking of you, and this one is the only
+                     * list that can be waiting on a reply.
+                     */}
+                    <SidebarLink
+                        icon={Bell}
+                        label="Notifications"
+                        badge={unread.notifications}
+                        href={notificationsIndex.url(workspace.slug)}
+                        active={isNotificationsView}
                         onNavigate={onNavigate}
                     />
                     <SidebarLink
@@ -359,14 +380,36 @@ function SidebarHeader({ onCompose }: { onCompose: () => void }) {
                         </DropdownMenuItem>
                     )}
 
+                    <DropdownMenuSeparator />
+
+                    {/*
+                     * Everyone's own notification settings, above the
+                     * admin-only block: these are the ones any member has a
+                     * reason to open, and they change nothing for anybody else.
+                     */}
+                    <DropdownMenuItem asChild>
+                        <Link href={notificationPreferences(workspace.slug)}>
+                            <Bell className="mr-2 size-4" />
+                            Notification preferences
+                        </Link>
+                    </DropdownMenuItem>
+
                     {workspace.abilities.administer && (
-                        <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem disabled>
+                        <DropdownMenuItem asChild>
+                            <Link href={workspaceSettings(workspace.slug)}>
                                 <Settings className="mr-2 size-4" />
                                 Workspace settings
-                            </DropdownMenuItem>
-                        </>
+                            </Link>
+                        </DropdownMenuItem>
+                    )}
+
+                    {workspace.abilities.view_audit_logs && (
+                        <DropdownMenuItem asChild>
+                            <Link href={auditIndex(workspace.slug)}>
+                                <ScrollText className="mr-2 size-4" />
+                                Audit log
+                            </Link>
+                        </DropdownMenuItem>
                     )}
                 </DropdownMenuContent>
             </DropdownMenu>

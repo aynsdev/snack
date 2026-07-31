@@ -151,6 +151,9 @@ class WorkspaceNavigator
                 // UnreadCounter::threadCount() for why it counts threads and
                 // not replies.
                 'threads' => $this->unread->threadCount($workspace, $user),
+
+                // The notification centre's own badge.
+                'notifications' => $this->unread->notificationCount($workspace, $user),
             ],
         ];
     }

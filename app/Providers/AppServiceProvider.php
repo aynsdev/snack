@@ -3,13 +3,16 @@
 namespace App\Providers;
 
 use App\Models\Workspace;
+use App\Notifications\Channels\WorkspaceDatabaseChannel;
 use App\Support\WorkspaceContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Foundation\DevCommands;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -34,7 +37,30 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->configureRouteBindings();
         $this->configureRateLimiters();
+        $this->configureNotifications();
         $this->configureDevCommands();
+    }
+
+    /**
+     * Teach the database notification channel about the tenant.
+     *
+     * Snack's `notifications` table carries a `workspace_id` that the framework's
+     * channel knows nothing about, and the unread badge's partial index is keyed
+     * on it. Replacing the driver here means every `via() => ['database']` fills
+     * the column in — see {@see WorkspaceDatabaseChannel} — rather than each
+     * notification having to remember to.
+     */
+    protected function configureNotifications(): void
+    {
+        /*
+         * The container arrives as the argument rather than being read from
+         * `$this`: Manager invokes a custom creator against itself, so `$this`
+         * inside the closure is the ChannelManager, not this provider.
+         */
+        Notification::extend(
+            'database',
+            fn (Application $app): WorkspaceDatabaseChannel => $app->make(WorkspaceDatabaseChannel::class),
+        );
     }
 
     /**

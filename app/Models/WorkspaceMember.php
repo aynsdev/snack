@@ -142,4 +142,48 @@ class WorkspaceMember extends Pivot
 
         return ['start' => (string) $schedule['start'], 'end' => (string) $schedule['end']];
     }
+
+    /**
+     * Whether to email this member about things they missed while away.
+     *
+     * Opt-out rather than opt-in: a mention nobody ever sees is the failure this
+     * exists to prevent, and someone who does not want the mail will say so
+     * after the first one.
+     */
+    public function wantsEmailNotifications(): bool
+    {
+        return (bool) data_get($this->notification_preferences, 'email.enabled', true);
+    }
+
+    /**
+     * Whether to include this member in the daily digest.
+     *
+     * Off by default, unlike the per-event email: a digest is a summary nobody
+     * asked for, and sending one to every member of every workspace on day one
+     * is how an application gets filed under promotions.
+     */
+    public function wantsDailyDigest(): bool
+    {
+        return (bool) data_get($this->notification_preferences, 'digest.enabled', false);
+    }
+
+    /**
+     * The member's notification preferences in the shape the settings screen
+     * renders, with every default already applied.
+     *
+     * Built here rather than in the controller so the read path and the write
+     * path agree on what the JSON column is allowed to contain — a jsonb column
+     * with no schema will otherwise accumulate keys nothing reads.
+     *
+     * @return array{default_level: string, email_enabled: bool, digest_enabled: bool, do_not_disturb: array{start: string, end: string}|null}
+     */
+    public function notificationSettings(): array
+    {
+        return [
+            'default_level' => $this->defaultNotificationLevel()->value,
+            'email_enabled' => $this->wantsEmailNotifications(),
+            'digest_enabled' => $this->wantsDailyDigest(),
+            'do_not_disturb' => $this->doNotDisturbSchedule(),
+        ];
+    }
 }

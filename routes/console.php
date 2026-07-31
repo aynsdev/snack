@@ -36,3 +36,18 @@ Schedule::command('snack:prune-uploads')
 Schedule::command('snack:reindex-messages')
     ->hourly()
     ->withoutOverlapping();
+
+/*
+ * The daily digest, woken hourly.
+ *
+ * "Send at 08:00" means 08:00 where the member is, and a workspace has people in
+ * more than one timezone — so the command runs every hour and sends to whoever
+ * has just reached their own configured hour. See SendNotificationDigests.
+ *
+ * `withoutOverlapping` because a run that is still walking memberships when the
+ * next hour starts would have both processes reading the same unread rows and
+ * sending the same person two copies.
+ */
+Schedule::command('snack:send-digests')
+    ->hourly()
+    ->withoutOverlapping();

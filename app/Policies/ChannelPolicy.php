@@ -65,14 +65,50 @@ class ChannelPolicy
      */
     public function update(User $user, Channel $channel): Response
     {
+        $rights = $this->managementRights($user, $channel);
+
+        if ($rights->denied()) {
+            return $rights;
+        }
+
+        return $channel->is_archived
+            ? Response::deny('Archived channels cannot be edited.')
+            : Response::allow();
+    }
+
+    /**
+     * Archiving a channel, and restoring one.
+     *
+     * Deliberately *not* delegating to {@see update()}: restoring is by
+     * definition performed on an archived channel, and `update` refuses those —
+     * so routing this through it would make an archived channel permanently
+     * unarchivable, which is the difference between archiving and deleting.
+     *
+     * The `is_default` refusal only ever bites on the way in. A default channel
+     * cannot be archived, so it can never be the thing being restored.
+     */
+    public function archive(User $user, Channel $channel): Response
+    {
+        if ($channel->is_default) {
+            return Response::deny('Default channels cannot be archived.');
+        }
+
+        return $this->managementRights($user, $channel);
+    }
+
+    /**
+     * Who may administer this channel at all, ignoring its archived state.
+     *
+     * Workspace admins always qualify; otherwise the channel's own admins do.
+     * Extracted so `update` and `archive` share one definition of the rights
+     * and differ only in what they additionally refuse.
+     */
+    private function managementRights(User $user, Channel $channel): Response
+    {
         $role = $user->roleIn($channel->workspace);
 
         if ($role === null) {
             return Response::denyAsNotFound();
-        }
-
-        if ($channel->is_archived) {
-            return Response::deny('Archived channels cannot be edited.');
         }
 
         if ($role->canAdministerWorkspace()) {
@@ -82,15 +118,6 @@ class ChannelPolicy
         return $channel->membershipFor($user)?->isChannelAdmin() === true
             ? Response::allow()
             : Response::deny('Only channel admins can edit this channel.');
-    }
-
-    public function archive(User $user, Channel $channel): Response
-    {
-        if ($channel->is_default) {
-            return Response::deny('Default channels cannot be archived.');
-        }
-
-        return $this->update($user, $channel);
     }
 
     /**

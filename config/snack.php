@@ -28,6 +28,11 @@ return [
     'workspaces' => [
         'member_limit' => (int) env('SNACK_DEFAULT_WORKSPACE_MEMBER_LIMIT', 500),
 
+        // The logo is centre-cropped square and re-encoded at this edge — see
+        // App\Actions\Workspaces\UpdateWorkspaceLogo for why the stored bytes
+        // are never the uploaded ones.
+        'logo_dimension' => 512,
+
         'default_channels' => [
             ['name' => 'general', 'description' => 'Company-wide chatter that does not fit anywhere else.'],
             ['name' => 'announcements', 'description' => 'Important updates from the leadership team.'],
@@ -323,6 +328,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Audit log
+    |--------------------------------------------------------------------------
+    |
+    | Paginated rather than capped like the message inboxes: the audit viewer's
+    | whole purpose is reaching back, so a fixed limit would defeat it.
+    |
+    */
+
+    'audit' => [
+        'page_size' => 50,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Presence
     |--------------------------------------------------------------------------
     |
@@ -336,6 +355,44 @@ return [
         'heartbeat_seconds' => (int) env('SNACK_PRESENCE_HEARTBEAT_SECONDS', 60),
         'typing_ttl_seconds' => 5,
         'away_after_seconds' => 300,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Notifications
+    |--------------------------------------------------------------------------
+    |
+    | The in-app centre is a history like Mentions and Threads, so "list_limit"
+    | bounds the page rather than a queue that drains.
+    |
+    | "idle_minutes" is what makes an email worth sending: somebody with a live
+    | socket whose tab has sat untouched since lunch is away, whatever their
+    | presence status claims. Deliberately longer than
+    | presence.away_after_seconds — that decides how an avatar renders, which can
+    | afford to be wrong for a minute, while this decides whether to put
+    | something in a person's inbox, which cannot be taken back.
+    |
+    | "digest" summarises what was missed. Off unless a member opts in, and sent
+    | once a day at the hour below in each member's own timezone.
+    |
+    */
+
+    'notifications' => [
+        'list_limit' => 50,
+
+        'idle_minutes' => (int) env('SNACK_NOTIFICATION_IDLE_MINUTES', 10),
+
+        'digest' => [
+            'hour' => (int) env('SNACK_DIGEST_HOUR', 8),
+
+            // Nothing older than this appears in a digest. A summary that
+            // reaches back further is a second inbox, not a catch-up.
+            'window_hours' => 24,
+
+            // Beyond this the digest stops listing and starts counting: an
+            // email with two hundred rows in it is not read.
+            'max_items' => 15,
+        ],
     ],
 
 ];

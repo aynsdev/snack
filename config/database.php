@@ -97,6 +97,24 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+
+            /*
+             * Pin the session timezone to match config('app.timezone').
+             *
+             * Snack's tables are timestamptz throughout. Laravel writes a naive
+             * datetime string, so Postgres resolves it against the *session*
+             * timezone — which, unset, is whatever the database server's local
+             * zone happens to be. On a server that is not UTC, every write is
+             * silently offset from the UTC instant PHP meant, and reads come
+             * back tagged with that zone.
+             *
+             * The round trip is self-consistent, so nothing that only compares
+             * stored timestamps to each other notices. It breaks the moment
+             * stored time is compared against PHP's now() — which is what
+             * App\Services\NotificationDelivery does to decide whether somebody
+             * is idle, and where this was found.
+             */
+            'timezone' => env('DB_TIMEZONE', 'UTC'),
         ],
 
         'sqlsrv' => [

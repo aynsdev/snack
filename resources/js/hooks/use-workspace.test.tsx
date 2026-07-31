@@ -84,6 +84,7 @@ function makeCurrent(
             conversations: { conv_01HZX: { messages: 2, mentions: 2 } },
             mentions: 1,
             threads: 0,
+            notifications: 2,
         },
     };
 }
@@ -200,6 +201,7 @@ describe('useUnreadState', () => {
             conversations: {},
             mentions: 0,
             threads: 0,
+            notifications: 0,
         });
     });
 });

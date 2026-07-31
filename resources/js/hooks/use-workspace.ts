@@ -95,6 +95,7 @@ export function useUnreadState(): UnreadState {
             conversations: {},
             mentions: 0,
             threads: 0,
+            notifications: 0,
         }
     );
 }

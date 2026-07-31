@@ -55,6 +55,19 @@ export function useIsMentionsView(): boolean {
 }
 
 /**
+ * Whether the current page is the workspace's notification centre.
+ *
+ * Deliberately excludes `/notification-preferences`, which is a different page
+ * on a URL that shares no path segment with this one — the boundary is the
+ * segment end, so the settings screen does not light up the inbox row.
+ */
+export function useIsNotificationsView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/notifications(?:[/?#]|$)/.test(currentUrl);
+}
+
+/**
  * Whether the current page is the workspace's Saved view.
  */
 export function useIsSavedView(): boolean {

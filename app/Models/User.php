@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -159,6 +160,23 @@ class User extends Authenticatable implements PasskeyUser
     public function savedMessages(): HasMany
     {
         return $this->hasMany(SavedMessage::class);
+    }
+
+    // -- Notifications -------------------------------------------------------
+
+    /**
+     * Overrides the Notifiable trait's relation so both reads *and* writes go
+     * through Snack's own model rather than the framework's.
+     *
+     * The database channel resolves the target table from this relation, so
+     * pointing it here is what lets {@see Notification} add the workspace scope
+     * and the reason accessor without a second, parallel model.
+     *
+     * @return MorphMany<Notification, $this>
+     */
+    public function notifications(): MorphMany
+    {
+        return $this->morphMany(Notification::class, 'notifiable')->latest();
     }
 
     // -- Membership helpers --------------------------------------------------

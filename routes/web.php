@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Channels\ChannelArchiveController;
 use App\Http\Controllers\Channels\ChannelController;
 use App\Http\Controllers\Channels\ChannelMembershipController;
+use App\Http\Controllers\Channels\ChannelPreferenceController;
 use App\Http\Controllers\Channels\ChannelReadController;
 use App\Http\Controllers\Channels\MentionableController;
 use App\Http\Controllers\Channels\MessageController as ChannelMessageController;
@@ -22,11 +24,17 @@ use App\Http\Controllers\Messages\SaveController;
 use App\Http\Controllers\Messages\ThreadController;
 use App\Http\Controllers\Messages\ThreadReadController;
 use App\Http\Controllers\Messages\ThreadSubscriptionController;
+use App\Http\Controllers\Notifications\NotificationController;
+use App\Http\Controllers\Notifications\NotificationPreferenceController;
+use App\Http\Controllers\Notifications\NotificationReadController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\UploadController;
 use App\Http\Controllers\WorkspaceController;
+use App\Http\Controllers\Workspaces\AuditLogController;
 use App\Http\Controllers\Workspaces\InvitationController;
+use App\Http\Controllers\Workspaces\LogoController;
 use App\Http\Controllers\Workspaces\MemberController;
+use App\Http\Controllers\Workspaces\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -96,10 +104,32 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::post('channels', [ChannelController::class, 'store'])->name('channels.store');
         Route::get('channels/{channel}', [ChannelController::class, 'show'])->name('channels.show');
 
+        /*
+         * A channel's shared settings, gated on ChannelPolicy::update — which
+         * admits workspace admins and the channel's own admins.
+         *
+         * Archiving is its own pair of idempotent endpoints rather than a field
+         * on the form above: it is not an edit, it closes the channel, and a
+         * toggle would let a double-submitted "Archive" quietly restore it.
+         */
+        Route::patch('channels/{channel}', [ChannelController::class, 'update'])
+            ->name('channels.update');
+
+        Route::post('channels/{channel}/archive', [ChannelArchiveController::class, 'store'])
+            ->name('channels.archive.store');
+        Route::delete('channels/{channel}/archive', [ChannelArchiveController::class, 'destroy'])
+            ->name('channels.archive.destroy');
+
         Route::post('channels/{channel}/membership', [ChannelMembershipController::class, 'store'])
             ->name('channels.membership.store');
         Route::delete('channels/{channel}/membership', [ChannelMembershipController::class, 'destroy'])
             ->name('channels.membership.destroy');
+
+        // Muting a channel and setting its notification level. The mirror of
+        // conversations.preferences.update, and private to the member who asks:
+        // silencing a busy channel must not silence it for anyone else.
+        Route::patch('channels/{channel}/preferences', [ChannelPreferenceController::class, 'update'])
+            ->name('channels.preferences.update');
 
         /*
          * Messages.
@@ -189,6 +219,37 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::get('saved', [SaveController::class, 'index'])->name('saved.index');
 
         /*
+         * The notification centre.
+         *
+         * Its own inbox rather than a filter over Mentions: a mention is a thing
+         * said in a room you are in, while a notification is a record of Snack
+         * raising something to you — which is also how a DM and a followed
+         * thread reach you, and neither of those is a mention.
+         *
+         * Marking one read is a POST that answers with JSON; the client stamps a
+         * row as the reader clicks through to it, and re-rendering the page they
+         * are leaving would be work nobody sees. Marking everything read is a
+         * PATCH on the collection, and redirects, because it changes the page
+         * you are looking at.
+         */
+        Route::get('notifications', [NotificationController::class, 'index'])
+            ->name('notifications.index');
+
+        Route::patch('notifications/read', [NotificationReadController::class, 'update'])
+            ->name('notifications.read.update');
+
+        Route::post('notifications/{notification}/read', [NotificationReadController::class, 'store'])
+            ->middleware('throttle:message-reads')
+            ->name('notifications.read.store');
+
+        // The member's own notification defaults for this workspace, plus the
+        // per-channel and per-conversation overrides they have made.
+        Route::get('notification-preferences', [NotificationPreferenceController::class, 'edit'])
+            ->name('notification-preferences.edit');
+        Route::patch('notification-preferences', [NotificationPreferenceController::class, 'update'])
+            ->name('notification-preferences.update');
+
+        /*
          * Search and the file browser.
          *
          * Both are Inertia pages rather than JSON endpoints: their state belongs
@@ -257,6 +318,27 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::delete('messages/{message}/reactions', [ReactionController::class, 'destroy'])
             ->middleware('throttle:messages')
             ->name('reactions.destroy');
+
+        /*
+         * Workspace administration.
+         *
+         * The logo is on its own endpoints for the reason the avatar is: a file
+         * needs a multipart request, and folding it into the settings form would
+         * re-validate the member limit every time somebody changed a picture.
+         *
+         * The audit log is read-only and has no write route at all — entries are
+         * written by the actions that cause them.
+         */
+        Route::get('settings', [SettingsController::class, 'edit'])->name('workspace-settings.edit');
+        Route::patch('settings', [SettingsController::class, 'update'])->name('workspace-settings.update');
+
+        Route::post('settings/logo', [LogoController::class, 'store'])
+            ->middleware('throttle:20,1')
+            ->name('workspace-logo.store');
+        Route::delete('settings/logo', [LogoController::class, 'destroy'])
+            ->name('workspace-logo.destroy');
+
+        Route::get('audit', [AuditLogController::class, 'index'])->name('audit.index');
 
         // Members
         Route::get('members', [MemberController::class, 'index'])->name('members.index');

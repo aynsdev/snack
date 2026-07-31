@@ -25,6 +25,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\Events\BroadcastNotificationCreated;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -61,6 +62,16 @@ pest()->extend(TestCase::class)
             ReactionChanged::class,
             ThreadActivity::class,
             WorkspaceMemberJoined::class,
+
+            /*
+             * Laravel's own notification broadcast, faked for the same reason
+             * and only for that reason: it would put a real HTTP call to Reverb
+             * on the sync queue. The database channel is untouched, so a test
+             * can still assert that a notification was *stored* — which is what
+             * the notification centre reads — and Event::assertDispatched() on
+             * this class covers the live-arrival half.
+             */
+            BroadcastNotificationCreated::class,
         ]);
     })
     ->in('Feature');

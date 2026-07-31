@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Channels;
 
 use App\Actions\Channels\CreateChannel;
+use App\Actions\Channels\UpdateChannel;
 use App\Actions\Messages\TogglePin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Channels\StoreChannelRequest;
+use App\Http\Requests\Channels\UpdateChannelRequest;
 use App\Http\Resources\ChannelResource;
 use App\Http\Resources\MessageResource;
 use App\Http\Resources\UserResource;
@@ -68,6 +70,31 @@ class ChannelController extends Controller
             'workspace' => $workspace->slug,
             'channel' => $channel->slug,
         ])->with('success', "#{$channel->slug} created.");
+    }
+
+    /**
+     * Renaming, re-describing, and re-typing a channel.
+     *
+     * Redirects to the channel by its *new* slug rather than back: a rename
+     * regenerates the slug — see {@see UpdateChannel} — so `back()` would return
+     * the person who just renamed it to a URL that no longer resolves.
+     */
+    public function update(
+        Workspace $workspace,
+        Channel $channel,
+        UpdateChannelRequest $request,
+        UpdateChannel $updateChannel,
+    ): RedirectResponse {
+        $updated = $updateChannel->handle(
+            channel: $channel,
+            actor: $request->user(),
+            attributes: $request->channelAttributes(),
+        );
+
+        return to_route('channels.show', [
+            'workspace' => $workspace->slug,
+            'channel' => $updated->slug,
+        ])->with('success', "#{$updated->slug} updated.");
     }
 
     /**
