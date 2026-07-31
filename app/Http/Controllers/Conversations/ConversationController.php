@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Conversations;
 
 use App\Actions\Conversations\FindOrCreateConversation;
 use App\Actions\Conversations\RenameConversation;
+use App\Actions\Messages\TogglePin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Conversations\StoreConversationRequest;
 use App\Http\Requests\Conversations\UpdateConversationRequest;
 use App\Http\Resources\ConversationResource;
+use App\Http\Resources\MessageResource;
 use App\Models\Conversation;
+use App\Models\Message;
 use App\Models\Workspace;
 use App\Services\MessageHistory;
 use Illuminate\Http\RedirectResponse;
@@ -30,7 +33,10 @@ use Inertia\Response;
  */
 class ConversationController extends Controller
 {
-    public function __construct(private readonly MessageHistory $history) {}
+    public function __construct(
+        private readonly MessageHistory $history,
+        private readonly TogglePin $pins,
+    ) {}
 
     /**
      * Open a conversation with a set of people, creating it only if it is new.
@@ -81,6 +87,12 @@ class ConversationController extends Controller
             'canManage' => $user->can('rename', $conversation),
             'canAddPeople' => $user->can('addParticipants', $conversation),
             'canLeave' => $user->can('leave', $conversation),
+            'canPin' => $user->can('pinMessages', $conversation),
+
+            // Ships with the page for the same reason it does in a channel.
+            'pinned' => $this->pins->pinnedIn($conversation)
+                ->map(fn (Message $message): array => (new MessageResource($message))->resolve($request))
+                ->all(),
 
             /*
              * The newest page only. Older pages are fetched by the timeline as

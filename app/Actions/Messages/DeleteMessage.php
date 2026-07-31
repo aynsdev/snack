@@ -5,6 +5,7 @@ namespace App\Actions\Messages;
 use App\Actions\Audit\RecordAuditLog;
 use App\Enums\AuditAction;
 use App\Events\MessageDeleted;
+use App\Events\ThreadActivity;
 use App\Models\Channel;
 use App\Models\Message;
 use App\Models\User;
@@ -28,12 +29,21 @@ class DeleteMessage
         DB::transaction(function () use ($message, $actor, $moderated): void {
             $message->delete();
 
-            if ($message->channel_id !== null) {
+            /*
+             * A reply was never counted in the channel's tally — SendMessage
+             * treats it as thread activity — so removing one must not decrement
+             * a count it never incremented.
+             */
+            if ($message->channel_id !== null && ! $message->isThreadReply()) {
                 // Guarded so a double-delete cannot drive the tally negative.
                 Channel::query()
                     ->whereKey($message->channel_id)
                     ->where('message_count', '>', 0)
                     ->update(['message_count' => DB::raw('message_count - 1')]);
+            }
+
+            if ($message->isThreadReply()) {
+                $this->releaseFromThread($message);
             }
 
             /*
@@ -57,5 +67,42 @@ class DeleteMessage
         });
 
         MessageDeleted::dispatch($message);
+
+        /*
+         * The container still shows the parent with a reply count on it, and
+         * that count just changed. Same event a new reply fires, for the same
+         * audience — see App\Events\ThreadActivity.
+         */
+        if ($message->isThreadReply()) {
+            $root = Message::query()->find($message->parent_message_id);
+
+            if ($root !== null) {
+                ThreadActivity::dispatch($root);
+            }
+        }
+    }
+
+    /**
+     * Take a deleted reply back out of its thread's denormalized counters.
+     *
+     * `last_reply_id` is recomputed rather than decremented, because the reply
+     * being removed may well be the newest one — leaving the pointer on a
+     * deleted row would badge the thread as unread for every follower with no
+     * way to clear it, since the reply they would have to read is gone.
+     */
+    private function releaseFromThread(Message $reply): void
+    {
+        DB::update(<<<'SQL'
+            UPDATE messages AS root
+            SET reply_count = GREATEST(root.reply_count - 1, 0),
+                last_reply_id = newest.id,
+                last_reply_at = newest.created_at
+            FROM (
+                SELECT MAX(id) AS id, MAX(created_at) AS created_at
+                FROM messages
+                WHERE parent_message_id = ? AND deleted_at IS NULL
+            ) AS newest
+            WHERE root.id = ?
+        SQL, [$reply->parent_message_id, $reply->parent_message_id]);
     }
 }

@@ -8,13 +8,16 @@ import {
     UserPlus,
     Users,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AddPeopleDialog } from '@/components/snack/add-people-dialog';
+import type { MentionSource } from '@/components/snack/mention-picker';
 import { MessageComposer } from '@/components/snack/message-composer';
 import { MessageList } from '@/components/snack/message-list';
+import { PinnedBar } from '@/components/snack/pinned-bar';
 import { PresenceDot } from '@/components/snack/presence-dot';
 import { RenameConversationDialog } from '@/components/snack/rename-conversation-dialog';
 import { RightPanel } from '@/components/snack/right-panel';
+import { ThreadPanel } from '@/components/snack/thread-panel';
 import { AvatarGroup, UserAvatar } from '@/components/snack/user-avatar';
 import {
     DropdownMenu,
@@ -25,11 +28,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useConversationMessages } from '@/hooks/use-conversation-messages';
 import { useMessageAlert } from '@/hooks/use-message-alert';
+import { usePins } from '@/hooks/use-pins';
+import { useTyping } from '@/hooks/use-typing';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
+import { channels } from '@/lib/echo';
 import { show as showConversation } from '@/routes/conversations';
+import { store as conversationMessageStore } from '@/routes/conversations/messages';
 import { destroy as leaveConversation } from '@/routes/conversations/participants';
 import { update as updatePreferences } from '@/routes/conversations/preferences';
-import type { Conversation, MessagePage, SnackUser } from '@/types';
+import type { Conversation, Message, MessagePage, SnackUser } from '@/types';
 
 type Props = {
     conversation: Conversation;
@@ -37,6 +44,9 @@ type Props = {
     canManage: boolean;
     canAddPeople: boolean;
     canLeave: boolean;
+    canPin: boolean;
+    /** Ships with the page so the bar does not appear a beat late. */
+    pinned: Message[];
     /** The newest page; older pages are fetched as the reader scrolls. */
     history: MessagePage;
 };
@@ -47,13 +57,29 @@ export default function ConversationShow({
     canManage,
     canAddPeople,
     canLeave,
+    canPin,
+    pinned,
     history,
 }: Props) {
-    const [detailsOpen, setDetailsOpen] = useState(false);
+    const workspace = useWorkspace();
     const currentUser = useCurrentUser();
 
-    const others = conversation.participants.filter(
-        (participant) => participant.id !== currentUser?.id,
+    /*
+     * One right panel at a time — the layout has a single column for it, so two
+     * booleans could describe a state it cannot render.
+     */
+    const [panel, setPanel] = useState<
+        { kind: 'details' } | { kind: 'thread'; rootId: number } | null
+    >(null);
+
+    // Memoized so the mention picker's source keeps a stable identity; see the
+    // note in channels/show.tsx.
+    const others = useMemo(
+        () =>
+            conversation.participants.filter(
+                (participant) => participant.id !== currentUser?.id,
+            ),
+        [conversation.participants, currentUser?.id],
     );
 
     return (
@@ -67,7 +93,13 @@ export default function ConversationShow({
                     canManage={canManage}
                     canAddPeople={canAddPeople}
                     canLeave={canLeave}
-                    onToggleDetails={() => setDetailsOpen((open) => !open)}
+                    onToggleDetails={() =>
+                        setPanel((current) =>
+                            current?.kind === 'details'
+                                ? null
+                                : { kind: 'details' },
+                        )
+                    }
                 />
 
                 {/*
@@ -79,22 +111,48 @@ export default function ConversationShow({
                     key={conversation.id}
                     conversation={conversation}
                     canPost={canPost}
+                    canPin={canPin}
+                    pinned={pinned}
                     history={history}
                     others={others}
+                    onOpenThread={(message) =>
+                        setPanel({ kind: 'thread', rootId: message.id })
+                    }
                 />
             </div>
 
-            {detailsOpen && (
+            {panel?.kind === 'details' && (
                 <RightPanel
                     title={
                         conversation.type === 'group'
                             ? 'About this group'
                             : 'About this conversation'
                     }
-                    onClose={() => setDetailsOpen(false)}
+                    onClose={() => setPanel(null)}
                 >
                     <ConversationDetails conversation={conversation} />
                 </RightPanel>
+            )}
+
+            {panel?.kind === 'thread' && (
+                /*
+                 * Keyed by root so opening a different thread remounts the
+                 * panel rather than leaving one thread's replies on screen
+                 * while another loads.
+                 */
+                <ThreadPanel
+                    key={panel.rootId}
+                    rootId={panel.rootId}
+                    workspaceSlug={workspace.slug}
+                    sendUrl={conversationMessageStore.url({
+                        workspace: workspace.slug,
+                        conversation: conversation.id,
+                    })}
+                    containerName={conversation.display_name}
+                    currentUser={currentUser}
+                    canPost={canPost}
+                    onClose={() => setPanel(null)}
+                />
             )}
         </>
     );
@@ -109,13 +167,19 @@ export default function ConversationShow({
 function ConversationTimeline({
     conversation,
     canPost,
+    canPin,
+    pinned,
     history,
     others,
+    onOpenThread,
 }: {
     conversation: Conversation;
     canPost: boolean;
+    canPin: boolean;
+    pinned: Message[];
     history: MessagePage;
     others: SnackUser[];
+    onOpenThread: (message: Message) => void;
 }) {
     const workspace = useWorkspace();
     const currentUser = useCurrentUser();
@@ -144,8 +208,38 @@ function ConversationTimeline({
         onMessageReceived: alert,
     });
 
+    const typing = useTyping({
+        channelName: channels.conversation(conversation.id),
+        currentUserId: currentUser?.id ?? null,
+        currentUserName: currentUser?.name ?? null,
+    });
+
+    const mentionSource = useMemo<MentionSource>(
+        () => ({ kind: 'local', people: others }),
+        [others],
+    );
+
+    const pins = usePins({
+        broadcastChannel: channels.conversation(conversation.id),
+        workspaceSlug: workspace.slug,
+        initial: pinned,
+        onSaveChanged: timeline.applySaved,
+    });
+
+    const quietly = (work: Promise<unknown>) =>
+        void work.catch(() => undefined);
+
     return (
         <>
+            <PinnedBar
+                pinned={pins.pinned}
+                onUnpin={
+                    canPin
+                        ? (message) => quietly(pins.togglePin(message))
+                        : undefined
+                }
+            />
+
             <MessageList
                 messages={timeline.messages}
                 pending={timeline.pending}
@@ -158,6 +252,23 @@ function ConversationTimeline({
                 onRetry={timeline.retry}
                 onDiscard={timeline.discard}
                 onReachBottom={timeline.markAsRead}
+                onOpenThread={onOpenThread}
+                // Someone who has left a group keeps read access but no
+                // posting rights, and reacting needs posting rights.
+                onReact={
+                    canPost
+                        ? (id, emoji, current) =>
+                              void timeline
+                                  .react(id, emoji, current)
+                                  .catch(() => undefined)
+                        : undefined
+                }
+                onTogglePin={
+                    canPin
+                        ? (message) => quietly(pins.togglePin(message))
+                        : undefined
+                }
+                onToggleSave={(message) => quietly(pins.toggleSave(message))}
                 header={
                     <ConversationIntro
                         conversation={conversation}
@@ -169,6 +280,15 @@ function ConversationTimeline({
             {canPost ? (
                 <MessageComposer
                     channelName={conversation.display_name}
+                    /*
+                     * The roster is already in props, so this filters in memory.
+                     * A round trip per keystroke to re-filter four names would
+                     * be slower than not having the picker at all.
+                     */
+                    mentionSource={mentionSource}
+                    typists={typing.typists}
+                    onTyping={typing.startTyping}
+                    onStopTyping={typing.stopTyping}
                     onSend={timeline.send}
                 />
             ) : (

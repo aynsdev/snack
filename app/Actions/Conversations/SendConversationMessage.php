@@ -32,13 +32,31 @@ class SendConversationMessage
 {
     public function __construct(private readonly SendMessage $sendMessage) {}
 
-    public function handle(Conversation $conversation, User $sender, string $body): Message
-    {
+    public function handle(
+        Conversation $conversation,
+        User $sender,
+        string $body,
+        ?Message $parent = null,
+    ): Message {
         $message = $this->sendMessage->handle(
             container: $conversation,
             sender: $sender,
             body: $body,
+            parent: $parent,
         );
+
+        /*
+         * A thread reply does not raise the DM.
+         *
+         * The sidebar badge counts what the conversation's timeline shows, and
+         * the timeline excludes replies — so signalling here would badge a
+         * conversation that looks unchanged when you open it, with no way to
+         * clear it. Thread replies badge the thread instead, through the
+         * subscription pointer.
+         */
+        if ($parent !== null) {
+            return $message;
+        }
 
         $recipients = $conversation->participants()
             ->active()

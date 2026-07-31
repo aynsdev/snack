@@ -13,6 +13,9 @@ use App\Events\ConversationUpdated;
 use App\Events\MessageDeleted;
 use App\Events\MessageSent;
 use App\Events\MessageUpdated;
+use App\Events\PinChanged;
+use App\Events\ReactionChanged;
+use App\Events\ThreadActivity;
 use App\Events\WorkspaceMemberJoined;
 use App\Models\Channel;
 use App\Models\ChannelMember;
@@ -54,6 +57,9 @@ pest()->extend(TestCase::class)
             MessageDeleted::class,
             MessageSent::class,
             MessageUpdated::class,
+            PinChanged::class,
+            ReactionChanged::class,
+            ThreadActivity::class,
             WorkspaceMemberJoined::class,
         ]);
     })

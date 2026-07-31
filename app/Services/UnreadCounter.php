@@ -63,19 +63,108 @@ class UnreadCounter
             ])
             ->get();
 
+        $mentions = $this->channelMentions($workspace, $user);
+
         $counts = [];
 
         foreach ($rows as $row) {
-            $counts[(int) $row->channel_id] = [
+            $channelId = (int) $row->channel_id;
+
+            $counts[$channelId] = [
                 'messages' => (int) $row->message_count,
-                // Mention rows are written in Phase 4, when @-mentions are
-                // parsed out of a message body. Until then a channel can be
-                // unread but never "mentioned".
-                'mentions' => 0,
+                'mentions' => $mentions[$channelId] ?? 0,
             ];
         }
 
+        /*
+         * A channel can hold an unread mention with no unread messages: the
+         * reader advanced their pointer past it without opening the channel — a
+         * "mark all read" — and the mention row survives that deliberately,
+         * because being addressed by name outlives a bulk dismissal.
+         */
+        foreach ($mentions as $channelId => $count) {
+            $counts[$channelId] ??= ['messages' => 0, 'mentions' => $count];
+        }
+
         return $counts;
+    }
+
+    /**
+     * Unread mention counts per channel.
+     *
+     * Reads the materialized `mentions` rows rather than searching message
+     * bodies — that is the entire reason the rows exist. `mentions_unread_index`
+     * is partial on `read_at IS NULL`, so this scans only what is actually
+     * unread for this person rather than their whole mention history.
+     *
+     * @return array<int, int>
+     */
+    private function channelMentions(Workspace $workspace, User $user): array
+    {
+        $rows = DB::table('mentions')
+            ->join('messages', 'messages.id', '=', 'mentions.message_id')
+            ->where('mentions.mentioned_user_id', $user->id)
+            ->where('mentions.workspace_id', $workspace->id)
+            ->whereNull('mentions.read_at')
+            ->whereNull('messages.deleted_at')
+            ->whereNotNull('messages.channel_id')
+            ->groupBy('messages.channel_id')
+            ->select([
+                'messages.channel_id',
+                DB::raw('COUNT(*) AS mention_count'),
+            ])
+            ->get();
+
+        $counts = [];
+
+        foreach ($rows as $row) {
+            $counts[(int) $row->channel_id] = (int) $row->mention_count;
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Every unread mention for this user in this workspace, across containers.
+     *
+     * Backs the global "Mentions" badge, which is a single number rather than a
+     * per-container breakdown — so this is one indexed count, not a sum over the
+     * per-channel map.
+     */
+    public function mentionCount(Workspace $workspace, User $user): int
+    {
+        return DB::table('mentions')
+            ->join('messages', 'messages.id', '=', 'mentions.message_id')
+            ->where('mentions.mentioned_user_id', $user->id)
+            ->where('mentions.workspace_id', $workspace->id)
+            ->whereNull('mentions.read_at')
+            ->whereNull('messages.deleted_at')
+            ->count();
+    }
+
+    /**
+     * How many followed threads have replies the user has not read.
+     *
+     * Threads, not replies: the badge answers "how many conversations are
+     * waiting on you", which is the question the sidebar entry is asking. A
+     * count of individual replies would be dominated by whichever thread happens
+     * to be busiest and would say nothing about how many things need attention.
+     *
+     * The comparison is pointer-against-pointer — `messages.last_reply_id`, kept
+     * current by SendMessage, against the subscriber's `last_read_reply_id` —
+     * so this stays one index scan over the user's subscriptions no matter how
+     * long any thread is. Nothing here stores a row per user per reply.
+     */
+    public function threadCount(Workspace $workspace, User $user): int
+    {
+        return DB::table('thread_subscriptions')
+            ->join('messages', 'messages.id', '=', 'thread_subscriptions.root_message_id')
+            ->where('thread_subscriptions.user_id', $user->id)
+            ->where('messages.workspace_id', $workspace->id)
+            ->whereNull('messages.deleted_at')
+            ->whereNotNull('messages.last_reply_id')
+            ->whereRaw('messages.last_reply_id > COALESCE(thread_subscriptions.last_read_reply_id, 0)')
+            ->count();
     }
 
     /**

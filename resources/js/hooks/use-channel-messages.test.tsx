@@ -71,11 +71,14 @@ function makeMessage(id: number, overrides: Partial<Message> = {}): Message {
         sender: currentUser,
         reply_count: 0,
         last_reply_at: null,
+        last_reply_id: null,
+        reactions: [],
+        is_pinned: false,
         has_attachments: false,
         is_edited: false,
         edited_at: null,
         created_at: '2026-07-29T10:00:00Z',
-        can: { update: true, delete: true },
+        can: { update: true, delete: true, pin: true },
         ...overrides,
     };
 }
@@ -322,7 +325,30 @@ describe('useChannelMessages', () => {
         expect(result.current.messages[0].can).toEqual({
             update: true,
             delete: true,
+            pin: true,
         });
+    });
+
+    it('keeps the private save flag when a broadcast replaces a message', async () => {
+        const { result } = setup({
+            messages: [makeMessage(1, { is_saved: true })],
+        });
+
+        act(() => {
+            /*
+             * A save is private, so a broadcast has no single answer to carry
+             * and omits it. Taking the incoming `undefined` would silently
+             * un-bookmark a message the viewer had saved, the moment anybody
+             * edited it.
+             */
+            const broadcast = makeMessage(1, { body: 'edited' });
+            delete broadcast.is_saved;
+
+            listeners.get('.message.updated')?.({ message: broadcast });
+        });
+
+        expect(result.current.messages[0].is_saved).toBe(true);
+        expect(result.current.messages[0].body).toBe('edited');
     });
 
     it('restores a message when the server refuses to delete it', async () => {

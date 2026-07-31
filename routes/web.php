@@ -3,6 +3,7 @@
 use App\Http\Controllers\Channels\ChannelController;
 use App\Http\Controllers\Channels\ChannelMembershipController;
 use App\Http\Controllers\Channels\ChannelReadController;
+use App\Http\Controllers\Channels\MentionableController;
 use App\Http\Controllers\Channels\MessageController as ChannelMessageController;
 use App\Http\Controllers\Conversations\ConversationController;
 use App\Http\Controllers\Conversations\ConversationPreferenceController;
@@ -12,6 +13,13 @@ use App\Http\Controllers\Conversations\MessageController as ConversationMessageC
 use App\Http\Controllers\Conversations\ParticipantController;
 use App\Http\Controllers\InvitationAcceptanceController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\Messages\MentionController;
+use App\Http\Controllers\Messages\PinController;
+use App\Http\Controllers\Messages\ReactionController;
+use App\Http\Controllers\Messages\SaveController;
+use App\Http\Controllers\Messages\ThreadController;
+use App\Http\Controllers\Messages\ThreadReadController;
+use App\Http\Controllers\Messages\ThreadSubscriptionController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\Workspaces\InvitationController;
 use App\Http\Controllers\Workspaces\MemberController;
@@ -107,6 +115,12 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->middleware('throttle:message-reads')
             ->name('channels.read.store');
 
+        // Who the composer offers for an @-mention. Scoped to the channel,
+        // because only members can actually be mentioned.
+        Route::get('channels/{channel}/mentionable', [MentionableController::class, 'index'])
+            ->middleware('throttle:message-reads')
+            ->name('channels.mentionable.index');
+
         /*
          * Direct and group conversations.
          *
@@ -157,6 +171,58 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->name('messages.update');
         Route::delete('messages/{message}', [MessageController::class, 'destroy'])
             ->name('messages.destroy');
+
+        /*
+         * Threads.
+         *
+         * Addressed by the message they hang off, for the same reason edits are:
+         * the id already names its container. Replies are *posted* through the
+         * container's own message endpoint with a `parent_message_id` rather
+         * than here, so there is exactly one send path — see Messages\ThreadController.
+         */
+        Route::get('threads', [ThreadController::class, 'index'])->name('threads.index');
+        Route::get('mentions', [MentionController::class, 'index'])->name('mentions.index');
+        Route::get('saved', [SaveController::class, 'index'])->name('saved.index');
+
+        Route::get('messages/{message}/thread', [ThreadController::class, 'show'])
+            ->middleware('throttle:message-reads')
+            ->name('threads.show');
+
+        Route::post('messages/{message}/thread/read', [ThreadReadController::class, 'store'])
+            ->middleware('throttle:message-reads')
+            ->name('threads.read.store');
+
+        Route::post('messages/{message}/thread/subscription', [ThreadSubscriptionController::class, 'store'])
+            ->name('threads.subscription.store');
+        Route::delete('messages/{message}/thread/subscription', [ThreadSubscriptionController::class, 'destroy'])
+            ->name('threads.subscription.destroy');
+
+        /*
+         * Reactions. Two idempotent endpoints rather than one toggle — see
+         * Messages\ReactionController for why a toggle is the wrong shape for
+         * the one control people double-click.
+         */
+        /*
+         * Pins are shared with the container; saves are private to the person
+         * who made them. Same shape, deliberately different authorization —
+         * see the two controllers.
+         */
+        Route::post('messages/{message}/pin', [PinController::class, 'store'])
+            ->name('pins.store');
+        Route::delete('messages/{message}/pin', [PinController::class, 'destroy'])
+            ->name('pins.destroy');
+
+        Route::post('messages/{message}/save', [SaveController::class, 'store'])
+            ->name('saves.store');
+        Route::delete('messages/{message}/save', [SaveController::class, 'destroy'])
+            ->name('saves.destroy');
+
+        Route::post('messages/{message}/reactions', [ReactionController::class, 'store'])
+            ->middleware('throttle:messages')
+            ->name('reactions.store');
+        Route::delete('messages/{message}/reactions', [ReactionController::class, 'destroy'])
+            ->middleware('throttle:messages')
+            ->name('reactions.destroy');
 
         // Members
         Route::get('members', [MemberController::class, 'index'])->name('members.index');

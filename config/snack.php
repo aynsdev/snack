@@ -91,7 +91,98 @@ return [
     'messages' => [
         'max_length' => 12_000,
         'page_size' => 50,
+
+        /*
+         * Threads page forward from the root rather than back from the newest
+         * reply, and are read start to finish, so a page here is a chunk of a
+         * conversation rather than a screenful of scrollback.
+         */
+        'thread_page_size' => 50,
         'edit_window_minutes' => null, // null = members may edit their messages forever.
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reactions
+    |--------------------------------------------------------------------------
+    |
+    | Reactions are stored as shortcodes ("taco"), never as the rendered glyph,
+    | so the same reaction survives an emoji set change.
+    |
+    | "available" is both the picker's contents and the server's allowlist. A
+    | free-text shortcode column would accept anything a crafted request cared
+    | to send, and every unrecognized value would render as a blank pill nobody
+    | could remove. Validating against this list means every stored reaction is
+    | one the client knows how to draw.
+    |
+    */
+
+    'reactions' => [
+        'available' => [
+            'thumbsup' => '👍',
+            'heart' => '❤️',
+            'tada' => '🎉',
+            'rocket' => '🚀',
+            'eyes' => '👀',
+            'joy' => '😂',
+            'thinking' => '🤔',
+            'fire' => '🔥',
+            'clap' => '👏',
+            'white_check_mark' => '✅',
+            'pray' => '🙏',
+            'taco' => '🌮',
+        ],
+
+        /*
+         * How many reactors' names ride along on a message. The pill's tooltip
+         * reads "Ada, Bo and 3 others" — past a dozen names nobody reads the
+         * list, and the payload should not grow with the size of the channel.
+         */
+        'named_reactors' => 12,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Threads
+    |--------------------------------------------------------------------------
+    |
+    | "list_limit" bounds the Threads view. Following a thread is implicit —
+    | replying subscribes you — so an active member accumulates them quickly,
+    | and the view is a digest of what just moved rather than an archive.
+    |
+    */
+
+    'threads' => [
+        'list_limit' => 50,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mentions
+    |--------------------------------------------------------------------------
+    |
+    | "list_limit" bounds the Mentions view, which is a history of what was
+    | addressed to you rather than a queue that empties — rows are stamped read,
+    | never deleted, so it would otherwise grow without limit.
+    |
+    */
+
+    'mentions' => [
+        'list_limit' => 50,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Saved messages
+    |--------------------------------------------------------------------------
+    |
+    | A private bookmark list, bounded for the same reason the others are: it
+    | only ever grows, since nothing removes a bookmark except its owner.
+    |
+    */
+
+    'saved' => [
+        'list_limit' => 50,
     ],
 
     /*

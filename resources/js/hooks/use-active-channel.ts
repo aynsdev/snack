@@ -33,3 +33,32 @@ export function useActiveConversationId(): string | null {
 
     return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
+
+/**
+ * Whether the current page is the workspace's Threads view.
+ *
+ * Derived from the URL for the same reason as the two above.
+ */
+export function useIsThreadsView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/threads(?:[/?#]|$)/.test(currentUrl);
+}
+
+/**
+ * Whether the current page is the workspace's Mentions view.
+ */
+export function useIsMentionsView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/mentions(?:[/?#]|$)/.test(currentUrl);
+}
+
+/**
+ * Whether the current page is the workspace's Saved view.
+ */
+export function useIsSavedView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/saved(?:[/?#]|$)/.test(currentUrl);
+}

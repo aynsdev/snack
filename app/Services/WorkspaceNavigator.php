@@ -140,15 +140,17 @@ class WorkspaceNavigator
                 'conversations' => (object) $conversationUnread,
 
                 /*
-                 * Every message in a conversation you are in is addressed to
-                 * you, so unread DMs count toward the global mention badge.
-                 * Channel mentions join them in Phase 4, when the mention parser
-                 * starts writing mention rows.
+                 * Real @-mentions, plus unread DMs — every message in a
+                 * conversation you are in is addressed to you, so the sidebar
+                 * treats it as loudly as being named.
                  */
-                'mentions' => array_sum(array_column($conversationUnread, 'mentions')),
+                'mentions' => $this->unread->mentionCount($workspace, $user)
+                    + array_sum(array_column($conversationUnread, 'mentions')),
 
-                // Thread badges are written in Phase 4, alongside the thread panel.
-                'threads' => 0,
+                // How many followed threads have unread replies — see
+                // UnreadCounter::threadCount() for why it counts threads and
+                // not replies.
+                'threads' => $this->unread->threadCount($workspace, $user),
             ],
         ];
     }

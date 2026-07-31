@@ -1,24 +1,35 @@
 import { Deferred, Head, Link } from '@inertiajs/react';
 import { Info, Users } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChannelIcon } from '@/components/snack/channel-icon';
+import type { MentionSource } from '@/components/snack/mention-picker';
 import { MessageComposer } from '@/components/snack/message-composer';
 import { MessageList } from '@/components/snack/message-list';
+import { PinnedBar } from '@/components/snack/pinned-bar';
 import { RightPanel } from '@/components/snack/right-panel';
+import { ThreadPanel } from '@/components/snack/thread-panel';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useChannelMessages } from '@/hooks/use-channel-messages';
 import { useMessageAlert } from '@/hooks/use-message-alert';
+import { usePins } from '@/hooks/use-pins';
+import { useTyping } from '@/hooks/use-typing';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
+import { channels } from '@/lib/echo';
 import { show as showChannel } from '@/routes/channels';
 import { store as joinChannel } from '@/routes/channels/membership';
-import type { Channel, MessagePage, SnackUser } from '@/types';
+import { index as mentionable } from '@/routes/channels/mentionable';
+import { store as messageStore } from '@/routes/channels/messages';
+import type { Channel, Message, MessagePage, SnackUser } from '@/types';
 
 type Props = {
     channel: Channel;
     canPost: boolean;
     canManage: boolean;
+    canPin: boolean;
+    /** Ships with the page so the bar does not appear a beat late. */
+    pinned: Message[];
     /** The newest page; older pages are fetched as the reader scrolls. */
     history: MessagePage;
     /** Deferred: streams in after the channel paints. */
@@ -29,10 +40,23 @@ export default function ChannelShow({
     channel,
     canPost,
     canManage,
+    canPin,
+    pinned,
     history,
     members,
 }: Props) {
-    const [detailsOpen, setDetailsOpen] = useState(false);
+    const workspace = useWorkspace();
+    const currentUser = useCurrentUser();
+
+    /*
+     * One right panel at a time, so the two are a single piece of state rather
+     * than two booleans that can both be true. Opening a thread while the
+     * details panel is open replaces it, which is what the layout can actually
+     * show — there is only one column.
+     */
+    const [panel, setPanel] = useState<
+        { kind: 'details' } | { kind: 'thread'; rootId: number } | null
+    >(null);
 
     return (
         <>
@@ -42,7 +66,13 @@ export default function ChannelShow({
                 <ChannelHeader
                     channel={channel}
                     canManage={canManage}
-                    onToggleDetails={() => setDetailsOpen((open) => !open)}
+                    onToggleDetails={() =>
+                        setPanel((current) =>
+                            current?.kind === 'details'
+                                ? null
+                                : { kind: 'details' },
+                        )
+                    }
                 />
 
                 {/*
@@ -54,17 +84,43 @@ export default function ChannelShow({
                     key={channel.id}
                     channel={channel}
                     canPost={canPost}
+                    canPin={canPin}
+                    pinned={pinned}
                     history={history}
+                    onOpenThread={(message) =>
+                        setPanel({ kind: 'thread', rootId: message.id })
+                    }
                 />
             </div>
 
-            {detailsOpen && (
+            {panel?.kind === 'details' && (
                 <RightPanel
                     title="About this channel"
-                    onClose={() => setDetailsOpen(false)}
+                    onClose={() => setPanel(null)}
                 >
                     <ChannelDetails channel={channel} members={members} />
                 </RightPanel>
+            )}
+
+            {panel?.kind === 'thread' && (
+                /*
+                 * Keyed by root so opening a different thread remounts the
+                 * panel rather than leaving one thread's replies on screen
+                 * while another loads.
+                 */
+                <ThreadPanel
+                    key={panel.rootId}
+                    rootId={panel.rootId}
+                    workspaceSlug={workspace.slug}
+                    sendUrl={messageStore.url({
+                        workspace: workspace.slug,
+                        channel: channel.slug,
+                    })}
+                    containerName={`#${channel.slug}`}
+                    currentUser={currentUser}
+                    canPost={canPost && channel.is_member}
+                    onClose={() => setPanel(null)}
+                />
             )}
         </>
     );
@@ -79,11 +135,17 @@ export default function ChannelShow({
 function ChannelTimeline({
     channel,
     canPost,
+    canPin,
+    pinned,
     history,
+    onOpenThread,
 }: {
     channel: Channel;
     canPost: boolean;
+    canPin: boolean;
+    pinned: Message[];
     history: MessagePage;
+    onOpenThread: (message: Message) => void;
 }) {
     const workspace = useWorkspace();
     const currentUser = useCurrentUser();
@@ -105,8 +167,50 @@ function ChannelTimeline({
         onMessageReceived: alert,
     });
 
+    const typing = useTyping({
+        channelName: channels.channel(channel.id),
+        currentUserId: currentUser?.id ?? null,
+        currentUserName: currentUser?.name ?? null,
+    });
+
+    /*
+     * Memoized for the same reason `endpoints` is in use-channel-messages: an
+     * object rebuilt every render gives every hook that depends on it a fresh
+     * identity, which is how the mention picker ended up re-fetching in a loop.
+     */
+    const mentionSource = useMemo<MentionSource>(
+        () => ({
+            kind: 'remote',
+            url: (term) =>
+                mentionable.url(
+                    { workspace: workspace.slug, channel: channel.slug },
+                    { query: { q: term } },
+                ),
+        }),
+        [workspace.slug, channel.slug],
+    );
+
+    const pins = usePins({
+        broadcastChannel: channels.channel(channel.id),
+        workspaceSlug: workspace.slug,
+        initial: pinned,
+        onSaveChanged: timeline.applySaved,
+    });
+
+    const quietly = (work: Promise<unknown>) =>
+        void work.catch(() => undefined);
+
     return (
         <>
+            <PinnedBar
+                pinned={pins.pinned}
+                onUnpin={
+                    canPin
+                        ? (message) => quietly(pins.togglePin(message))
+                        : undefined
+                }
+            />
+
             <MessageList
                 messages={timeline.messages}
                 pending={timeline.pending}
@@ -119,12 +223,41 @@ function ChannelTimeline({
                 onRetry={timeline.retry}
                 onDiscard={timeline.discard}
                 onReachBottom={timeline.markAsRead}
+                onOpenThread={onOpenThread}
+                /*
+                 * No reacting from a channel preview: reacting is a
+                 * contribution, and MessagePolicy::react resolves to posting
+                 * rights. Hiding the control matches what the server would
+                 * answer rather than offering a button that 403s.
+                 */
+                onReact={
+                    canPost && channel.is_member
+                        ? (id, emoji, current) =>
+                              void timeline
+                                  .react(id, emoji, current)
+                                  .catch(() => undefined)
+                        : undefined
+                }
+                onTogglePin={
+                    canPin
+                        ? (message) => quietly(pins.togglePin(message))
+                        : undefined
+                }
+                // Saving needs only read access, so it is offered even while
+                // previewing a channel nobody has joined.
+                onToggleSave={(message) => quietly(pins.toggleSave(message))}
                 header={<ChannelIntro channel={channel} />}
             />
 
             {channel.is_member ? (
                 <MessageComposer
                     channelName={`#${channel.slug}`}
+                    // A channel's roster is not in the page — only its count —
+                    // so the picker asks the server, scoped to this channel.
+                    mentionSource={mentionSource}
+                    typists={typing.typists}
+                    onTyping={typing.startTyping}
+                    onStopTyping={typing.stopTyping}
                     disabled={!canPost}
                     disabledReason={
                         canPost

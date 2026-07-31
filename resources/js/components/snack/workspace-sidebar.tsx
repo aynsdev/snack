@@ -31,6 +31,9 @@ import {
 import {
     useActiveChannelSlug,
     useActiveConversationId,
+    useIsMentionsView,
+    useIsSavedView,
+    useIsThreadsView,
 } from '@/hooks/use-active-channel';
 import {
     useCurrentUser,
@@ -43,6 +46,9 @@ import {
 import { cn } from '@/lib/utils';
 import { index as browseChannels } from '@/routes/channels';
 import { index as workspaceMembers } from '@/routes/members';
+import { index as mentionsIndex } from '@/routes/mentions';
+import { index as savedIndex } from '@/routes/saved';
+import { index as threadsIndex } from '@/routes/threads';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
 import type { Channel, Conversation } from '@/types';
 
@@ -68,6 +74,9 @@ export function WorkspaceSidebar({
     const unread = useUnreadState();
     const activeChannelSlug = useActiveChannelSlug();
     const activeConversationId = useActiveConversationId();
+    const isThreadsView = useIsThreadsView();
+    const isMentionsView = useIsMentionsView();
+    const isSavedView = useIsSavedView();
 
     const [composing, setComposing] = useState(false);
 
@@ -94,17 +103,25 @@ export function WorkspaceSidebar({
                         icon={MessagesSquare}
                         label="Threads"
                         badge={unread.threads}
-                        // Threads get their own view in Phase 4; the entry point
-                        // is present so the sidebar's shape is settled.
-                        disabled
+                        href={threadsIndex.url(workspace.slug)}
+                        active={isThreadsView}
+                        onNavigate={onNavigate}
                     />
                     <SidebarLink
                         icon={AtSign}
                         label="Mentions"
                         badge={unread.mentions}
-                        disabled
+                        href={mentionsIndex.url(workspace.slug)}
+                        active={isMentionsView}
+                        onNavigate={onNavigate}
                     />
-                    <SidebarLink icon={Bookmark} label="Saved" disabled />
+                    <SidebarLink
+                        icon={Bookmark}
+                        label="Saved"
+                        href={savedIndex.url(workspace.slug)}
+                        active={isSavedView}
+                        onNavigate={onNavigate}
+                    />
                 </ul>
 
                 <SidebarSection
@@ -417,42 +434,70 @@ function SidebarSection({
     );
 }
 
+/**
+ * A top-level sidebar entry.
+ *
+ * Renders as a link once its view exists and as a disabled button until then,
+ * so the sidebar's shape is settled before every destination in it is built.
+ */
 function SidebarLink({
     icon: Icon,
     label,
     badge = 0,
-    disabled = false,
+    href,
+    active = false,
+    onNavigate,
 }: {
     icon: typeof AtSign;
     label: string;
     badge?: number;
-    disabled?: boolean;
+    /** Omitted while the destination is still to come. */
+    href?: string;
+    active?: boolean;
+    onNavigate?: () => void;
 }) {
+    const content = (
+        <>
+            <Icon aria-hidden="true" className="size-4" />
+            <span className="flex-1 text-left">{label}</span>
+
+            {badge > 0 && (
+                <span className="min-w-5 rounded-full bg-mention px-1.5 py-0.5 text-center text-[0.6875rem] leading-none font-bold text-mention-foreground tabular-nums">
+                    {badge > 99 ? '99+' : badge}
+                </span>
+            )}
+        </>
+    );
+
+    const className = cn(
+        'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
+        active
+            ? 'bg-sidebar-accent font-semibold text-foreground'
+            : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+        'disabled:pointer-events-none disabled:opacity-50',
+    );
+
     return (
         <li>
-            <button
-                type="button"
-                disabled={disabled}
-                title={
+            {href === undefined ? (
+                <button
+                    type="button"
                     disabled
-                        ? `${label} — arriving in a later phase`
-                        : undefined
-                }
-                className={cn(
-                    'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
-                    'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
-                    'disabled:pointer-events-none disabled:opacity-50',
-                )}
-            >
-                <Icon aria-hidden="true" className="size-4" />
-                <span className="flex-1 text-left">{label}</span>
-
-                {badge > 0 && (
-                    <span className="min-w-5 rounded-full bg-mention px-1.5 py-0.5 text-center text-[0.6875rem] leading-none font-bold text-mention-foreground tabular-nums">
-                        {badge > 99 ? '99+' : badge}
-                    </span>
-                )}
-            </button>
+                    title={`${label} — arriving in a later phase`}
+                    className={className}
+                >
+                    {content}
+                </button>
+            ) : (
+                <Link
+                    href={href}
+                    onClick={onNavigate}
+                    aria-current={active ? 'page' : undefined}
+                    className={className}
+                >
+                    {content}
+                </Link>
+            )}
         </li>
     );
 }

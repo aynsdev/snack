@@ -1,7 +1,10 @@
+import { Link } from '@inertiajs/react';
 import { Fragment } from 'react';
+import { useCurrentUser, useCurrentWorkspace } from '@/hooks/use-workspace';
 import { parseMessage } from '@/lib/message-format';
 import type { BlockNode, InlineNode } from '@/lib/message-format';
 import { cn } from '@/lib/utils';
+import { show as showChannel } from '@/routes/channels';
 
 /**
  * A message body, rendered.
@@ -122,6 +125,12 @@ function InlineLeaf({ node }: { node: InlineNode }) {
                 </em>
             );
 
+        case 'mention':
+            return <MentionChip node={node} />;
+
+        case 'channel':
+            return <ChannelChip slug={node.slug} />;
+
         case 'strike':
             return (
                 <s className="text-muted-foreground">
@@ -129,4 +138,73 @@ function InlineLeaf({ node }: { node: InlineNode }) {
                 </s>
             );
     }
+}
+
+/**
+ * An `@mention`.
+ *
+ * Two weights, and the distinction matters more than it looks: a mention that
+ * addresses *you* is the reason you scan a channel at all, so it gets the loud
+ * treatment, and every other mention stays a quiet reference to a person.
+ *
+ * Whether it is you is decided here, on the client, from the username already in
+ * the page's props — there is nothing to fetch and nothing per-message to send.
+ * It is presentation only; who actually gets notified was settled server-side
+ * when the message was written.
+ */
+function MentionChip({
+    node,
+}: {
+    node: Extract<InlineNode, { type: 'mention' }>;
+}) {
+    const currentUser = useCurrentUser();
+
+    const addressesMe =
+        node.kind !== 'user' ||
+        (currentUser !== null &&
+            currentUser.username.toLowerCase() === node.handle);
+
+    return (
+        <span
+            className={cn(
+                'rounded px-1 py-0.5 font-semibold',
+                addressesMe
+                    ? 'bg-mention text-mention-foreground'
+                    : 'bg-brand-subtle text-brand',
+            )}
+        >
+            @{node.handle}
+        </span>
+    );
+}
+
+/**
+ * A `#channel` reference.
+ *
+ * Rendered as a link into the channel, but only inside a workspace — the same
+ * body also renders in places with no workspace context, and a link built from
+ * a missing slug would point at nothing.
+ *
+ * It does not check that the channel exists: doing so would need the full
+ * directory, and a private channel's absence from that list would quietly turn
+ * a valid reference into plain text for exactly the people who can see it.
+ */
+function ChannelChip({ slug }: { slug: string }) {
+    const workspace = useCurrentWorkspace();
+
+    if (workspace === null) {
+        return <span className="font-semibold text-brand">#{slug}</span>;
+    }
+
+    return (
+        <Link
+            href={showChannel.url({
+                workspace: workspace.workspace.slug,
+                channel: slug,
+            })}
+            className="rounded px-0.5 font-semibold text-brand hover:underline"
+        >
+            #{slug}
+        </Link>
+    );
 }

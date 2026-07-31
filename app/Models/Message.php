@@ -35,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property array<string, mixed> $metadata
  * @property int $reply_count
  * @property Carbon|null $last_reply_at
+ * @property int|null $last_reply_id
  * @property bool $has_attachments
  * @property Carbon|null $edited_at
  * @property Carbon|null $deleted_at
@@ -157,6 +158,16 @@ class Message extends Model
         return $this->hasMany(SavedMessage::class);
     }
 
+    /**
+     * Who is following this thread. Only ever populated on a thread root.
+     *
+     * @return HasMany<ThreadSubscription, $this>
+     */
+    public function threadSubscriptions(): HasMany
+    {
+        return $this->hasMany(ThreadSubscription::class, 'root_message_id');
+    }
+
     // -- Scopes --------------------------------------------------------------
 
     /**
@@ -196,14 +207,33 @@ class Message extends Model
      * a fixed number of queries regardless of page size.
      *
      * @param  Builder<$this>  $query
+     * @param  User|null  $viewer  Whose saves to load. A save is private, so it
+     *                             is loaded per-viewer rather than wholesale —
+     *                             without this the relation would carry every
+     *                             user who bookmarked the message.
      */
-    public function scopeWithTimelineRelations(Builder $query): void
+    public function scopeWithTimelineRelations(Builder $query, ?User $viewer = null): void
     {
+        $viewer ??= request()->user();
+
         $query->with([
             'sender:id,name,username,avatar_path,title,presence_status',
+            // The reactor's name comes along because the pill's tooltip names
+            // who reacted. Nested here rather than resolved per pill, which
+            // would be an N+1 hiding inside the resource.
             'reactions:id,message_id,user_id,emoji',
+            'reactions.user:id,name',
             'attachments',
             'pin:id,message_id,pinned_by',
+
+            /*
+             * Loaded *empty* rather than skipped for an unauthenticated request:
+             * an unloaded relation would be re-queried by the resource for every
+             * message, which is the N+1 this eager load exists to prevent.
+             */
+            'saves' => fn ($saves) => $viewer === null
+                ? $saves->whereRaw('1 = 0')
+                : $saves->where('user_id', $viewer->id),
         ]);
     }
 

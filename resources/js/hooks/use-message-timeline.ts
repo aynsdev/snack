@@ -1,5 +1,6 @@
 import { useEchoPresence } from '@laravel/echo-react';
 import { useCallback, useRef, useState } from 'react';
+import { useReactions } from '@/hooks/use-reactions';
 import { ApiError, api } from '@/lib/api';
 import { events } from '@/lib/echo';
 import { createNonce } from '@/lib/nonce';
@@ -13,7 +14,9 @@ import type {
     MessageEvent,
     MessagePage,
     PendingMessage,
+    ReactionChangedEvent,
     SnackUser,
+    ThreadActivityEvent,
 } from '@/types';
 
 /**
@@ -103,12 +106,17 @@ export function useMessageTimeline({
 
             if (index !== -1) {
                 const next = [...current];
-                // Keep the abilities from the HTTP-loaded copy: a broadcast
-                // cannot carry them, and dropping them would make the author's
-                // own edit controls vanish when their message echoes back.
+                /*
+                 * Keep the viewer-specific fields from the HTTP-loaded copy. A
+                 * broadcast cannot carry either — there is no single viewer to
+                 * compute them for — so taking the incoming `undefined` would
+                 * make the author's own edit controls vanish, and un-bookmark a
+                 * message they had saved, the moment it echoed back.
+                 */
                 next[index] = {
                     ...incoming,
                     can: incoming.can ?? current[index].can,
+                    is_saved: incoming.is_saved ?? current[index].is_saved,
                 };
 
                 return next;
@@ -125,6 +133,47 @@ export function useMessageTimeline({
                 : [...current.slice(0, at), incoming, ...current.slice(at)];
         });
     }, []);
+
+    /**
+     * Replace one message's reaction summary.
+     *
+     * A message that is not currently loaded is ignored: its reactions are
+     * already correct in whatever page fetches it later.
+     */
+    const applyReactions = useCallback(
+        (messageId: number, reactions: Message['reactions']) => {
+            setMessages((current) =>
+                current.map((message) =>
+                    message.id === messageId
+                        ? { ...message, reactions }
+                        : message,
+                ),
+            );
+        },
+        [],
+    );
+
+    /**
+     * Flip a message's private save flag.
+     *
+     * Nothing broadcasts this — a save is visible only to the person who made
+     * it — so the only copy that needs updating is the one on screen.
+     */
+    const applySaved = useCallback((messageId: number, isSaved: boolean) => {
+        setMessages((current) =>
+            current.map((message) =>
+                message.id === messageId
+                    ? { ...message, is_saved: isSaved }
+                    : message,
+            ),
+        );
+    }, []);
+
+    const { toggle: react } = useReactions({
+        workspaceSlug,
+        currentUserId: currentUser?.id ?? null,
+        apply: applyReactions,
+    });
 
     // -- Real time ----------------------------------------------------------
 
@@ -154,6 +203,44 @@ export function useMessageTimeline({
         (payload) =>
             setMessages((current) =>
                 current.filter((m) => m.id !== payload.id),
+            ),
+        [endpoints.broadcastChannel],
+    );
+
+    /*
+     * A reaction changed on a message in this container. The payload is the
+     * message's whole reaction state, so applying it is a replacement rather
+     * than arithmetic — a client that missed an earlier broadcast is corrected
+     * by this one instead of compounding the drift.
+     */
+    useEchoPresence<ReactionChangedEvent>(
+        endpoints.broadcastChannel,
+        events.reactionChanged,
+        (payload) => applyReactions(payload.message_id, payload.reactions),
+        [endpoints.broadcastChannel],
+    );
+
+    /*
+     * A thread somewhere in this container gained or lost a reply. The reply
+     * itself goes to `thread.{root}` and never arrives here — only the parent's
+     * "N replies" affordance changes, so only those two fields are touched. A
+     * message not currently loaded is ignored: its count is already correct in
+     * whatever page fetches it later.
+     */
+    useEchoPresence<ThreadActivityEvent>(
+        endpoints.broadcastChannel,
+        events.threadActivity,
+        (payload) =>
+            setMessages((current) =>
+                current.map((message) =>
+                    message.id === payload.root_id
+                        ? {
+                              ...message,
+                              reply_count: payload.reply_count,
+                              last_reply_at: payload.last_reply_at,
+                          }
+                        : message,
+                ),
             ),
         [endpoints.broadcastChannel],
     );
@@ -348,6 +435,8 @@ export function useMessageTimeline({
         discard,
         edit,
         remove,
+        react,
+        applySaved,
         markAsRead,
     };
 }

@@ -170,3 +170,81 @@ describe('parseInline', () => {
         expect(parseInline('**a**')).toEqual(parseInline('**a**'));
     });
 });
+
+/**
+ * Mentions and channel references.
+ *
+ * These have to agree exactly with App\Services\MentionParser: the server
+ * decides who gets notified and the client decides what gets highlighted, so a
+ * disagreement means a message that highlights someone it never notified, or
+ * notifies someone it never highlighted.
+ */
+describe('mentions', () => {
+    it('tokenizes a handle', () => {
+        expect(parseInline('hi @ada')).toEqual([
+            { type: 'text', value: 'hi ' },
+            { type: 'mention', kind: 'user', handle: 'ada' },
+        ]);
+    });
+
+    it('marks broadcast mentions by kind', () => {
+        expect(parseInline('@everyone')).toEqual([
+            { type: 'mention', kind: 'everyone', handle: 'everyone' },
+        ]);
+
+        expect(parseInline('@here')).toEqual([
+            { type: 'mention', kind: 'here', handle: 'here' },
+        ]);
+    });
+
+    it('lowercases a handle so casing does not split a mention', () => {
+        expect(parseInline('@Ada')).toEqual([
+            { type: 'mention', kind: 'user', handle: 'ada' },
+        ]);
+    });
+
+    it('tokenizes a channel reference', () => {
+        expect(parseInline('see #design')).toEqual([
+            { type: 'text', value: 'see ' },
+            { type: 'channel', slug: 'design' },
+        ]);
+    });
+
+    it('leaves an email address alone', () => {
+        // Without the lookbehind every address in a message mentions somebody.
+        expect(parseInline('ada@snack.test')).toEqual([
+            { type: 'text', value: 'ada@snack.test' },
+        ]);
+    });
+
+    it('does not swallow trailing punctuation', () => {
+        expect(parseInline('ask @ada.')).toEqual([
+            { type: 'text', value: 'ask ' },
+            { type: 'mention', kind: 'user', handle: 'ada' },
+            { type: 'text', value: '.' },
+        ]);
+    });
+
+    it('does not tokenize a mention inside code', () => {
+        // Code consumes its contents whole, matching the server's parser.
+        expect(parseInline('`@ada`')).toEqual([
+            { type: 'code', value: '@ada' },
+        ]);
+    });
+
+    it('prefers a url over a mention inside it', () => {
+        expect(parseInline('https://example.com/@ada')).toEqual([
+            {
+                type: 'link',
+                href: 'https://example.com/@ada',
+                value: 'https://example.com/@ada',
+            },
+        ]);
+    });
+
+    it('keeps a mention inert as text, not markup', () => {
+        const nodes = parseInline('@<script>');
+
+        expect(nodes.every((node) => node.type !== 'mention')).toBe(true);
+    });
+});

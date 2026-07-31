@@ -4,6 +4,7 @@ namespace App\Actions\Messages;
 
 use App\Enums\MessageType;
 use App\Events\MessageSent;
+use App\Events\ThreadActivity;
 use App\Models\Channel;
 use App\Models\Conversation;
 use App\Models\Message;
@@ -22,14 +23,37 @@ use Illuminate\Support\Facades\DB;
  * because everything a caller could get wrong is shared: deriving the workspace
  * from the container instead of the request, hydrating the sender before the
  * broadcast, and stamping activity atomically.
+ *
+ * # Replies
+ *
+ * Passing `$parent` makes the message a thread reply. The parent must already
+ * have been resolved *through the container* — see StoreMessageRequest — so a
+ * reply structurally cannot attach itself to a message in another channel.
  */
 class SendMessage
 {
-    public function handle(Channel|Conversation $container, User $sender, string $body): Message
-    {
+    public function __construct(
+        private readonly SubscribeToThread $subscribe,
+        private readonly SyncMentions $mentions,
+    ) {}
+
+    public function handle(
+        Channel|Conversation $container,
+        User $sender,
+        string $body,
+        ?Message $parent = null,
+    ): Message {
         $content = MessageBody::fromInput($body);
 
-        $message = DB::transaction(function () use ($container, $sender, $content): Message {
+        /*
+         * Threads are flat. Replying to a reply joins the thread it is already
+         * in rather than starting a nested one — a tree of replies is a
+         * structure nobody can follow in a chat window, and it would make
+         * "the thread this belongs to" a recursive walk instead of one column.
+         */
+        $root = $parent?->threadRootId();
+
+        $message = DB::transaction(function () use ($container, $sender, $content, $root): Message {
             $message = Message::create([
                 ...$content->toAttributes(),
 
@@ -38,6 +62,7 @@ class SendMessage
                 'workspace_id' => $container->workspace_id,
                 'channel_id' => $container instanceof Channel ? $container->id : null,
                 'conversation_id' => $container instanceof Conversation ? $container->id : null,
+                'parent_message_id' => $root,
                 'sender_id' => $sender->id,
                 'type' => $container instanceof Channel && $container->type->requiresElevatedPostingRights()
                     ? MessageType::Announcement
@@ -45,12 +70,36 @@ class SendMessage
                 'metadata' => [],
             ]);
 
-            $container instanceof Channel
-                ? $this->recordChannelActivity($container, $message)
-                : $this->recordConversationActivity($container, $message);
+            /*
+             * A reply is thread activity, not container activity.
+             *
+             * It deliberately leaves `last_message_at` and `message_count`
+             * alone: the timeline excludes replies (Message::scopeRootLevel)
+             * and so does the unread badge, so bumping the container would
+             * order the sidebar by messages the sidebar cannot show and light
+             * up a channel nobody said anything in.
+             */
+            if ($root !== null) {
+                $this->recordThreadActivity($root, $message);
+            } elseif ($container instanceof Channel) {
+                $this->recordChannelActivity($container, $message);
+            } else {
+                $this->recordConversationActivity($container, $message);
+            }
 
             return $message;
         });
+
+        /*
+         * Mentions are materialized before the broadcast, so a recipient whose
+         * client reacts to the arrival by re-reading its badge counts finds the
+         * row already there rather than a count that is one behind.
+         */
+        $this->mentions->handle($message, $sender);
+
+        if ($root !== null) {
+            $this->subscribe->afterReply($root, $message, $sender);
+        }
 
         /*
          * Both relations are attached before broadcasting so the queued worker
@@ -62,7 +111,44 @@ class SendMessage
 
         MessageSent::dispatch($message);
 
+        /*
+         * The reply itself goes to the thread's own channel, which only people
+         * with the thread open are listening to. Everyone looking at the
+         * container needs the parent's "N replies" affordance to move too, and
+         * that is a different audience — so it is a second, deliberately tiny
+         * event rather than leaking the reply body onto the container channel.
+         */
+        if ($root !== null) {
+            $rootMessage = Message::query()->find($root);
+
+            if ($rootMessage !== null) {
+                // Given the container it already belongs to, so the queued
+                // broadcast does not re-load it to name its channel.
+                $rootMessage->setRelation($container instanceof Channel ? 'channel' : 'conversation', $container);
+
+                ThreadActivity::dispatch($rootMessage);
+            }
+        }
+
         return $message;
+    }
+
+    /**
+     * Denormalized thread activity on the root, incremented atomically for the
+     * same reason the channel tally is: two people replying at once must not
+     * read the same count and write the same value back.
+     *
+     * `last_reply_id` is what the unread-threads badge compares each follower's
+     * pointer against, so it is stamped in the same statement as the count —
+     * a count that moved without the id would badge a thread as unread forever.
+     */
+    private function recordThreadActivity(int $rootId, Message $reply): void
+    {
+        Message::query()->whereKey($rootId)->update([
+            'reply_count' => DB::raw('reply_count + 1'),
+            'last_reply_at' => $reply->created_at,
+            'last_reply_id' => $reply->id,
+        ]);
     }
 
     /**

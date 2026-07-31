@@ -16,7 +16,7 @@ import {
     isSameDay,
     pendingContinuesGroup,
 } from '@/lib/message-grouping';
-import type { Message, PendingMessage } from '@/types';
+import type { Message, PendingMessage, ReactionGroup } from '@/types';
 
 /**
  * A channel's timeline.
@@ -55,6 +55,10 @@ export function MessageList({
     onRetry,
     onDiscard,
     onReachBottom,
+    onOpenThread,
+    onReact,
+    onTogglePin,
+    onToggleSave,
     header,
 }: {
     messages: Message[];
@@ -68,6 +72,14 @@ export function MessageList({
     onRetry: (nonce: string) => void;
     onDiscard: (nonce: string) => void;
     onReachBottom: () => void;
+    onOpenThread?: (message: Message) => void;
+    onReact?: (
+        messageId: number,
+        emoji: string,
+        current: ReactionGroup[],
+    ) => void;
+    onTogglePin?: (message: Message) => void;
+    onToggleSave?: (message: Message) => void;
     /** The channel masthead, which scrolls away with the history. */
     header?: React.ReactNode;
 }) {
@@ -241,6 +253,11 @@ export function MessageList({
                             isOwn={message.sender?.id === currentUserId}
                             onEdit={onEdit}
                             onDelete={onDelete}
+                            onOpenThread={onOpenThread}
+                            onReact={onReact}
+                            onTogglePin={onTogglePin}
+                            onToggleSave={onToggleSave}
+                            currentUserId={currentUserId}
                         />
                     </div>
                 ))}

@@ -76,11 +76,14 @@ function makeMessage(id: number, overrides: Partial<Message> = {}): Message {
         sender: currentUser,
         reply_count: 0,
         last_reply_at: null,
+        last_reply_id: null,
+        reactions: [],
+        is_pinned: false,
         has_attachments: false,
         is_edited: false,
         edited_at: null,
         created_at: '2026-07-30T10:00:00Z',
-        can: { update: true, delete: true },
+        can: { update: true, delete: true, pin: true },
         ...overrides,
     };
 }

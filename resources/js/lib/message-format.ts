@@ -25,9 +25,22 @@ export type InlineNode =
     | { type: 'text'; value: string }
     | { type: 'code'; value: string }
     | { type: 'link'; href: string; value: string }
+    | { type: 'mention'; kind: MentionKind; handle: string }
+    | { type: 'channel'; slug: string }
     | { type: 'bold'; children: InlineNode[] }
     | { type: 'italic'; children: InlineNode[] }
     | { type: 'strike'; children: InlineNode[] };
+
+/**
+ * `everyone` and `here` address a room; `user` addresses a person.
+ *
+ * The tokenizer does not know whether a handle belongs to anyone — it cannot,
+ * without the roster — so a mention node means "the author wrote a mention
+ * here", not "this person will be notified". The server decides the latter, in
+ * App\Actions\Messages\SyncMentions, and the two agree because both ignore
+ * mentions inside code.
+ */
+export type MentionKind = 'user' | 'everyone' | 'here';
 
 export type BlockNode =
     | { type: 'paragraph'; children: InlineNode[] }
@@ -41,6 +54,16 @@ export type BlockNode =
  * backticks nothing else is markup, which is the only way to write about the
  * syntax itself.
  */
+/**
+ * The characters a username or channel slug may contain. Mirrors
+ * App\Services\MentionParser::HANDLE — the two have to agree, or a message
+ * highlights a mention it did not send.
+ *
+ * The trailing character cannot be a dot, so "ask @ada." reads as a sentence
+ * rather than as a handle called "ada.".
+ */
+const HANDLE = '[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?';
+
 const INLINE_PATTERN = new RegExp(
     [
         '(`[^`\\n]+`)', // `code`
@@ -48,6 +71,9 @@ const INLINE_PATTERN = new RegExp(
         '(~~[\\s\\S]+?~~)', // ~~strike~~
         '(_[^_\\n]+_)', // _italic_
         '(https?://[^\\s<>()]+[^\\s<>().,;:!?])', // bare link
+        // The lookbehind is what stops an email address becoming a mention.
+        `(?<![\\w@])@(${HANDLE})`, // @mention
+        `(?<![\\w#])#(${HANDLE})`, // #channel
     ].join('|'),
     'g',
 );
@@ -157,7 +183,8 @@ export function parseInline(text: string): InlineNode[] {
             });
         }
 
-        const [token, code, bold, strike, italic, link] = match;
+        const [token, code, bold, strike, italic, link, handle, channel] =
+            match;
 
         if (code !== undefined) {
             nodes.push({ type: 'code', value: code.slice(1, -1) });
@@ -183,6 +210,19 @@ export function parseInline(text: string): InlineNode[] {
              * the author types stays plain text.
              */
             nodes.push({ type: 'link', href: link, value: link });
+        } else if (handle !== undefined) {
+            const lowered = handle.toLowerCase();
+
+            nodes.push({
+                type: 'mention',
+                kind:
+                    lowered === 'everyone' || lowered === 'here'
+                        ? lowered
+                        : 'user',
+                handle: lowered,
+            });
+        } else if (channel !== undefined) {
+            nodes.push({ type: 'channel', slug: channel.toLowerCase() });
         }
 
         lastIndex = match.index + token.length;

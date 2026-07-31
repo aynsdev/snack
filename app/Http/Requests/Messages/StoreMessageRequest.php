@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Messages;
 
+use App\Http\Requests\Concerns\ResolvesThreadParent;
 use App\Models\Channel;
+use App\Models\Message;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
@@ -16,6 +18,8 @@ use Illuminate\Support\Facades\Gate;
  */
 class StoreMessageRequest extends FormRequest
 {
+    use ResolvesThreadParent;
+
     /**
      * Returns the policy's own Response rather than a bool.
      *
@@ -42,6 +46,8 @@ class StoreMessageRequest extends FormRequest
                 // enforces the same ceiling, but only as a courtesy.
                 'max:'.config('snack.messages.max_length'),
             ],
+
+            'parent_message_id' => $this->parentRules(),
         ];
     }
 
@@ -68,5 +74,13 @@ class StoreMessageRequest extends FormRequest
     public function messageBody(): string
     {
         return $this->string('body')->toString();
+    }
+
+    /**
+     * The message being replied to, resolved through the channel itself.
+     */
+    public function parentMessage(): ?Message
+    {
+        return $this->resolveParent($this->channel());
     }
 }

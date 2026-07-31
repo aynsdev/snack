@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Channels;
 
 use App\Actions\Channels\CreateChannel;
+use App\Actions\Messages\TogglePin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Channels\StoreChannelRequest;
 use App\Http\Resources\ChannelResource;
+use App\Http\Resources\MessageResource;
 use App\Http\Resources\UserResource;
 use App\Models\Channel;
+use App\Models\Message;
 use App\Models\Workspace;
 use App\Services\MessageHistory;
 use App\Services\WorkspaceNavigator;
@@ -29,6 +32,7 @@ class ChannelController extends Controller
     public function __construct(
         private readonly WorkspaceNavigator $navigator,
         private readonly MessageHistory $history,
+        private readonly TogglePin $pins,
     ) {}
 
     /**
@@ -85,6 +89,17 @@ class ChannelController extends Controller
             'channel' => (new ChannelResource($channel))->resolve($request),
             'canPost' => $user->can('post', $channel),
             'canManage' => $user->can('update', $channel),
+            'canPin' => $user->can('pinMessages', $channel),
+
+            /*
+             * Pinned messages are reference material, so they ship with the page
+             * rather than being fetched after it paints — the bar appearing a
+             * beat late is exactly the flicker at the top of the conversation
+             * that makes a channel feel unsettled.
+             */
+            'pinned' => $this->pins->pinnedIn($channel)
+                ->map(fn (Message $message): array => (new MessageResource($message))->resolve($request))
+                ->all(),
 
             /*
              * The newest page only. Older pages are fetched by the timeline as

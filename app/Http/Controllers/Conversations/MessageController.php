@@ -50,6 +50,7 @@ class MessageController extends Controller
             conversation: $conversation,
             sender: $request->user(),
             body: $request->messageBody(),
+            parent: $request->parentMessage(),
         );
 
         return response()->json(

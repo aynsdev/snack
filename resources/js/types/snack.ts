@@ -137,6 +137,11 @@ export type Message = {
     sender: SnackUser | null;
     reply_count: number;
     last_reply_at: string | null;
+    /** The newest reply's id — what a thread's read pointer is compared against. */
+    last_reply_id: number | null;
+    reactions: ReactionGroup[];
+    /** Shared with the whole container, unlike `is_saved`. */
+    is_pinned: boolean;
     has_attachments: boolean;
     is_edited: boolean;
     edited_at: string | null;
@@ -147,11 +152,37 @@ export type Message = {
      * fills in a local hint for those; the server re-authorizes regardless.
      */
     can?: MessageAbilities;
+    /**
+     * Whether *this viewer* has bookmarked it. Absent on messages that arrived
+     * over the WebSocket, for the same reason `can` is: a save is private, so
+     * one broadcast has no single answer to carry.
+     */
+    is_saved?: boolean;
 };
 
 export type MessageAbilities = {
     update: boolean;
     delete: boolean;
+    pin: boolean;
+};
+
+/**
+ * One emoji's reactions on a message.
+ *
+ * Carries `user_ids` rather than a `reacted` flag because this exact shape is
+ * also the broadcast payload, and one broadcast reaches every subscriber — there
+ * is no single viewer to compute "did *you* react" for. The client finds its own
+ * id in the list.
+ *
+ * Both lists are capped server-side (`snack.reactions.named_reactors`) so the
+ * payload does not grow with the size of the channel; `count` stays exact.
+ */
+export type ReactionGroup = {
+    /** A shortcode such as "tada", never the rendered glyph. */
+    emoji: string;
+    count: number;
+    user_ids: number[];
+    names: string[];
 };
 
 /**
@@ -174,6 +205,66 @@ export type MessagePage = {
     has_more: boolean;
     next_cursor: number | null;
 };
+
+/**
+ * A thread: its root, and a page of replies.
+ *
+ * Replies page *forward* from the root — a thread is read start to finish —
+ * where a timeline pages backward from the newest message. Same cursor on the
+ * same monotonic id, opposite direction.
+ */
+export type ThreadPage = {
+    root: Message;
+    replies: Message[];
+    has_more: boolean;
+    next_cursor: number | null;
+    subscription: ThreadSubscriptionState;
+};
+
+/** Where the current viewer stands in a thread. */
+export type ThreadSubscriptionState = {
+    is_subscribed: boolean;
+    last_read_reply_id: number | null;
+};
+
+/**
+ * One row in the Threads view.
+ *
+ * `container` deliberately carries no display name for a conversation: an
+ * unnamed DM is titled by whoever else is in it, which differs per viewer, so
+ * the client derives it from the sidebar it already holds.
+ */
+export type ThreadSummary = {
+    root: Message;
+    container: ThreadContainer | null;
+    is_unread: boolean;
+    last_read_reply_id: number | null;
+};
+
+/**
+ * One row in the Mentions view — a history of what was addressed to you.
+ *
+ * `is_read` reflects the mention row's own stamp, which the channel's read
+ * pointer clears. The row survives being read, so this list still answers
+ * "what was I asked about last week" long after the badge went away.
+ */
+export type MentionSummary = {
+    id: number;
+    type: MentionType;
+    is_read: boolean;
+    message: Message;
+    container: ThreadContainer | null;
+};
+
+export type ThreadContainer =
+    | {
+          kind: 'channel';
+          id: number;
+          name: string;
+          slug: string;
+          type: ChannelType;
+      }
+    | { kind: 'conversation'; id: string; type: ConversationType };
 
 /** Mirrors App\Http\Resources\WorkspaceMemberResource. */
 export type WorkspaceMember = {
@@ -315,6 +406,56 @@ export type MessageDeletedEvent = {
     channel_id: number | null;
     conversation_id: string | null;
     parent_message_id: number | null;
+};
+
+/**
+ * Payload of the `pin.changed` broadcast.
+ *
+ * Carries the message itself, unlike `thread.activity`: the audience is exactly
+ * the people who can already see it in the timeline, so the body is not new
+ * information to any of them — and the pinned bar can redraw without a
+ * follow-up request.
+ */
+export type PinChangedEvent = {
+    pinned: boolean;
+    message: Omit<Message, 'can' | 'is_saved'>;
+};
+
+/**
+ * One row in the Saved view.
+ */
+export type SavedSummary = {
+    id: number;
+    notes: string | null;
+    saved_at: string | null;
+    message: Message;
+    container: ThreadContainer | null;
+};
+
+/**
+ * Payload of the `reaction.changed` broadcast.
+ *
+ * The message's *complete* reaction state, not a delta. A client that missed one
+ * broadcast — a reconnect, a backgrounded tab — would carry that drift until it
+ * reloaded; a full summary is self-correcting.
+ */
+export type ReactionChangedEvent = {
+    message_id: number;
+    reactions: ReactionGroup[];
+};
+
+/**
+ * Payload of the `thread.activity` broadcast.
+ *
+ * Sent to the *container*, not the thread: the audience is everyone looking at
+ * the channel, whose copy of the parent shows "3 replies" and needs to say four.
+ * Deliberately carries no reply body — it reaches every member of the channel,
+ * including everyone who never opens the thread.
+ */
+export type ThreadActivityEvent = {
+    root_id: number;
+    reply_count: number;
+    last_reply_at: string | null;
 };
 
 /** Payload of the `channel.read` broadcast, for syncing a user's own devices. */

@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Conversations;
 
+use App\Http\Requests\Concerns\ResolvesThreadParent;
 use App\Models\Conversation;
+use App\Models\Message;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
@@ -15,6 +17,8 @@ use Illuminate\Support\Facades\Gate;
  */
 class StoreConversationMessageRequest extends FormRequest
 {
+    use ResolvesThreadParent;
+
     /**
      * Returns the policy's own Response rather than a bool.
      *
@@ -35,6 +39,7 @@ class StoreConversationMessageRequest extends FormRequest
     {
         return [
             'body' => ['required', 'string', 'max:'.config('snack.messages.max_length')],
+            'parent_message_id' => $this->parentRules(),
         ];
     }
 
@@ -61,5 +66,13 @@ class StoreConversationMessageRequest extends FormRequest
     public function messageBody(): string
     {
         return $this->string('body')->toString();
+    }
+
+    /**
+     * The message being replied to, resolved through the conversation itself.
+     */
+    public function parentMessage(): ?Message
+    {
+        return $this->resolveParent($this->conversation());
     }
 }
