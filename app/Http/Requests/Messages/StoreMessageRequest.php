@@ -2,11 +2,15 @@
 
 namespace App\Http\Requests\Messages;
 
+use App\Http\Requests\Concerns\ResolvesAttachments;
 use App\Http\Requests\Concerns\ResolvesThreadParent;
 use App\Models\Channel;
 use App\Models\Message;
+use App\Models\MessageAttachment;
+use App\Models\Workspace;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -18,7 +22,7 @@ use Illuminate\Support\Facades\Gate;
  */
 class StoreMessageRequest extends FormRequest
 {
-    use ResolvesThreadParent;
+    use ResolvesAttachments, ResolvesThreadParent;
 
     /**
      * Returns the policy's own Response rather than a bool.
@@ -40,7 +44,13 @@ class StoreMessageRequest extends FormRequest
     {
         return [
             'body' => [
-                'required',
+                /*
+                 * A message with files and no words is a normal thing to send —
+                 * "here is the deck" is the attachment. What is still rejected
+                 * is a message that is empty in both senses.
+                 */
+                'required_without:attachment_ids',
+                'nullable',
                 'string',
                 // Guards the column and the broadcast payload. The composer
                 // enforces the same ceiling, but only as a courtesy.
@@ -48,6 +58,8 @@ class StoreMessageRequest extends FormRequest
             ],
 
             'parent_message_id' => $this->parentRules(),
+
+            ...$this->attachmentRules(),
         ];
     }
 
@@ -57,8 +69,9 @@ class StoreMessageRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'body.required' => 'A message cannot be empty.',
+            'body.required_without' => 'A message cannot be empty.',
             'body.max' => 'That message is too long to send.',
+            'attachment_ids.max' => 'That is more files than one message can carry.',
         ];
     }
 
@@ -82,5 +95,22 @@ class StoreMessageRequest extends FormRequest
     public function parentMessage(): ?Message
     {
         return $this->resolveParent($this->channel());
+    }
+
+    /**
+     * @return Collection<int, MessageAttachment>
+     */
+    public function attachments(): Collection
+    {
+        return $this->resolveAttachments($this->workspace());
+    }
+
+    private function workspace(): Workspace
+    {
+        $workspace = $this->route('workspace');
+
+        abort_unless($workspace instanceof Workspace, 404);
+
+        return $workspace;
     }
 }

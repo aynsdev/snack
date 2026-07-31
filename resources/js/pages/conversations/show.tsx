@@ -287,6 +287,7 @@ function ConversationTimeline({
                      */
                     mentionSource={mentionSource}
                     typists={typing.typists}
+                    workspaceSlug={workspace.slug}
                     onTyping={typing.startTyping}
                     onStopTyping={typing.stopTyping}
                     onSend={timeline.send}

@@ -11,6 +11,7 @@ import {
     X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { AttachmentList } from '@/components/snack/attachment-list';
 import { MessageText } from '@/components/snack/message-text';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
@@ -160,13 +161,23 @@ export function MessageItem({
                     />
                 ) : (
                     <>
-                        <MessageText body={message.body} />
+                        {/*
+                         * A message may legitimately have no words at all —
+                         * files alone are a message — so the body is only
+                         * rendered when there is one, rather than leaving an
+                         * empty line above the attachments.
+                         */}
+                        {message.body !== '' && (
+                            <MessageText body={message.body} />
+                        )}
 
                         {message.is_edited && (
                             <span className="ml-1 text-[0.6875rem] text-muted-foreground">
                                 (edited)
                             </span>
                         )}
+
+                        <AttachmentList attachments={message.attachments} />
 
                         {message.reactions.length > 0 &&
                             onReact !== undefined && (
@@ -312,10 +323,35 @@ export function PendingMessageItem({
                     </div>
                 )}
 
-                <MessageText
-                    body={message.body}
-                    className={message.failed ? 'text-danger' : 'opacity-60'}
-                />
+                {message.body !== '' && (
+                    <MessageText
+                        body={message.body}
+                        className={
+                            message.failed ? 'text-danger' : 'opacity-60'
+                        }
+                    />
+                )}
+
+                {/*
+                 * The files themselves are already on the server — they were
+                 * uploaded from the tray — so there is nothing to preview here,
+                 * only a count. A files-only message would otherwise render as
+                 * a blank row while the send is in flight.
+                 */}
+                {message.attachmentCount > 0 && (
+                    <p
+                        className={cn(
+                            'text-sm',
+                            message.failed
+                                ? 'text-danger'
+                                : 'text-muted-foreground opacity-60',
+                        )}
+                    >
+                        {message.attachmentCount === 1
+                            ? '1 file'
+                            : `${message.attachmentCount} files`}
+                    </p>
+                )}
 
                 {message.failed && (
                     <div className="mt-1 flex items-center gap-2">

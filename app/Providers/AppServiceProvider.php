@@ -74,6 +74,15 @@ class AppServiceProvider extends ServiceProvider
          */
         RateLimiter::for('message-reads', fn (Request $request) => Limit::perMinute(300)
             ->by((string) $request->user()->id));
+
+        /*
+         * Uploading. Much tighter than the others because each request costs
+         * disk rather than a row: at the default 50 MB ceiling this still allows
+         * three gigabytes a minute from one account, which is far more than
+         * anyone attaches to a message and far less than a script could.
+         */
+        RateLimiter::for('uploads', fn (Request $request) => Limit::perMinute(60)
+            ->by((string) $request->user()->id));
     }
 
     /**

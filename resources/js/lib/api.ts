@@ -87,6 +87,90 @@ async function request<T>(
     return response.json() as Promise<T>;
 }
 
+/**
+ * A multipart upload with progress.
+ *
+ * Uses XMLHttpRequest rather than `fetch` for one reason: `fetch` still cannot
+ * report how much of a request body has been sent. For a 40 MB video that is the
+ * difference between a progress bar and a spinner that might mean anything, so
+ * the older API earns its place here and nowhere else.
+ */
+function upload<T>(
+    url: string,
+    file: File,
+    onProgress?: (percent: number) => void,
+    signal?: AbortSignal,
+): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        const form = new FormData();
+
+        form.append('file', file);
+
+        request.open('POST', url, true);
+        request.withCredentials = true;
+        request.setRequestHeader('Accept', 'application/json');
+        request.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        request.setRequestHeader('X-XSRF-TOKEN', csrfToken());
+
+        // Deliberately no Content-Type: the browser has to set it itself so it
+        // can append the multipart boundary, and naming it here breaks the body.
+
+        request.upload.addEventListener('progress', (event) => {
+            if (event.lengthComputable) {
+                onProgress?.(Math.round((event.loaded / event.total) * 100));
+            }
+        });
+
+        request.addEventListener('load', () => {
+            const payload: {
+                errors?: Record<string, string[]>;
+                message?: string;
+            } = parseJson(request.responseText);
+
+            if (request.status >= 200 && request.status < 300) {
+                resolve(payload as T);
+
+                return;
+            }
+
+            reject(
+                new ApiError(
+                    request.status,
+                    payload.errors ?? {},
+                    payload.message ??
+                        `Upload failed with status ${request.status}`,
+                ),
+            );
+        });
+
+        request.addEventListener('error', () =>
+            reject(
+                new ApiError(0, {}, 'The upload could not reach the server.'),
+            ),
+        );
+
+        request.addEventListener('abort', () =>
+            reject(new ApiError(0, {}, 'Upload cancelled.')),
+        );
+
+        signal?.addEventListener('abort', () => request.abort(), {
+            once: true,
+        });
+
+        request.send(form);
+    });
+}
+
+function parseJson(text: string): Record<string, never> {
+    try {
+        return JSON.parse(text);
+    } catch {
+        // A 419 or a 5xx may answer with HTML. The status is what matters.
+        return {} as Record<string, never>;
+    }
+}
+
 export const api = {
     get: <T>(url: string, signal?: AbortSignal) =>
         request<T>('GET', url, undefined, signal),
@@ -96,4 +180,5 @@ export const api = {
         request<T>('PATCH', url, body, signal),
     delete: <T>(url: string, signal?: AbortSignal) =>
         request<T>('DELETE', url, undefined, signal),
+    upload,
 };

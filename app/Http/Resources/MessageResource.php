@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\MessageReaction;
 use App\Services\MessageBody;
 use Illuminate\Http\Request;
@@ -93,10 +94,35 @@ class MessageResource extends JsonResource
                 ? $message->pin !== null
                 : false,
             'has_attachments' => $message->has_attachments,
+            'attachments' => self::attachments($message),
             'is_edited' => $message->isEdited(),
             'edited_at' => $message->edited_at?->toIso8601String(),
             'created_at' => $message->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * The files riding along with this message.
+     *
+     * `has_attachments` stays in the payload alongside this list because they
+     * answer different questions at different costs: the boolean is on the row
+     * itself and is what a client checks before deciding to render anything,
+     * while this array requires the relation to have been loaded. Every path
+     * that draws a message loads it through
+     * {@see Message::scopeWithTimelineRelations()}.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function attachments(Message $message): array
+    {
+        if (! $message->relationLoaded('attachments')) {
+            return [];
+        }
+
+        return $message->attachments
+            ->map(fn (MessageAttachment $attachment): array => AttachmentResource::payload($attachment))
+            ->values()
+            ->all();
     }
 
     /**

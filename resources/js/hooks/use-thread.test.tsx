@@ -73,6 +73,7 @@ function makeMessage(id: number, overrides: Partial<Message> = {}): Message {
         reactions: [],
         is_pinned: false,
         has_attachments: false,
+        attachments: [],
         is_edited: false,
         edited_at: null,
         created_at: '2026-07-31T10:00:00+00:00',
@@ -137,7 +138,7 @@ describe('useThread', () => {
         // One send path: the container's endpoint, carrying the parent.
         expect(api.post).toHaveBeenCalledWith(
             '/w/acme/channels/general/messages',
-            { body: 'Snack.', parent_message_id: 10 },
+            { body: 'Snack.', parent_message_id: 10, attachment_ids: [] },
         );
 
         expect(result.current.replies.map((r) => r.id)).toEqual([11, 12]);

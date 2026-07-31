@@ -279,7 +279,7 @@ export function useMessageTimeline({
     // -- Mutations ----------------------------------------------------------
 
     const send = useCallback(
-        async (body: string) => {
+        async (body: string, attachmentIds: number[] = []) => {
             if (currentUser === null) {
                 return;
             }
@@ -294,13 +294,20 @@ export function useMessageTimeline({
                     created_at: new Date().toISOString(),
                     sender: currentUser,
                     failed: false,
+                    attachmentCount: attachmentIds.length,
+                    attachmentIds,
                 },
             ]);
 
             try {
                 const { message } = await api.post<{ message: Message }>(
                     endpoints.send(),
-                    { body },
+                    /*
+                     * The ids name uploads the server already holds, and it
+                     * re-verifies every one of them against this workspace and
+                     * this uploader before claiming it — see ResolvesAttachments.
+                     */
+                    { body, attachment_ids: attachmentIds },
                 );
 
                 upsert(message);
@@ -333,7 +340,13 @@ export function useMessageTimeline({
             }
 
             setPending((current) => current.filter((p) => p.nonce !== nonce));
-            void send(failed.body);
+
+            /*
+             * The same ids are re-sent. A failed send claimed nothing, so the
+             * uploads are still unattached and still this user's — the retry
+             * claims them exactly as the first attempt would have.
+             */
+            void send(failed.body, failed.attachmentIds);
         },
         [pending, send],
     );

@@ -213,13 +213,16 @@ export function ThreadPanel({
 
                         <MessageComposer
                             channelName={`this thread in ${containerName}`}
+                            workspaceSlug={workspaceSlug}
                             disabled={!canPost}
                             disabledReason={
                                 canPost
                                     ? undefined
                                     : 'You cannot reply in this conversation.'
                             }
-                            onSend={(body) => void thread.reply(body)}
+                            onSend={(body, attachmentIds) =>
+                                void thread.reply(body, attachmentIds)
+                            }
                         />
                     </>
                 )}

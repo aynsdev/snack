@@ -2,7 +2,37 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+/*
+|--------------------------------------------------------------------------
+| Maintenance
+|--------------------------------------------------------------------------
+|
+| Uploads that were never sent are swept nightly. Without this, every
+| abandoned draft and closed tab leaves bytes on the disk that nothing in the
+| application will ever look at again.
+|
+| `withoutOverlapping` matters more than the hour does: the sweep deletes files
+| one at a time, and on a large backlog a second run starting before the first
+| finished would have both processes racing for the same rows.
+|
+*/
+
+Schedule::command('snack:prune-uploads')
+    ->dailyAt('03:15')
+    ->withoutOverlapping();
+
+/*
+ * A safety net rather than the indexing path — messages are indexed by a queued
+ * job as they are written. This catches rows whose job was lost to a worker
+ * restart, which would otherwise be invisible: an unindexed message does not
+ * error, it just never appears in a search result.
+ */
+Schedule::command('snack:reindex-messages')
+    ->hourly()
+    ->withoutOverlapping();

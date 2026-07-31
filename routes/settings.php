@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\AvatarController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -10,6 +11,18 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
+
+    /*
+     * The profile picture, on its own endpoints rather than folded into the
+     * profile form: a file needs a multipart request, and merging the two would
+     * make every name change one as well. Throttled because each request costs
+     * a decode and a re-encode rather than a row.
+     */
+    Route::post('settings/profile/avatar', [AvatarController::class, 'store'])
+        ->middleware('throttle:20,1')
+        ->name('profile.avatar.store');
+    Route::delete('settings/profile/avatar', [AvatarController::class, 'destroy'])
+        ->name('profile.avatar.destroy');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {

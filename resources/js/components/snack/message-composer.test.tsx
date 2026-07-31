@@ -18,7 +18,7 @@ describe('MessageComposer', () => {
 
         await user.type(screen.getByRole('textbox'), 'Hello{Enter}');
 
-        expect(onSend).toHaveBeenCalledWith('Hello');
+        expect(onSend).toHaveBeenCalledWith('Hello', []);
     });
 
     it('inserts a newline on Shift+Enter instead of sending', async () => {
@@ -64,7 +64,7 @@ describe('MessageComposer', () => {
 
         await user.type(screen.getByRole('textbox'), '  padded  {Enter}');
 
-        expect(onSend).toHaveBeenCalledWith('padded');
+        expect(onSend).toHaveBeenCalledWith('padded', []);
     });
 
     it('sends from the send button', async () => {
@@ -76,7 +76,7 @@ describe('MessageComposer', () => {
         await user.type(screen.getByRole('textbox'), 'Clicked');
         await user.click(screen.getByRole('button', { name: 'Send message' }));
 
-        expect(onSend).toHaveBeenCalledWith('Clicked');
+        expect(onSend).toHaveBeenCalledWith('Clicked', []);
     });
 
     it('disables the send button while empty', () => {
@@ -112,5 +112,62 @@ describe('MessageComposer', () => {
         expect(
             screen.getByRole('textbox', { name: 'Message #engineering' }),
         ).toBeInTheDocument();
+    });
+
+    /**
+     * Attachments are opt-in: without a workspace to upload to there is no
+     * endpoint to talk to, so the control must not be offered at all rather
+     * than offered and broken.
+     */
+    describe('attachments', () => {
+        it('offers no paperclip without somewhere to upload to', () => {
+            render(<MessageComposer channelName="#general" onSend={vi.fn()} />);
+
+            expect(
+                screen.queryByRole('button', { name: 'Attach files' }),
+            ).not.toBeInTheDocument();
+        });
+
+        it('offers a paperclip once given a workspace', () => {
+            render(
+                <MessageComposer
+                    channelName="#general"
+                    workspaceSlug="acme"
+                    onSend={vi.fn()}
+                />,
+            );
+
+            expect(
+                screen.getByRole('button', { name: 'Attach files' }),
+            ).toBeInTheDocument();
+        });
+
+        it('hides the paperclip where posting is refused', () => {
+            render(
+                <MessageComposer
+                    channelName="#announcements"
+                    workspaceSlug="acme"
+                    disabled
+                    onSend={vi.fn()}
+                />,
+            );
+
+            expect(
+                screen.queryByRole('button', { name: 'Attach files' }),
+            ).not.toBeInTheDocument();
+        });
+
+        it('mentions dropping files in the hint', () => {
+            render(
+                <MessageComposer
+                    channelName="#general"
+                    workspaceSlug="acme"
+                    onSend={vi.fn()}
+                />,
+            );
+
+            // Nobody discovers drag-and-drop by guessing.
+            expect(screen.getByText(/drop files here/)).toBeInTheDocument();
+        });
     });
 });

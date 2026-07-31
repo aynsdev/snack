@@ -1,9 +1,10 @@
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import {
     AtSign,
     Bookmark,
     ChevronDown,
     Compass,
+    Folder,
     MessagesSquare,
     Plus,
     Search,
@@ -11,7 +12,7 @@ import {
     SquarePen,
     UsersRound,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChannelListItem } from '@/components/snack/channel-list-item';
 import { ConversationListItem } from '@/components/snack/conversation-list-item';
 import { NewMessageDialog } from '@/components/snack/new-message-dialog';
@@ -31,6 +32,7 @@ import {
 import {
     useActiveChannelSlug,
     useActiveConversationId,
+    useIsFilesView,
     useIsMentionsView,
     useIsSavedView,
     useIsThreadsView,
@@ -45,9 +47,11 @@ import {
 } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import { index as browseChannels } from '@/routes/channels';
+import { index as filesIndex } from '@/routes/files';
 import { index as workspaceMembers } from '@/routes/members';
 import { index as mentionsIndex } from '@/routes/mentions';
 import { index as savedIndex } from '@/routes/saved';
+import { index as searchIndex } from '@/routes/search';
 import { index as threadsIndex } from '@/routes/threads';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
 import type { Channel, Conversation } from '@/types';
@@ -77,6 +81,7 @@ export function WorkspaceSidebar({
     const isThreadsView = useIsThreadsView();
     const isMentionsView = useIsMentionsView();
     const isSavedView = useIsSavedView();
+    const isFilesView = useIsFilesView();
 
     const [composing, setComposing] = useState(false);
 
@@ -91,7 +96,7 @@ export function WorkspaceSidebar({
             />
 
             <div className="px-3 pb-2">
-                <SearchButton />
+                <SearchButton onNavigate={onNavigate} />
             </div>
 
             <nav
@@ -120,6 +125,13 @@ export function WorkspaceSidebar({
                         label="Saved"
                         href={savedIndex.url(workspace.slug)}
                         active={isSavedView}
+                        onNavigate={onNavigate}
+                    />
+                    <SidebarLink
+                        icon={Folder}
+                        label="Files"
+                        href={filesIndex.url(workspace.slug)}
+                        active={isFilesView}
                         onNavigate={onNavigate}
                     />
                 </ul>
@@ -377,15 +389,31 @@ function SidebarHeader({ onCompose }: { onCompose: () => void }) {
     );
 }
 
-function SearchButton() {
+/**
+ * The way into search.
+ *
+ * A link rather than an inline input, because search has its own page: the
+ * results need room, and the query belongs in the URL so it can be shared and
+ * returned to. Typing here would mean two search boxes that disagree about which
+ * one holds the query.
+ *
+ * ⌘K focuses the box on that page — see {@see useSearchShortcut}, which is
+ * mounted here rather than there so the shortcut works from anywhere in the
+ * workspace, which is the only reason to have it.
+ */
+function SearchButton({ onNavigate }: { onNavigate?: () => void }) {
+    const workspace = useWorkspace();
+    const href = searchIndex.url(workspace.slug);
+
+    useSearchShortcut(href);
+
     return (
-        <button
-            type="button"
-            disabled
-            title="Search — arriving in Phase 5"
+        <Link
+            href={href}
+            onClick={onNavigate}
             className={cn(
                 'flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-background/60 px-2.5 py-2 text-sm text-muted-foreground',
-                'transition-colors hover:bg-background disabled:opacity-60',
+                'transition-colors hover:bg-background',
             )}
         >
             <Search aria-hidden="true" className="size-4" />
@@ -393,8 +421,44 @@ function SearchButton() {
             <kbd className="rounded bg-muted px-1.5 py-0.5 font-sans text-[0.6875rem] font-medium text-muted-foreground">
                 ⌘K
             </kbd>
-        </button>
+        </Link>
     );
+}
+
+/**
+ * ⌘K / Ctrl+K opens search.
+ *
+ * Deliberately inert while the focus is in a text field. Search is a full
+ * navigation, and nothing in Snack persists an unsent draft yet — so firing this
+ * from the composer would discard a half-written message on a keystroke the
+ * author may well have meant for the browser. It can be relaxed once drafts
+ * survive a navigation.
+ */
+function useSearchShortcut(href: string) {
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'k' || !(event.metaKey || event.ctrlKey)) {
+                return;
+            }
+
+            const target = event.target;
+
+            if (
+                target instanceof HTMLElement &&
+                (target.isContentEditable ||
+                    ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+            router.visit(href);
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [href]);
 }
 
 function SidebarSection({

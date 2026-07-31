@@ -198,6 +198,127 @@ return [
     'uploads' => [
         'disk' => env('SNACK_UPLOAD_DISK', 'local'),
         'max_size_kb' => (int) env('SNACK_MAX_UPLOAD_SIZE_KB', 51_200),
+
+        /*
+         * How many files may ride along with one message. The composer enforces
+         * the same ceiling as a courtesy; this is the authority.
+         */
+        'per_message' => 10,
+
+        /*
+         * A deny list rather than an allow list, and deliberately so: an allow
+         * list of "documents people share at work" is a list nobody can finish,
+         * and every omission reads to the user as a broken product. What must be
+         * refused is the much shorter list of things a browser or an operating
+         * system will *execute* — so that is what is enumerated.
+         *
+         * Extension and MIME type are both checked, because either alone is
+         * trivially wrong: a client picks the MIME type it feels like sending,
+         * and an extension is just the tail of a string.
+         */
+        'blocked_extensions' => [
+            'app', 'bat', 'cgi', 'cmd', 'com', 'cpl', 'dll', 'exe', 'jar', 'js',
+            'jse', 'msi', 'msp', 'phar', 'php', 'php3', 'php4', 'php5', 'phtml',
+            'pif', 'ps1', 'py', 'reg', 'scr', 'sh', 'vb', 'vbe', 'vbs', 'wsf',
+        ],
+
+        'blocked_mime_types' => [
+            'application/x-msdownload',
+            'application/x-msdos-program',
+            'application/x-sh',
+            'application/x-httpd-php',
+            'text/x-php',
+        ],
+
+        /*
+         * Thumbnails are generated for images only, on the queue, at a size that
+         * covers both the inline preview in the timeline and the grid tile in
+         * the file browser. Bounded on the long edge so a panorama does not
+         * become a 4,000-pixel-wide "thumbnail".
+         */
+        'thumbnail_max_edge' => 640,
+
+        /*
+         * Inline previews are rendered for images below this ceiling. Above it
+         * the message shows a file chip instead: a 40 MB PNG is not a preview,
+         * it is a download that happens to start on its own.
+         */
+        'inline_preview_max_size' => 25 * 1024 * 1024,
+
+        /*
+         * How long a download link stays valid. Long enough to click, short
+         * enough that a URL pasted somewhere else stops working — the signature
+         * is a convenience, not the authorization, which is re-checked on every
+         * hit regardless.
+         */
+        'download_link_ttl_minutes' => 30,
+
+        /*
+         * Uploads that were never attached to a sent message are swept after
+         * this long. Someone can legitimately leave a composer open for hours,
+         * so this is generous.
+         */
+        'orphan_ttl_hours' => 24,
+
+        // The "Files" browser.
+        'browser_page_size' => 60,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Avatars
+    |--------------------------------------------------------------------------
+    |
+    | Unlike attachments, an avatar is public by design: it renders next to
+    | every message its owner has ever written, for everyone who can read that
+    | message. Serving it through a signed, per-viewer route would mean a
+    | database round trip per face on screen, so it lives on the public disk.
+    |
+    | It is re-encoded rather than stored as uploaded. That normalizes the
+    | dimensions, strips EXIF (a photo taken on a phone carries GPS coordinates),
+    | and means the bytes served are ones this application wrote.
+    |
+    */
+
+    'avatars' => [
+        'disk' => 'public',
+        'max_size_kb' => 4096,
+        'dimension' => 512,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Search
+    |--------------------------------------------------------------------------
+    |
+    | Full-text search over "messages.search_vector", a real tsvector column
+    | refreshed by a queued job because it folds in the sender's name, the
+    | channel name, and attachment filenames — all of which live in other tables
+    | and can change after the message is written.
+    |
+    */
+
+    'search' => [
+        // The text search configuration. 'english' gives stemming, so "meeting"
+        // finds "meetings"; 'simple' would not.
+        'dictionary' => 'english',
+
+        'page_size' => 25,
+
+        /*
+         * The shortest query worth running lives on App\Support\SearchQuery as
+         * MIN_TERM_LENGTH rather than here: it is what makes that value object's
+         * `isEmpty()` answerable, and a value object that reaches into the
+         * container cannot be constructed without booting the framework.
+         */
+
+        /*
+         * ts_rank's weight array, which Postgres reads in the fixed order
+         * {D, C, B, A} — so this is filenames, channel name, sender name, body.
+         * The body dominates on purpose: a message *about* invoices should
+         * outrank one that merely happens to carry a file called "invoice.pdf".
+         */
+        'weights' => [0.1, 0.2, 0.4, 1.0],
     ],
 
     /*

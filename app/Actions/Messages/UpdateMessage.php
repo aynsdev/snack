@@ -3,6 +3,7 @@
 namespace App\Actions\Messages;
 
 use App\Events\MessageUpdated;
+use App\Jobs\IndexMessage;
 use App\Models\Message;
 use App\Services\MessageBody;
 
@@ -44,6 +45,10 @@ class UpdateMessage
         if ($message->sender !== null) {
             $this->mentions->handle($message, $message->sender);
         }
+
+        // The stored vector is now stale by exactly the words that changed, so
+        // it is rebuilt rather than patched.
+        IndexMessage::dispatch($message->id);
 
         MessageUpdated::dispatch($message);
 

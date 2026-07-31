@@ -2,11 +2,15 @@
 
 namespace App\Http\Requests\Conversations;
 
+use App\Http\Requests\Concerns\ResolvesAttachments;
 use App\Http\Requests\Concerns\ResolvesThreadParent;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\MessageAttachment;
+use App\Models\Workspace;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -17,7 +21,7 @@ use Illuminate\Support\Facades\Gate;
  */
 class StoreConversationMessageRequest extends FormRequest
 {
-    use ResolvesThreadParent;
+    use ResolvesAttachments, ResolvesThreadParent;
 
     /**
      * Returns the policy's own Response rather than a bool.
@@ -38,8 +42,17 @@ class StoreConversationMessageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'body' => ['required', 'string', 'max:'.config('snack.messages.max_length')],
+            // Files alone are a message; empty in both senses is not. Same rule
+            // as the channel composer's — see StoreMessageRequest.
+            'body' => [
+                'required_without:attachment_ids',
+                'nullable',
+                'string',
+                'max:'.config('snack.messages.max_length'),
+            ],
             'parent_message_id' => $this->parentRules(),
+
+            ...$this->attachmentRules(),
         ];
     }
 
@@ -49,8 +62,9 @@ class StoreConversationMessageRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'body.required' => 'A message cannot be empty.',
+            'body.required_without' => 'A message cannot be empty.',
             'body.max' => 'That message is too long to send.',
+            'attachment_ids.max' => 'That is more files than one message can carry.',
         ];
     }
 
@@ -74,5 +88,22 @@ class StoreConversationMessageRequest extends FormRequest
     public function parentMessage(): ?Message
     {
         return $this->resolveParent($this->conversation());
+    }
+
+    /**
+     * @return Collection<int, MessageAttachment>
+     */
+    public function attachments(): Collection
+    {
+        return $this->resolveAttachments($this->workspace());
+    }
+
+    private function workspace(): Workspace
+    {
+        $workspace = $this->route('workspace');
+
+        abort_unless($workspace instanceof Workspace, 404);
+
+        return $workspace;
     }
 }

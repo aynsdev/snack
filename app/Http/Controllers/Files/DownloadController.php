@@ -1,0 +1,146 @@
+<?php
+
+namespace App\Http\Controllers\Files;
+
+use App\Http\Controllers\Controller;
+use App\Models\MessageAttachment;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+/**
+ * Serves attachment bytes.
+ *
+ * # The signature is not the authorization
+ *
+ * These routes are signed, which bounds how long a copied link keeps working.
+ * That is all it does. Every hit still re-resolves the attachment, finds the
+ * message it hangs off, and puts that message through the container policy — so
+ * a link forwarded to someone who was never in the channel is a 404 no matter
+ * how valid its signature is, and a link that outlives the sender's removal from
+ * a private channel stops working for them too.
+ *
+ * # Inline is a narrower door than download
+ *
+ * Anything served inline renders *on this application's origin*, so an
+ * `image/svg+xml` with a `<script>` in it would be stored XSS against every
+ * viewer. Only a fixed list of raster formats is ever given an inline
+ * disposition; everything else — SVG included — is an attachment, which browsers
+ * download rather than execute. `nosniff` and a sandboxing CSP back that up for
+ * the cases where a browser would otherwise go looking for a better content type
+ * than the one it was given.
+ */
+class DownloadController extends Controller
+{
+    /**
+     * Raster formats it is safe to render on our own origin. SVG is deliberately
+     * absent: it is a document that can carry script, not a picture.
+     *
+     * @var array<int, string>
+     */
+    private const INLINE_SAFE = [
+        'image/jpeg',
+        'image/pjpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/avif',
+        'image/bmp',
+    ];
+
+    /**
+     * The original file, as an attachment or — for images the client asked to
+     * preview — inline.
+     */
+    public function show(MessageAttachment $attachment, Request $request): StreamedResponse
+    {
+        $this->authorizeAccess($attachment, $request->user());
+
+        $inline = $request->boolean('inline')
+            && in_array(strtolower($attachment->mime_type), self::INLINE_SAFE, true);
+
+        return $this->stream(
+            $attachment,
+            $attachment->path,
+            $attachment->mime_type,
+            $inline,
+        );
+    }
+
+    /**
+     * The generated preview, which is always one of our own re-encoded rasters
+     * and therefore always safe inline.
+     */
+    public function thumbnail(MessageAttachment $attachment, Request $request): StreamedResponse
+    {
+        $this->authorizeAccess($attachment, $request->user());
+
+        abort_if($attachment->thumbnail_path === null, 404);
+
+        return $this->stream(
+            $attachment,
+            $attachment->thumbnail_path,
+            // Written by ImageProcessor, which emits only these two.
+            str_ends_with($attachment->thumbnail_path, '.png') ? 'image/png' : 'image/jpeg',
+            inline: true,
+        );
+    }
+
+    /**
+     * Who may read this file.
+     *
+     * An unattached upload belongs to nobody but the person who made it — there
+     * is no message yet, so there is no container policy to consult and no one
+     * else with any claim to it.
+     */
+    private function authorizeAccess(MessageAttachment $attachment, User $user): void
+    {
+        if ($attachment->message_id === null) {
+            abort_unless($attachment->uploaded_by === $user->id, 404);
+
+            return;
+        }
+
+        // Null when the message was soft-deleted: the relation carries Message's
+        // global scope, so a deleted message takes its files with it.
+        $message = $attachment->message;
+
+        abort_if($message === null, 404);
+
+        Gate::authorize('view', $message);
+    }
+
+    private function stream(
+        MessageAttachment $attachment,
+        string $path,
+        string $contentType,
+        bool $inline,
+    ): StreamedResponse {
+        $disk = Storage::disk($attachment->disk);
+
+        abort_unless($disk->exists($path), 404);
+
+        return $disk->response(
+            $path,
+            $attachment->original_name,
+            [
+                'Content-Type' => $contentType,
+                // Stops a browser from deciding the bytes are really HTML.
+                'X-Content-Type-Options' => 'nosniff',
+                // Belt and braces for the inline case: even if something did get
+                // rendered as a document, it can load nothing and run nothing.
+                'Content-Security-Policy' => "default-src 'none'; sandbox",
+                /*
+                 * Private, because the URL is per-viewer authorized and must not
+                 * be held by a shared proxy. Cached at all because the signed URL
+                 * is stable within its window — see AttachmentResource — which is
+                 * what stops a timeline of images re-downloading on every visit.
+                 */
+                'Cache-Control' => 'private, max-age=3600',
+            ],
+            $inline ? 'inline' : 'attachment',
+        );
+    }
+}

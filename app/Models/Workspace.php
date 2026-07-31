@@ -133,6 +133,22 @@ class Workspace extends Model
     }
 
     /**
+     * Every file uploaded into this workspace, attached or not.
+     *
+     * Exists so the file routes can be scope-bound: `w/{workspace}/files/{attachment}`
+     * resolves through here, which means an id from another tenant is a 404 at
+     * the router rather than something a controller has to remember to check.
+     * Whether the *viewer* may see a given file is a separate question, settled
+     * by the message's container policy.
+     *
+     * @return HasMany<MessageAttachment, $this>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(MessageAttachment::class);
+    }
+
+    /**
      * @return HasMany<AuditLog, $this>
      */
     public function auditLogs(): HasMany

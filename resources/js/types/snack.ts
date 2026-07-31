@@ -143,6 +143,11 @@ export type Message = {
     /** Shared with the whole container, unlike `is_saved`. */
     is_pinned: boolean;
     has_attachments: boolean;
+    /**
+     * The files themselves. Empty when the relation was not loaded, which
+     * `has_attachments` distinguishes from "genuinely has none".
+     */
+    attachments: Attachment[];
     is_edited: boolean;
     edited_at: string | null;
     created_at: string | null;
@@ -197,6 +202,16 @@ export type PendingMessage = {
     created_at: string;
     sender: SnackUser;
     failed: boolean;
+    /**
+     * How many files are going out with it.
+     *
+     * The uploads themselves have already finished by the time a send starts, so
+     * this is only ever a label — but a files-only message has an empty body, and
+     * without it the optimistic row would render as nothing at all.
+     */
+    attachmentCount: number;
+    /** The ids to re-claim if the send failed and is retried. */
+    attachmentIds: number[];
 };
 
 /** One page of cursor-paginated history. */
@@ -265,6 +280,112 @@ export type ThreadContainer =
           type: ChannelType;
       }
     | { kind: 'conversation'; id: string; type: ConversationType };
+
+// -- Files -------------------------------------------------------------------
+
+/** How the client renders a file. Mirrors MessageAttachment::kind(). */
+export type AttachmentKind = 'image' | 'video' | 'audio' | 'pdf' | 'file';
+
+/**
+ * A file on a message. Mirrors App\Http\Resources\AttachmentResource.
+ *
+ * There is no path here and never will be. The three URLs are signed routes that
+ * re-authorize the viewer against the message's container on every hit, so a
+ * copied link is useless to anyone who could not already read the message.
+ *
+ * `thumbnail_url` is null until the queue has processed the upload — the client
+ * shows a placeholder until then — and stays null for anything that is not a
+ * decodable image. `preview_url` is null above the inline-preview size ceiling,
+ * which is what makes a 40 MB PNG render as a chip rather than as a download
+ * that started on its own.
+ */
+export type Attachment = {
+    id: number;
+    name: string;
+    mime_type: string;
+    size: number;
+    /** Pre-formatted server-side so every surface says "1.4 MB" the same way. */
+    human_size: string;
+    kind: AttachmentKind;
+    width: number | null;
+    height: number | null;
+    download_url: string;
+    thumbnail_url: string | null;
+    preview_url: string | null;
+    created_at: string | null;
+};
+
+/**
+ * A file in the composer's tray, before the message carrying it is sent.
+ *
+ * Local until the upload completes: `attachment` is null while the bytes are
+ * still going up, which is also when `progress` means anything. A failure keeps
+ * the row so it can be retried or removed, rather than making the file the
+ * author picked silently disappear.
+ */
+export type PendingUpload = {
+    /** Client-side only, so the tray has a stable key before the server answers. */
+    nonce: string;
+    name: string;
+    size: number;
+    /** 0–100. */
+    progress: number;
+    /** Set once the server has taken the file; this is what a send claims. */
+    attachment: Attachment | null;
+    error: string | null;
+    /** An object URL for images, so the tray previews before the upload lands. */
+    localPreview: string | null;
+};
+
+/** One row in the Files browser. */
+export type FileRow = Attachment & {
+    uploader: SnackUser | null;
+    container: ThreadContainer | null;
+    message_id: number | null;
+};
+
+// -- Search ------------------------------------------------------------------
+
+/**
+ * What the server made of the search box's contents.
+ *
+ * The filters are echoed back parsed rather than left for the client to re-read,
+ * so the chips above the results say exactly what the query actually did — not
+ * what the client guessed it did.
+ */
+export type ParsedSearchQuery = {
+    raw: string;
+    terms: string;
+    from: string[];
+    in: string[];
+    has_file: boolean;
+    before: string | null;
+    after: string | null;
+    /** Nothing to search for: no usable terms and no filters. */
+    is_empty: boolean;
+    /** Something was typed, but it did not amount to a query. */
+    too_short: boolean;
+};
+
+/**
+ * One piece of a result snippet.
+ *
+ * Snippets arrive pre-split rather than as markup: this application renders no
+ * HTML from message content anywhere, so `ts_headline`'s marks are turned into
+ * these on the server and drawn as React elements here. Nothing is ever handed
+ * to `dangerouslySetInnerHTML`.
+ */
+export type SnippetSegment = {
+    text: string;
+    highlight: boolean;
+};
+
+export type SearchResult = {
+    message: Message;
+    container: ThreadContainer | null;
+    /** Empty when there was nothing to highlight, e.g. a filters-only search. */
+    snippet: SnippetSegment[];
+};
 
 /** Mirrors App\Http\Resources\WorkspaceMemberResource. */
 export type WorkspaceMember = {

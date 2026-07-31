@@ -62,3 +62,25 @@ export function useIsSavedView(): boolean {
 
     return /^\/w\/[^/]+\/saved(?:[/?#]|$)/.test(currentUrl);
 }
+
+/**
+ * Whether the current page is the workspace's Files browser.
+ */
+export function useIsFilesView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/files(?:[/?#]|$)/.test(currentUrl);
+}
+
+/**
+ * Whether the current page is search.
+ *
+ * Matches with a query string attached, unlike the others, because search is the
+ * one view whose URL always carries one — `/w/acme/search?q=budget` is still the
+ * search page and the sidebar has to say so.
+ */
+export function useIsSearchView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/search(?:[/?#]|$)/.test(currentUrl);
+}

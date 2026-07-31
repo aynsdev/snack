@@ -319,7 +319,7 @@ export function useThread({
     // -- Mutations -----------------------------------------------------------
 
     const reply = useCallback(
-        async (body: string) => {
+        async (body: string, attachmentIds: number[] = []) => {
             if (currentUser === null) {
                 return;
             }
@@ -334,13 +334,19 @@ export function useThread({
                     created_at: new Date().toISOString(),
                     sender: currentUser,
                     failed: false,
+                    attachmentCount: attachmentIds.length,
+                    attachmentIds,
                 },
             ]);
 
             try {
                 const { message } = await api.post<{ message: Message }>(
                     sendUrl,
-                    { body, parent_message_id: resolvedRootId },
+                    {
+                        body,
+                        parent_message_id: resolvedRootId,
+                        attachment_ids: attachmentIds,
+                    },
                 );
 
                 upsert(message);

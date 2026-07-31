@@ -1,5 +1,6 @@
-import { SendHorizontal } from 'lucide-react';
+import { Paperclip, SendHorizontal } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
+import { AttachmentTray } from '@/components/snack/attachment-tray';
 import {
     MentionPicker,
     useMentionCandidates,
@@ -8,6 +9,7 @@ import type { MentionSource } from '@/components/snack/mention-picker';
 import { TypingIndicator } from '@/components/snack/typing-indicator';
 import { Textarea } from '@/components/ui/textarea';
 import type { Typist } from '@/hooks/use-typing';
+import { useUploads } from '@/hooks/use-uploads';
 import { applyMention, mentionQueryAt } from '@/lib/mention-query';
 import type { MentionQuery } from '@/lib/mention-query';
 import { cn } from '@/lib/utils';
@@ -36,6 +38,17 @@ const COUNTER_THRESHOLD = MAX_LENGTH - 500;
  * rather than to the composer: with a list open, Enter means "choose this
  * person", and sending the message half-written instead is the mistake that
  * makes people stop using the picker.
+ *
+ * # Attachments
+ *
+ * Files are offered three ways — the paperclip, dropping onto the composer, and
+ * pasting — because those are the three things people already try. Each one
+ * uploads immediately, so the progress bar runs while the author keeps typing;
+ * the message claims the finished uploads when it is sent.
+ *
+ * Passing `workspaceSlug` is what turns any of that on. A composer without one
+ * (a preview, a test) has no upload endpoint to talk to and shows no paperclip,
+ * rather than showing a control that cannot work.
  */
 export function MessageComposer({
     channelName,
@@ -43,6 +56,7 @@ export function MessageComposer({
     disabledReason,
     mentionSource,
     typists = [],
+    workspaceSlug,
     onTyping,
     onStopTyping,
     onSend,
@@ -54,23 +68,42 @@ export function MessageComposer({
     mentionSource?: MentionSource;
     /** Who else is typing here, rendered just above the box. */
     typists?: Typist[];
+    /** Where uploads go. Omitted disables attachments entirely. */
+    workspaceSlug?: string;
     /** Called per keystroke; the hook throttles, so this need not. */
     onTyping?: () => void;
     onStopTyping?: () => void;
-    onSend: (body: string) => void;
+    onSend: (body: string, attachmentIds: number[]) => void;
 }) {
     const [body, setBody] = useState('');
     const [mention, setMention] = useState<MentionQuery | null>(null);
     const [activeIndex, setActiveIndex] = useState(0);
+    const [draggingOver, setDraggingOver] = useState(false);
     const textarea = useRef<HTMLTextAreaElement>(null);
+    const filePicker = useRef<HTMLInputElement>(null);
 
     const candidates = useMentionCandidates(
         mention?.term ?? null,
         mentionSource,
     );
 
+    const uploads = useUploads({ workspaceSlug: workspaceSlug ?? '' });
+    const attachmentsEnabled = workspaceSlug !== undefined && !disabled;
+
     const trimmed = body.trim();
-    const canSend = trimmed !== '' && trimmed.length <= MAX_LENGTH && !disabled;
+
+    /*
+     * A message may be files alone — "here is the deck" is the attachment — so
+     * text is only required when nothing is attached. It still waits for the
+     * uploads to finish: sending while bytes are in flight would claim ids that
+     * do not exist yet.
+     */
+    const canSend =
+        !disabled &&
+        !uploads.isUploading &&
+        trimmed.length <= MAX_LENGTH &&
+        (trimmed !== '' || uploads.attachmentIds.length > 0);
+
     const picking = mention !== null && candidates.length > 0;
 
     const resize = () => {
@@ -124,12 +157,22 @@ export function MessageComposer({
         });
     };
 
+    /** Hand files to the tray, from the picker, a drop, or a paste. */
+    const attach = (files: FileList | File[] | null) => {
+        if (!attachmentsEnabled || files === null) {
+            return;
+        }
+
+        uploads.add(Array.from(files));
+    };
+
     const send = () => {
         if (!canSend) {
             return;
         }
 
-        onSend(trimmed);
+        onSend(trimmed, uploads.attachmentIds);
+        uploads.clear();
         setBody('');
         setMention(null);
 
@@ -157,8 +200,49 @@ export function MessageComposer({
     }
 
     return (
-        <div className="border-t border-border p-4">
+        <div
+            className="border-t border-border p-4"
+            /*
+             * The drop target is the whole composer, not the textarea: aiming a
+             * dragged file at a one-line box is fiddly, and every chat app
+             * people arrive from accepts a drop anywhere near the bottom.
+             *
+             * dragOver must preventDefault or the browser navigates to the file
+             * instead — which replaces the entire app with a picture.
+             */
+            onDragOver={(event) => {
+                if (!attachmentsEnabled) {
+                    return;
+                }
+
+                event.preventDefault();
+                setDraggingOver(true);
+            }}
+            onDragLeave={(event) => {
+                // Only when the pointer actually left the composer, not merely
+                // crossed onto a child — otherwise the highlight flickers.
+                if (
+                    !event.currentTarget.contains(event.relatedTarget as Node)
+                ) {
+                    setDraggingOver(false);
+                }
+            }}
+            onDrop={(event) => {
+                if (!attachmentsEnabled) {
+                    return;
+                }
+
+                event.preventDefault();
+                setDraggingOver(false);
+                attach(event.dataTransfer.files);
+            }}
+        >
             <TypingIndicator typists={typists} className="mb-1" />
+
+            <AttachmentTray
+                uploads={uploads.uploads}
+                onRemove={uploads.remove}
+            />
 
             <div className="relative">
                 <MentionPicker
@@ -171,8 +255,51 @@ export function MessageComposer({
                     className={cn(
                         'flex items-end gap-2 rounded-xl border border-input bg-background px-3 py-2',
                         'focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/25',
+                        draggingOver && 'border-brand ring-2 ring-brand/25',
                     )}
                 >
+                    {attachmentsEnabled && (
+                        <>
+                            <input
+                                ref={filePicker}
+                                type="file"
+                                multiple
+                                className="sr-only"
+                                aria-label="Attach files"
+                                onChange={(event) => {
+                                    attach(event.target.files);
+
+                                    // Cleared so choosing the same file twice in
+                                    // a row still fires a change event.
+                                    event.target.value = '';
+                                }}
+                            />
+
+                            <button
+                                type="button"
+                                onClick={() => filePicker.current?.click()}
+                                disabled={uploads.isFull}
+                                title={
+                                    uploads.isFull
+                                        ? 'That is as many files as one message can carry'
+                                        : 'Attach files'
+                                }
+                                className={cn(
+                                    'shrink-0 rounded-lg p-1.5 pb-0.5 transition-colors',
+                                    uploads.isFull
+                                        ? 'text-muted-foreground/40'
+                                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                                )}
+                            >
+                                <Paperclip
+                                    aria-hidden="true"
+                                    className="size-4"
+                                />
+                                <span className="sr-only">Attach files</span>
+                            </button>
+                        </>
+                    )}
+
                     <Textarea
                         ref={textarea}
                         value={body}
@@ -211,6 +338,22 @@ export function MessageComposer({
                         onBlur={() => {
                             setMention(null);
                             onStopTyping?.();
+                        }}
+                        /*
+                         * Pasting a screenshot is how most images get shared,
+                         * and it arrives as a file on the clipboard rather than
+                         * as text. Only handled when there actually are files —
+                         * pasting ordinary text must still paste text.
+                         */
+                        onPaste={(event) => {
+                            const files = Array.from(event.clipboardData.files);
+
+                            if (files.length === 0 || !attachmentsEnabled) {
+                                return;
+                            }
+
+                            event.preventDefault();
+                            attach(files);
                         }}
                         onKeyDown={(event) => {
                             /*
@@ -314,10 +457,24 @@ export function MessageComposer({
                 </div>
             </div>
 
-            <p className="mt-1.5 px-1 text-[0.6875rem] text-muted-foreground">
-                <strong className="font-semibold">Enter</strong> to send,{' '}
-                <strong className="font-semibold">Shift + Enter</strong> for a
-                new line
+            <p
+                className="mt-1.5 px-1 text-[0.6875rem] text-muted-foreground"
+                aria-live="polite"
+            >
+                {uploads.isUploading ? (
+                    // Replaces the shortcut hint rather than sitting beside it:
+                    // the reason the send button is dark right now is the one
+                    // thing worth saying here.
+                    <>Uploading… the message will send once the files finish.</>
+                ) : (
+                    <>
+                        <strong className="font-semibold">Enter</strong> to
+                        send,{' '}
+                        <strong className="font-semibold">Shift + Enter</strong>{' '}
+                        for a new line
+                        {attachmentsEnabled && ', or drop files here'}
+                    </>
+                )}
             </p>
         </div>
     );

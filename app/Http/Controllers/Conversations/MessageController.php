@@ -51,6 +51,7 @@ class MessageController extends Controller
             sender: $request->user(),
             body: $request->messageBody(),
             parent: $request->parentMessage(),
+            attachments: $request->attachments(),
         );
 
         return response()->json(

@@ -80,6 +80,7 @@ function makeMessage(id: number, overrides: Partial<Message> = {}): Message {
         reactions: [],
         is_pinned: false,
         has_attachments: false,
+        attachments: [],
         is_edited: false,
         edited_at: null,
         created_at: '2026-07-30T10:00:00Z',
@@ -148,6 +149,7 @@ describe('useConversationMessages', () => {
             '/w/snack-hq/dms/conv_01HZX/messages',
             {
                 body: 'Lunch?',
+                attachment_ids: [],
             },
         );
     });

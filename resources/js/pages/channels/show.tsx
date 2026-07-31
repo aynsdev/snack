@@ -256,6 +256,7 @@ function ChannelTimeline({
                     // so the picker asks the server, scoped to this channel.
                     mentionSource={mentionSource}
                     typists={typing.typists}
+                    workspaceSlug={workspace.slug}
                     onTyping={typing.startTyping}
                     onStopTyping={typing.stopTyping}
                     disabled={!canPost}

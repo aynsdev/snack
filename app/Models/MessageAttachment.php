@@ -92,7 +92,59 @@ class MessageAttachment extends Model
         $query->whereNull('message_id');
     }
 
+    /**
+     * Files that made it onto a sent message. The only ones anybody other than
+     * the uploader has any business seeing.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeAttached(Builder $query): void
+    {
+        $query->whereNotNull('message_id');
+    }
+
+    /**
+     * The file browser's type filter, expressed against MIME prefixes so the
+     * grouping matches {@see self::kind()} exactly.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeOfKind(Builder $query, string $kind): void
+    {
+        match ($kind) {
+            'image', 'video', 'audio' => $query->where('mime_type', 'like', $kind.'/%'),
+            'pdf' => $query->where('mime_type', 'application/pdf'),
+            // Everything the named buckets do not claim.
+            'file' => $query
+                ->where('mime_type', 'not like', 'image/%')
+                ->where('mime_type', 'not like', 'video/%')
+                ->where('mime_type', 'not like', 'audio/%')
+                ->where('mime_type', '!=', 'application/pdf'),
+            default => null,
+        };
+    }
+
     // -- State ---------------------------------------------------------------
+
+    /**
+     * The bucket the client renders this file as.
+     *
+     * Derived from the MIME type rather than the extension, and kept here rather
+     * than in the client so the browser's filter and the message's rendering
+     * cannot disagree about what counts as an image.
+     *
+     * @return 'image'|'video'|'audio'|'pdf'|'file'
+     */
+    public function kind(): string
+    {
+        return match (true) {
+            $this->isImage() => 'image',
+            $this->isVideo() => 'video',
+            $this->isAudio() => 'audio',
+            $this->isPdf() => 'pdf',
+            default => 'file',
+        };
+    }
 
     public function isImage(): bool
     {

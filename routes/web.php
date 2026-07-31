@@ -11,6 +11,8 @@ use App\Http\Controllers\Conversations\ConversationReadController;
 use App\Http\Controllers\Conversations\DirectoryController;
 use App\Http\Controllers\Conversations\MessageController as ConversationMessageController;
 use App\Http\Controllers\Conversations\ParticipantController;
+use App\Http\Controllers\Files\DownloadController;
+use App\Http\Controllers\Files\FileBrowserController;
 use App\Http\Controllers\InvitationAcceptanceController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\Messages\MentionController;
@@ -20,6 +22,8 @@ use App\Http\Controllers\Messages\SaveController;
 use App\Http\Controllers\Messages\ThreadController;
 use App\Http\Controllers\Messages\ThreadReadController;
 use App\Http\Controllers\Messages\ThreadSubscriptionController;
+use App\Http\Controllers\SearchController;
+use App\Http\Controllers\UploadController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\Workspaces\InvitationController;
 use App\Http\Controllers\Workspaces\MemberController;
@@ -184,6 +188,36 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::get('mentions', [MentionController::class, 'index'])->name('mentions.index');
         Route::get('saved', [SaveController::class, 'index'])->name('saved.index');
 
+        /*
+         * Search and the file browser.
+         *
+         * Both are Inertia pages rather than JSON endpoints: their state belongs
+         * in the URL so a search can be linked and reloaded, and neither has
+         * anything live about it to merge.
+         *
+         * These are the only two read paths in the app that start from the whole
+         * workspace instead of from a container the route already authorized, so
+         * both narrow through App\Services\MessageVisibility.
+         */
+        Route::get('search', [SearchController::class, 'index'])
+            ->middleware('throttle:message-reads')
+            ->name('search.index');
+
+        Route::get('files', [FileBrowserController::class, 'index'])
+            ->middleware('throttle:message-reads')
+            ->name('files.index');
+
+        /*
+         * The composer's attachment tray. A file is uploaded while the composer
+         * is still open and is only claimed by a message when that message is
+         * sent — see App\Actions\Attachments\StoreUpload.
+         */
+        Route::post('uploads', [UploadController::class, 'store'])
+            ->middleware('throttle:uploads')
+            ->name('uploads.store');
+        Route::delete('uploads/{attachment}', [UploadController::class, 'destroy'])
+            ->name('uploads.destroy');
+
         Route::get('messages/{message}/thread', [ThreadController::class, 'show'])
             ->middleware('throttle:message-reads')
             ->name('threads.show');
@@ -237,5 +271,29 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::delete('invitations/{invitation}', [InvitationController::class, 'destroy'])
             ->name('workspace-invitations.destroy');
     });
+
+/*
+|--------------------------------------------------------------------------
+| File delivery
+|--------------------------------------------------------------------------
+|
+| Deliberately outside the workspace prefix. These URLs are minted by queued
+| broadcasts, which have no request and therefore no resolved workspace, and a
+| slug in the path would break every existing link the moment a workspace was
+| renamed.
+|
+| `signed` bounds how long a copied link keeps working. It is not what grants
+| access: the controller re-resolves the attachment, finds the message it hangs
+| off, and puts that message through the container policy on every single hit —
+| so a forwarded link is a 404 for someone who was never in the channel, however
+| valid its signature.
+|
+*/
+
+Route::middleware(['auth', 'signed'])->group(function () {
+    Route::get('files/{attachment}', [DownloadController::class, 'show'])->name('files.show');
+    Route::get('files/{attachment}/thumbnail', [DownloadController::class, 'thumbnail'])
+        ->name('files.thumbnail');
+});
 
 require __DIR__.'/settings.php';

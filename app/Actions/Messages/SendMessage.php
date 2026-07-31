@@ -2,14 +2,18 @@
 
 namespace App\Actions\Messages;
 
+use App\Actions\Attachments\LinkAttachments;
 use App\Enums\MessageType;
 use App\Events\MessageSent;
 use App\Events\ThreadActivity;
+use App\Jobs\IndexMessage;
 use App\Models\Channel;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\User;
 use App\Services\MessageBody;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -35,13 +39,20 @@ class SendMessage
     public function __construct(
         private readonly SubscribeToThread $subscribe,
         private readonly SyncMentions $mentions,
+        private readonly LinkAttachments $attachments,
     ) {}
 
+    /**
+     * @param  Collection<int, MessageAttachment>|null  $attachments  Uploads to
+     *                                                                claim for this message, already resolved through the workspace and
+     *                                                                the uploader — see ResolvesAttachments. Never client ids.
+     */
     public function handle(
         Channel|Conversation $container,
         User $sender,
         string $body,
         ?Message $parent = null,
+        ?Collection $attachments = null,
     ): Message {
         $content = MessageBody::fromInput($body);
 
@@ -53,7 +64,9 @@ class SendMessage
          */
         $root = $parent?->threadRootId();
 
-        $message = DB::transaction(function () use ($container, $sender, $content, $root): Message {
+        $files = $attachments ?? new Collection;
+
+        $message = DB::transaction(function () use ($container, $sender, $content, $root, $files): Message {
             $message = Message::create([
                 ...$content->toAttributes(),
 
@@ -64,11 +77,26 @@ class SendMessage
                 'conversation_id' => $container instanceof Conversation ? $container->id : null,
                 'parent_message_id' => $root,
                 'sender_id' => $sender->id,
+                /*
+                 * Attachments deliberately do not make this a `file` message.
+                 * Carrying files is a property of a message, not a kind of
+                 * message — `has_attachments` says so — and spending the type on
+                 * it would cost the announcement distinction, which decides who
+                 * is allowed to post at all.
+                 */
                 'type' => $container instanceof Channel && $container->type->requiresElevatedPostingRights()
                     ? MessageType::Announcement
                     : MessageType::Text,
                 'metadata' => [],
             ]);
+
+            /*
+             * Inside the transaction so a message and its files commit together.
+             * Outside it, a failure between the two would leave a message whose
+             * attachments are still unclaimed — and therefore due to be swept by
+             * the orphan pruner, silently emptying a sent message hours later.
+             */
+            $this->attachments->handle($message, $files);
 
             /*
              * A reply is thread activity, not container activity.
@@ -108,6 +136,16 @@ class SendMessage
          */
         $message->setRelation('sender', $sender);
         $message->setRelation($container instanceof Channel ? 'channel' : 'conversation', $container);
+
+        // Re-read rather than reusing the models handed in: the claim above is
+        // an UPDATE, so the in-memory copies still say `message_id` is null.
+        $message->setRelation(
+            'attachments',
+            $files->isEmpty() ? new Collection : $message->attachments()->get(),
+        );
+
+        // The vector folds in the filenames, so it is queued after the claim.
+        IndexMessage::dispatch($message->id);
 
         MessageSent::dispatch($message);
 

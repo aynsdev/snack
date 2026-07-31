@@ -7,7 +7,9 @@ use App\Events\ConversationActivity;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\User;
+use Illuminate\Support\Collection;
 
 /**
  * Posts a message to a conversation.
@@ -32,17 +34,22 @@ class SendConversationMessage
 {
     public function __construct(private readonly SendMessage $sendMessage) {}
 
+    /**
+     * @param  Collection<int, MessageAttachment>|null  $attachments
+     */
     public function handle(
         Conversation $conversation,
         User $sender,
         string $body,
         ?Message $parent = null,
+        ?Collection $attachments = null,
     ): Message {
         $message = $this->sendMessage->handle(
             container: $conversation,
             sender: $sender,
             body: $body,
             parent: $parent,
+            attachments: $attachments,
         );
 
         /*
