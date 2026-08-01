@@ -347,3 +347,38 @@ it('drops a save whose message was deleted', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page->has('saved', 0));
 });
+
+/*
+ * See the matching test in tests/Feature/Messages/MentionTest.php. Both views
+ * list messages out of context and both used to load the container as a column
+ * subset that omitted the very flags ChannelPolicy decides on, so an archived
+ * channel reported itself as live.
+ */
+it('stops offering container actions once the channel is archived', function () {
+    [$workspace, $member, $channel] = makePinFixture();
+
+    $own = makeMessage($channel, $member, 'Mine, in a channel about to close.');
+
+    $this->actingAs($member);
+    save($workspace, $own)->assertOk();
+
+    $assertFlags = fn (bool $update, bool $pin, bool $delete) => $this
+        ->get(route('saved.index', ['workspace' => $workspace->slug]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('saved.0.message.can.update', $update)
+            ->where('saved.0.message.can.pin', $pin)
+            ->where('saved.0.message.can.delete', $delete));
+
+    $assertFlags(update: true, pin: true, delete: true);
+
+    $channel->forceFill(['is_archived' => true])->save();
+
+    /*
+     * Deleting stays available and that is deliberate: MessagePolicy::delete()
+     * is author-or-admin on top of plain `view`, so withdrawing your own message
+     * survives the channel closing. Editing and pinning both route through
+     * `post`, which does not.
+     */
+    $assertFlags(update: false, pin: false, delete: true);
+});

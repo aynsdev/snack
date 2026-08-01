@@ -9,6 +9,7 @@ use App\Http\Resources\MessageResource;
 use App\Models\Message;
 use App\Models\SavedMessage;
 use App\Models\Workspace;
+use App\Services\MessageContainers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -24,7 +25,10 @@ use Inertia\Response as InertiaResponse;
  */
 class SaveController extends Controller
 {
-    public function __construct(private readonly ToggleSave $saves) {}
+    public function __construct(
+        private readonly ToggleSave $saves,
+        private readonly MessageContainers $containers,
+    ) {}
 
     /**
      * The "Saved" view: everything this user has bookmarked in this workspace.
@@ -43,13 +47,18 @@ class SaveController extends Controller
             ->whereHas('message', fn ($query) => $query->where('workspace_id', $workspace->id))
             ->with([
                 'message' => fn ($query) => $query->withTimelineRelations($request->user())->with([
-                    'channel:id,name,slug,type,workspace_id',
+                    'channel',
                     'conversation',
                 ]),
             ])
             ->orderByDesc('id')
             ->limit((int) config('snack.saved.list_limit', 50))
             ->get();
+
+        // Bookmarks come from anywhere in the workspace, so the policy checks
+        // below would otherwise walk each container's workspace and membership
+        // one message at a time.
+        $this->containers->prime($saved->pluck('message'), $request->user());
 
         return Inertia::render('saved/index', [
             'saved' => $saved

@@ -297,3 +297,34 @@ it('does not count a mention on a deleted message', function () {
 
     expect(app(UnreadCounter::class)->mentionCount($workspace, $bo))->toBe(0);
 });
+
+/*
+ * The inbox used to eager-load the container as `channel:id,name,slug,type,
+ * workspace_id`, and ChannelPolicy decides on `is_archived`, `is_private` and
+ * `is_default` — none of which were selected. An unselected column reads back as
+ * null rather than raising, so an archived channel described itself as live and
+ * the inbox offered an Edit action the server would then refuse. Whatever else
+ * changes here, the answer must match the one the channel timeline gives.
+ */
+it('stops offering container actions once the channel is archived', function () {
+    [$workspace, $owner, $channel, $bo] = makeMentionFixture();
+
+    $this->actingAs($owner);
+    sendWithMentions($workspace, $channel, 'Morning @bo')->assertCreated();
+
+    /*
+     * Pinning rather than editing, because it is decided purely by the
+     * container: `bo` did not write this message, so an assertion about editing
+     * would pass on authorship alone and prove nothing about the archive.
+     */
+    $assertCanPin = fn (bool $expected) => $this->actingAs($bo)
+        ->get(route('mentions.index', $workspace))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('mentions.0.message.can.pin', $expected));
+
+    $assertCanPin(true);
+
+    $channel->forceFill(['is_archived' => true])->save();
+
+    $assertCanPin(false);
+});

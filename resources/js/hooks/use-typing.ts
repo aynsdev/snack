@@ -1,5 +1,11 @@
 import { useChannel } from '@laravel/echo-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+/*
+ * Configures the transport as a side effect. Imported here rather than left to
+ * the entry file: subscribing without it produces no error, just a socket that
+ * never connects, so every module that subscribes states the dependency itself.
+ */
+import '@/lib/echo';
 
 /**
  * How long a typing signal stays valid, in milliseconds.

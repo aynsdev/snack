@@ -7,6 +7,7 @@ use App\Http\Resources\ContainerSummary;
 use App\Http\Resources\MessageResource;
 use App\Models\Mention;
 use App\Models\Workspace;
+use App\Services\MessageContainers;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -24,6 +25,8 @@ use Inertia\Response as InertiaResponse;
  */
 class MentionController extends Controller
 {
+    public function __construct(private readonly MessageContainers $containers) {}
+
     public function index(Workspace $workspace, Request $request): InertiaResponse
     {
         $mentions = Mention::query()
@@ -31,7 +34,7 @@ class MentionController extends Controller
             ->whereHas('message')
             ->with([
                 'message' => fn ($query) => $query->withTimelineRelations()->with([
-                    'channel:id,name,slug,type,workspace_id',
+                    'channel',
                     'conversation',
                 ]),
             ])
@@ -40,6 +43,11 @@ class MentionController extends Controller
             ->orderByDesc('id')
             ->limit((int) config('snack.mentions.list_limit', 50))
             ->get();
+
+        // These rows come from anywhere in the workspace, so the policy checks
+        // below would otherwise walk each container's workspace and membership
+        // one message at a time.
+        $this->containers->prime($mentions->pluck('message'), $request->user());
 
         return Inertia::render('mentions/index', [
             /*
