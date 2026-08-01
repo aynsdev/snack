@@ -28,6 +28,7 @@ use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\Notifications\NotificationPreferenceController;
 use App\Http\Controllers\Notifications\NotificationReadController;
 use App\Http\Controllers\SearchController;
+use App\Http\Controllers\SetupController;
 use App\Http\Controllers\UploadController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\Workspaces\AuditLogController;
@@ -35,7 +36,29 @@ use App\Http\Controllers\Workspaces\InvitationController;
 use App\Http\Controllers\Workspaces\LogoController;
 use App\Http\Controllers\Workspaces\MemberController;
 use App\Http\Controllers\Workspaces\SettingsController;
+use App\Http\Middleware\EnsureInstanceIsSetUp;
+use App\Http\Middleware\EnsureInstanceNeedsSetup;
 use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| First-run setup
+|--------------------------------------------------------------------------
+|
+| Only reachable while the installation has no accounts. Snack is
+| invitation-first, so without this a fresh install has no way in at all:
+| registration 404s because nobody holds an invitation, and the login form has
+| nothing to authenticate against.
+|
+*/
+
+Route::middleware(EnsureInstanceNeedsSetup::class)->group(function () {
+    Route::get('setup', [SetupController::class, 'create'])->name('setup.create');
+
+    Route::post('setup', [SetupController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('setup.store');
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -43,7 +66,9 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-Route::inertia('/', 'welcome')->name('home');
+Route::inertia('/', 'welcome')
+    ->middleware(EnsureInstanceIsSetUp::class)
+    ->name('home');
 
 /*
 |--------------------------------------------------------------------------

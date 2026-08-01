@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Services\InstanceSetup;
 use App\Services\RegistrationGate;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -49,10 +50,20 @@ class FortifyServiceProvider extends ServiceProvider
      */
     private function configureViews(): void
     {
-        Fortify::loginView(fn (Request $request) => Inertia::render('auth/login', [
-            'canResetPassword' => Features::enabled(Features::resetPasswords()),
-            'status' => $request->session()->get('status'),
-        ]));
+        // A fresh installation has nothing to authenticate against, so the login
+        // form would be a dead end. Fortify's routes are vendor-registered and
+        // cannot take route middleware here, so the redirect lives in the view
+        // callback instead.
+        Fortify::loginView(function (Request $request) {
+            if (app(InstanceSetup::class)->isPending()) {
+                return redirect()->route('setup.create');
+            }
+
+            return Inertia::render('auth/login', [
+                'canResetPassword' => Features::enabled(Features::resetPasswords()),
+                'status' => $request->session()->get('status'),
+            ]);
+        });
 
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [
             'email' => $request->email,

@@ -1,4 +1,5 @@
 import { Form, Head } from '@inertiajs/react';
+import { Lock } from 'lucide-react';
 import InputError from '@/components/input-error';
 import PasskeyVerify from '@/components/passkey-verify';
 import PasswordInput from '@/components/password-input';
@@ -8,7 +9,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
 
@@ -92,11 +92,16 @@ export default function Login({ status, canResetPassword }: Props) {
                             </Button>
                         </div>
 
-                        <div className="text-center text-sm text-muted-foreground">
-                            Don't have an account?{' '}
-                            <TextLink href={register()} tabIndex={5}>
-                                Sign up
-                            </TextLink>
+                        {/*
+                         * No sign-up link. Snack is invitation-first, so the
+                         * registration route deliberately 404s for anyone who
+                         * is not holding a live invitation — offering it here
+                         * would send people to a dead end and make a working
+                         * installation look broken.
+                         */}
+                        <div className="flex items-center justify-center gap-1.5 text-center text-sm text-muted-foreground">
+                            <Lock aria-hidden="true" className="size-3.5" />
+                            Snack is invite-only. Ask an admin for a link.
                         </div>
                     </>
                 )}

@@ -5,6 +5,11 @@ use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Fortify\Features;
 
 test('login screen can be rendered', function () {
+    // An account has to exist first: on an installation with none, the login
+    // form has nothing to authenticate against and redirects to first-run
+    // setup instead. See tests/Feature/Setup/InstanceSetupTest.php.
+    User::factory()->create();
+
     $response = $this->get(route('login'));
 
     $response->assertOk();
