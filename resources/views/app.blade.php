@@ -8,6 +8,12 @@
         <script>
             (function() {
                 const appearance = '{{ $appearance ?? "system" }}';
+                const colorThemes = ['original', 'sage', 'ocean', 'clay', 'rose', 'graphite'];
+                const storedColorTheme = localStorage.getItem('color-theme');
+
+                document.documentElement.dataset.colorTheme = colorThemes.includes(storedColorTheme)
+                    ? storedColorTheme
+                    : 'original';
 
                 if (appearance === 'system') {
                     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -23,10 +29,12 @@
         <style>
             html {
                 background-color: oklch(1 0 0);
+                color-scheme: light;
             }
 
             html.dark {
                 background-color: oklch(0.145 0 0);
+                color-scheme: dark;
             }
         </style>
 

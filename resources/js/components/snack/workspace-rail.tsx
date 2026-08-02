@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
 import { UserAvatar } from '@/components/snack/user-avatar';
+import { ThemeSwitcher } from '@/components/theme-switcher';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -71,7 +72,10 @@ export function WorkspaceRail({
                 </li>
             </ul>
 
-            {user && <RailUserMenu />}
+            <div className="flex flex-col items-center gap-2">
+                <ThemeSwitcher />
+                {user && <RailUserMenu />}
+            </div>
         </nav>
     );
 }
