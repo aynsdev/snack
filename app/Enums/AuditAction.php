@@ -16,6 +16,8 @@ enum AuditAction: string
 
     case MemberInvited = 'member.invited';
     case MemberInvitationRevoked = 'member.invitation_revoked';
+    case InviteLinkCreated = 'member.invite_link_created';
+    case InviteLinkRevoked = 'member.invite_link_revoked';
     case MemberJoined = 'member.joined';
     case MemberRemoved = 'member.removed';
     case MemberSuspended = 'member.suspended';
@@ -39,6 +41,8 @@ enum AuditAction: string
             self::WorkspaceSettingsUpdated => 'Workspace settings updated',
             self::MemberInvited => 'Member invited',
             self::MemberInvitationRevoked => 'Invitation revoked',
+            self::InviteLinkCreated => 'Invite link created',
+            self::InviteLinkRevoked => 'Invite link revoked',
             self::MemberJoined => 'Member joined',
             self::MemberRemoved => 'Member removed',
             self::MemberSuspended => 'Member suspended',

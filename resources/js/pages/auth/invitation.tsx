@@ -12,7 +12,9 @@ type Props = {
         description: string | null;
     };
     invitedBy: string;
-    email: string;
+    /** Null for a shareable link, which is addressed to nobody. */
+    email: string | null;
+    isLink: boolean;
     role: string;
     expiresAt: string;
     isAuthenticated: boolean;
@@ -28,6 +30,11 @@ type Props = {
  * workspace name, the inviter, and the invited address are revealed — all
  * things the recipient already knows from the email that brought them here.
  *
+ * A shareable invite link is the same page with no addressee. The "Invited
+ * address" row and the wrong-account notice both drop away, because neither has
+ * anything to say: a link is meant to be forwarded, so whoever is holding it is
+ * the right person by definition.
+ *
  * Renders inside the shared auth layout, which supplies the Snack mark and the
  * centred column. The heading goes through `setLayoutProps` because it names
  * the workspace and so cannot be a static layout value.
@@ -37,6 +44,7 @@ export default function Invitation({
     workspace,
     invitedBy,
     email,
+    isLink,
     role,
     expiresAt,
     isAuthenticated,
@@ -67,12 +75,14 @@ export default function Invitation({
                 </div>
 
                 <dl className="space-y-1.5 rounded-xl border border-border p-4 text-sm text-muted-foreground">
-                    <div className="flex justify-between gap-4">
-                        <dt>Invited address</dt>
-                        <dd className="truncate font-medium text-foreground">
-                            {email}
-                        </dd>
-                    </div>
+                    {email !== null && (
+                        <div className="flex justify-between gap-4">
+                            <dt>Invited address</dt>
+                            <dd className="truncate font-medium text-foreground">
+                                {email}
+                            </dd>
+                        </div>
+                    )}
                     <div className="flex justify-between gap-4">
                         <dt>Role</dt>
                         <dd className="font-medium text-foreground">{role}</dd>
@@ -87,7 +97,7 @@ export default function Invitation({
 
                 {!isAuthenticated ? (
                     <SignedOutActions />
-                ) : emailMatches ? (
+                ) : emailMatches || isLink ? (
                     <Button
                         className="w-full"
                         onClick={() => router.post(accept(token))}
@@ -95,7 +105,7 @@ export default function Invitation({
                         Join {workspace.name}
                     </Button>
                 ) : (
-                    <WrongAccountNotice email={email} />
+                    <WrongAccountNotice email={email ?? ''} />
                 )}
             </div>
         </>

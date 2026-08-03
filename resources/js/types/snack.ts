@@ -48,7 +48,14 @@ export type NotificationReason = 'mention' | 'direct_message' | 'thread_reply';
 export type PresenceStatus = 'online' | 'away' | 'offline' | 'do_not_disturb';
 
 /** Lifecycle of a workspace invitation, from WorkspaceInvitation::status(). */
-export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
+export type InvitationStatus =
+    | 'pending'
+    | 'accepted'
+    | 'revoked'
+    | 'expired'
+    // A shareable link that has been redeemed its full `max_uses` times. Only
+    // links can reach this: an emailed invitation is spent via `accepted_at`.
+    | 'used_up';
 
 // -- Core records ------------------------------------------------------------
 
@@ -500,7 +507,19 @@ export type WorkspaceMember = {
 /** Mirrors App\Http\Resources\WorkspaceInvitationResource. */
 export type WorkspaceInvitation = {
     id: number;
-    email: string;
+    /** Null for a shareable invite link, which is addressed to nobody. */
+    email: string | null;
+    is_link: boolean;
+    /** Null means unlimited within the expiry window. */
+    max_uses: number | null;
+    use_count: number;
+    /**
+     * The URL to hand out. Present only where the server opted in via
+     * `WorkspaceInvitationResource::withUrl()` — an emailed invitation never
+     * has one, because its plaintext token lives only in the message that
+     * carried it.
+     */
+    url?: string | null;
     role: WorkspaceRole;
     role_label: string;
     status: InvitationStatus;

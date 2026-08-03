@@ -27,15 +27,39 @@ class InvitationController extends Controller
 
         // Outstanding rather than pending: an expired invitation stays listed
         // so an admin can see that someone was invited and never arrived.
+        //
+        // `addressed()` excludes the shareable link, which shares this table but
+        // is not a row in this list — it is a single URL with its own card, and
+        // listing it among the people who were written to would make "revoke"
+        // ambiguous about what it closes.
         $invitations = $workspace->invitations()
+            ->addressed()
             ->outstanding()
             ->with('inviter')
             ->latest()
             ->paginate(50)
             ->withQueryString();
 
+        $link = $workspace->invitations()
+            ->links()
+            ->outstanding()
+            ->with('inviter')
+            ->latest()
+            ->first();
+
         return Inertia::render('workspace/invitations', [
             'invitations' => WorkspaceInvitationResource::collection($invitations),
+
+            /*
+             * Null when the workspace has no live link, which the page renders
+             * as an off state with a button rather than as an empty card. An
+             * expired or spent link is still returned — the admin needs to see
+             * *why* it stopped working, and "nothing here" would read as though
+             * one was never made.
+             */
+            'inviteLink' => $link === null
+                ? null
+                : (new WorkspaceInvitationResource($link))->withUrl()->resolve(request()),
         ]);
     }
 

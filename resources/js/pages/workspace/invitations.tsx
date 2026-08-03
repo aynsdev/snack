@@ -2,6 +2,7 @@ import { Form, Head, router } from '@inertiajs/react';
 import { MailPlus } from 'lucide-react';
 import InputError from '@/components/input-error';
 import { EmptyState } from '@/components/snack/empty-state';
+import { InviteLinkCard } from '@/components/snack/invite-link-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,8 @@ type Props = {
         data: WorkspaceInvitation[];
         meta: { total: number };
     };
+    /** The workspace's shareable link, or null if it has never had one. */
+    inviteLink: WorkspaceInvitation | null;
 };
 
 const STATUS_VARIANT: Record<
@@ -32,6 +35,8 @@ const STATUS_VARIANT: Record<
     accepted: 'secondary',
     expired: 'outline',
     revoked: 'destructive',
+    // Links only; an emailed invitation is spent through `accepted_at`.
+    used_up: 'outline',
 };
 
 /**
@@ -41,7 +46,10 @@ const STATUS_VARIANT: Record<
  * that someone was invited and never came — silently dropping the row would
  * make it look like the invitation was never sent.
  */
-export default function WorkspaceInvitations({ invitations }: Props) {
+export default function WorkspaceInvitations({
+    invitations,
+    inviteLink,
+}: Props) {
     const workspace = useWorkspace();
 
     return (
@@ -55,10 +63,17 @@ export default function WorkspaceInvitations({ invitations }: Props) {
                             Invite people
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            Invitations expire automatically and can be revoked
-                            at any time.
+                            Share a link, or invite people by email. Both expire
+                            automatically and can be revoked at any time.
                         </p>
                     </header>
+
+                    <InviteLinkCard
+                        link={inviteLink}
+                        workspaceSlug={workspace.slug}
+                    />
+
+                    <h2 className="mb-3 font-semibold">Invite by email</h2>
 
                     <Form
                         action={store(workspace.slug)}

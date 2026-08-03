@@ -34,6 +34,7 @@ use App\Http\Controllers\UploadController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\Workspaces\AuditLogController;
 use App\Http\Controllers\Workspaces\InvitationController;
+use App\Http\Controllers\Workspaces\InviteLinkController;
 use App\Http\Controllers\Workspaces\LogoController;
 use App\Http\Controllers\Workspaces\MemberController;
 use App\Http\Controllers\Workspaces\SettingsController;
@@ -392,6 +393,18 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::post('invitations', [InvitationController::class, 'store'])
             ->middleware('throttle:30,1')
             ->name('workspace-invitations.store');
+        /*
+         * The workspace's one shareable invite link. Addressed as a singleton
+         * rather than by id: there is only ever one live link, and naming it in
+         * the URL would invite a request that revokes another workspace's.
+         */
+        Route::post('invite-link', [InviteLinkController::class, 'store'])
+            ->middleware('throttle:10,1')
+            ->name('workspace-invite-link.store');
+
+        Route::delete('invite-link', [InviteLinkController::class, 'destroy'])
+            ->name('workspace-invite-link.destroy');
+
         Route::delete('invitations/{invitation}', [InvitationController::class, 'destroy'])
             ->name('workspace-invitations.destroy');
     });

@@ -56,7 +56,10 @@ class InvitationAcceptanceController extends Controller
                 'description' => $invitation->workspace->description,
             ],
             'invitedBy' => $invitation->inviter->name,
+            // Null for a shareable link, which names nobody — the landing page
+            // drops the "invited as …" line rather than printing an empty one.
             'email' => $invitation->email,
+            'isLink' => $invitation->isLink(),
             'role' => $invitation->role->label(),
             'expiresAt' => $invitation->expires_at->toIso8601String(),
             'isAuthenticated' => $user !== null,

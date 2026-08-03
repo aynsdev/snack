@@ -26,7 +26,13 @@ class RevokeWorkspaceInvitation
 
         $this->audit->handle(
             workspace: $invitation->workspace,
-            action: AuditAction::MemberInvitationRevoked,
+            // A revoked link is a different event from a withdrawn invitation:
+            // one closes a door for everybody holding a URL, the other for one
+            // named person, and an admin reading the log needs to tell them
+            // apart at a glance.
+            action: $invitation->isLink()
+                ? AuditAction::InviteLinkRevoked
+                : AuditAction::MemberInvitationRevoked,
             actor: $actor,
             auditable: $invitation,
             oldValues: ['email' => $invitation->email, 'role' => $invitation->role->value],

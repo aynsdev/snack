@@ -57,6 +57,24 @@ return [
 
     'invitations' => [
         'ttl_days' => (int) env('SNACK_INVITATION_TTL_DAYS', 7),
+
+        /*
+         * Shareable invite links live longer than emailed invitations, because
+         * they are used differently: an emailed invitation is aimed at one
+         * person who is expected to act on it this week, while a link goes in an
+         * onboarding doc or a team channel and is expected to still work for the
+         * next person who reads it. Short enough that a leaked URL stops being a
+         * way in without anybody noticing.
+         */
+        'link_ttl_days' => (int) env('SNACK_INVITE_LINK_TTL_DAYS', 30),
+
+        /*
+         * The ceiling an admin may set on one link's redemptions. Not a default
+         * — a link is unlimited within its expiry unless a limit is chosen — but
+         * a bound on the number the form will accept, so the column cannot be
+         * handed something absurd.
+         */
+        'link_max_uses' => (int) env('SNACK_INVITE_LINK_MAX_USES', 1000),
     ],
 
     /*
@@ -345,16 +363,36 @@ return [
     | Presence
     |--------------------------------------------------------------------------
     |
-    | Live presence is tracked in Redis / Reverb presence channels. The database
-    | column "users.last_seen_at" is only persisted every N seconds so that an
-    | active workspace does not generate a write per keystroke.
+    | How the green dot is kept honest.
+    |
+    | Presence is a claim with an expiry, not a flag. A browser that is closed,
+    | crashed, or dropped off wifi sends nothing at all — there is no "goodbye"
+    | to rely on — so a status only ever written by the client stays Online
+    | forever. Every value here exists to make the claim decay:
+    |
+    | - "heartbeat_seconds" is how often an open tab renews it.
+    | - "away_after_seconds" is when a silent tab is assumed idle rather than
+    |   gone. Roughly two missed beats, so one dropped request does not flicker
+    |   somebody to Away while they are typing.
+    | - "offline_after_seconds" is when it is assumed gone. Deliberately several
+    |   missed beats: calling somebody offline while they are reading is the
+    |   error people actually notice.
+    |
+    | The client also reports Away directly when its tab is hidden, which is
+    | faster and more accurate than any timer here. The windows are the backstop
+    | for when the client cannot report at all.
+    |
+    | "typing_ttl_seconds" is unrelated to the decay above: it is how long a
+    | typing indicator survives without a fresh whisper, mirrored by hand in
+    | resources/js/hooks/use-typing.ts.
     |
     */
 
     'presence' => [
         'heartbeat_seconds' => (int) env('SNACK_PRESENCE_HEARTBEAT_SECONDS', 60),
+        'away_after_seconds' => (int) env('SNACK_PRESENCE_AWAY_AFTER_SECONDS', 150),
+        'offline_after_seconds' => (int) env('SNACK_PRESENCE_OFFLINE_AFTER_SECONDS', 300),
         'typing_ttl_seconds' => 5,
-        'away_after_seconds' => 300,
     ],
 
     /*
@@ -393,38 +431,6 @@ return [
             // email with two hundred rows in it is not read.
             'max_items' => 15,
         ],
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Presence
-    |--------------------------------------------------------------------------
-    |
-    | How the green dot is kept honest.
-    |
-    | Presence is a claim with an expiry, not a flag. A browser that is closed,
-    | crashed, or dropped off wifi sends nothing at all — there is no "goodbye"
-    | to rely on — so a status that is only ever written by the client stays
-    | Online forever. Every value here exists to make the claim decay:
-    |
-    | - "heartbeat_seconds" is how often an open tab renews the claim.
-    | - "away_after_seconds" is when a silent tab is assumed idle rather than
-    |   gone. Roughly two missed beats, so one dropped request does not flicker
-    |   somebody to Away while they are typing.
-    | - "offline_after_seconds" is when it is assumed gone. Deliberately several
-    |   missed beats: calling somebody offline while they are reading is the
-    |   error people actually notice.
-    |
-    | The client also reports Away directly when its tab is hidden, which is
-    | faster and more accurate than any timer here. The windows are the backstop
-    | for the case the client cannot report at all.
-    |
-    */
-
-    'presence' => [
-        'heartbeat_seconds' => (int) env('SNACK_PRESENCE_HEARTBEAT_SECONDS', 60),
-        'away_after_seconds' => (int) env('SNACK_PRESENCE_AWAY_AFTER_SECONDS', 150),
-        'offline_after_seconds' => (int) env('SNACK_PRESENCE_OFFLINE_AFTER_SECONDS', 300),
     ],
 
 ];
