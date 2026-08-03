@@ -60,6 +60,14 @@ class ProcessAttachment implements ShouldQueue
             $metadata = [...$metadata, ...$dimensions];
         }
 
+        /*
+         * Recorded so the client knows to serve the original rather than the
+         * thumbnail. GD decodes only the first frame, so the thumbnail below is
+         * a still — fine as a poster in the Files grid, wrong in a timeline
+         * where the whole point of the file is that it moves.
+         */
+        $metadata['animated'] = $images->isAnimated($contents);
+
         $thumbnail = $images->canProcess($attachment->mime_type)
             ? $images->fit($contents, (int) config('snack.uploads.thumbnail_max_edge', 640))
             : null;

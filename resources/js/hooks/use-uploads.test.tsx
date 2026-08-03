@@ -28,6 +28,7 @@ function makeAttachment(id: number, name = 'budget.pdf'): Attachment {
         kind: 'file',
         width: null,
         height: null,
+        is_animated: false,
         download_url: `/files/${id}?signature=x`,
         thumbnail_url: null,
         preview_url: null,

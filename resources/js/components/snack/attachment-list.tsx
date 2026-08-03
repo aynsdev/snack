@@ -96,9 +96,23 @@ export function AttachmentList({
  * sender sees their image immediately instead of a placeholder that resolves
  * seconds later.
  *
- * `width`/`height` are set from the stored dimensions where they are known, which
- * is what reserves the space before the bytes arrive. Without them the whole
- * conversation jumps every time an image finishes loading.
+ * # Except when it moves
+ *
+ * A thumbnail is a single frame: GD decodes only the first one, so a GIF
+ * rendered through it is a still picture of something everybody expects to
+ * animate. Animated files therefore show the original, which is the only copy
+ * that plays.
+ *
+ * That is a deliberate trade of bytes for behaviour, and it is already bounded:
+ * `preview_url` is null above the inline size ceiling, and {@see AttachmentList}
+ * routes anything without one to a file chip — so an enormous GIF never reaches
+ * here to be pulled into a scrolling timeline in the first place.
+ *
+ * `width`/`height` come from the server already corrected for EXIF orientation,
+ * which is what reserves the right space before the bytes arrive. They used to
+ * be the raw buffer's dimensions while the thumbnail beside them had been
+ * rotated upright, so a portrait photo was poured into a landscape box and read
+ * as though the image had been rotated.
  */
 function ImagePreview({
     attachment,
@@ -109,6 +123,14 @@ function ImagePreview({
     solo: boolean;
     onOpen: () => void;
 }) {
+    /*
+     * `preview_url` is non-null for everything that reaches here — the caller
+     * filters on it — so an animated file always has an original to play.
+     */
+    const source = attachment.is_animated
+        ? attachment.preview_url
+        : (attachment.thumbnail_url ?? attachment.preview_url);
+
     return (
         <button
             type="button"
@@ -120,7 +142,7 @@ function ImagePreview({
             )}
         >
             <img
-                src={attachment.thumbnail_url ?? attachment.preview_url ?? ''}
+                src={source ?? ''}
                 alt={attachment.name}
                 width={attachment.width ?? undefined}
                 height={attachment.height ?? undefined}

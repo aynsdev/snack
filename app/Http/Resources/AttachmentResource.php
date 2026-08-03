@@ -69,6 +69,14 @@ class AttachmentResource extends JsonResource
             'width' => isset($metadata['width']) ? (int) $metadata['width'] : null,
             'height' => isset($metadata['height']) ? (int) $metadata['height'] : null,
 
+            /*
+             * Whether the file moves. The client uses it to choose the original
+             * over the generated thumbnail, which is a single frozen frame.
+             * False until the queue has looked at the upload, so a GIF plays a
+             * moment after it is sent rather than never.
+             */
+            'is_animated' => (bool) ($metadata['animated'] ?? false),
+
             'download_url' => self::signed('files.show', $attachment),
 
             /*

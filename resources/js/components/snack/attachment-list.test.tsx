@@ -13,6 +13,7 @@ function makeAttachment(overrides: Partial<Attachment> = {}): Attachment {
         kind: 'file',
         width: null,
         height: null,
+        is_animated: false,
         download_url: '/files/1?signature=abc',
         thumbnail_url: null,
         preview_url: null,
@@ -145,5 +146,81 @@ describe('AttachmentList', () => {
         expect(
             screen.getByRole('link', { name: /notes\.txt/ }),
         ).toBeInTheDocument();
+    });
+});
+
+/**
+ * Animated images are the one case where the thumbnail is the wrong picture.
+ *
+ * GD decodes only the first frame, so a GIF rendered through its thumbnail is a
+ * still image of something everybody expects to move.
+ */
+describe('animated images', () => {
+    function gif(overrides: Partial<Attachment> = {}) {
+        return makeAttachment({
+            name: 'reaction.gif',
+            kind: 'image',
+            mime_type: 'image/gif',
+            is_animated: true,
+            preview_url: '/files/9?inline=1&signature=abc',
+            thumbnail_url: '/files/9/thumbnail?signature=abc',
+            width: 320,
+            height: 240,
+            ...overrides,
+        });
+    }
+
+    it('serves the original so it actually plays', () => {
+        render(<AttachmentList attachments={[gif()]} />);
+
+        expect(screen.getByAltText('reaction.gif')).toHaveAttribute(
+            'src',
+            '/files/9?inline=1&signature=abc',
+        );
+    });
+
+    it('shows an over-ceiling gif as a chip rather than inlining it', () => {
+        /*
+         * `preview_url` is null above the inline size ceiling, and the list
+         * routes anything without one to a download chip. That is what keeps
+         * "serve the original so it plays" from meaning "pull forty megabytes
+         * into a scrolling timeline".
+         */
+        render(<AttachmentList attachments={[gif({ preview_url: null })]} />);
+
+        expect(screen.queryByAltText('reaction.gif')).not.toBeInTheDocument();
+        expect(
+            screen.getByRole('link', { name: /reaction\.gif/ }),
+        ).toBeInTheDocument();
+    });
+
+    it('still prefers the thumbnail for a still image', () => {
+        render(
+            <AttachmentList
+                attachments={[gif({ is_animated: false, name: 'flat.gif' })]}
+            />,
+        );
+
+        expect(screen.getByAltText('flat.gif')).toHaveAttribute(
+            'src',
+            '/files/9/thumbnail?signature=abc',
+        );
+    });
+
+    it('sizes the box from the display dimensions', () => {
+        // Corrected for EXIF server-side, so a portrait photo reports portrait
+        // even though its raw buffer is landscape.
+        render(
+            <AttachmentList
+                attachments={[
+                    gif({ is_animated: false, width: 600, height: 800 }),
+                ]}
+            />,
+        );
+
+        const image = screen.getByAltText('reaction.gif');
+
+        expect(image).toHaveAttribute('width', '600');
+        expect(image).toHaveAttribute('height', '800');
     });
 });

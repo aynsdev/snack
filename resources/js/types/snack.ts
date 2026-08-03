@@ -412,8 +412,19 @@ export type Attachment = {
     /** Pre-formatted server-side so every surface says "1.4 MB" the same way. */
     human_size: string;
     kind: AttachmentKind;
+    /**
+     * Display dimensions, already corrected for EXIF orientation — a portrait
+     * phone photo reports portrait here even though its raw buffer is
+     * landscape. Used as the aspect ratio that reserves space before the bytes
+     * arrive.
+     */
     width: number | null;
     height: number | null;
+    /**
+     * Whether the file moves. False until the queue has processed the upload,
+     * so a GIF starts playing a moment after it is sent rather than never.
+     */
+    is_animated: boolean;
     download_url: string;
     thumbnail_url: string | null;
     preview_url: string | null;
