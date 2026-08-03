@@ -542,6 +542,48 @@
     .snack-scroll::-webkit-scrollbar-track {
         background: transparent;
     }
+
+    /*
+     | The three dots beside "Ada is typing…".
+     |
+     | Transform and opacity only — the dots sit directly above the composer,
+     | and animating any layout property there would nudge the text box while
+     | somebody is typing into it.
+     |
+     | The stagger comes from negative delays rather than three separate
+     | keyframe sets: a negative delay starts the animation already part-way
+     | through, so all three are running the same loop offset in time and stay
+     | in step forever. Positive delays would leave each dot idle for its first
+     | cycle, which reads as a stutter on the very first render — exactly when
+     | the indicator appears.
+     |
+     | The `prefers-reduced-motion` block below flattens this to a static row.
+     */
+    @keyframes snack-typing-bounce {
+        0%,
+        60%,
+        100% {
+            transform: translateY(0);
+            opacity: 0.45;
+        }
+
+        30% {
+            transform: translateY(-0.1875rem);
+            opacity: 1;
+        }
+    }
+
+    .snack-typing-dot {
+        animation: snack-typing-bounce 1.2s ease-in-out infinite;
+    }
+
+    .snack-typing-dot:nth-child(2) {
+        animation-delay: -1s;
+    }
+
+    .snack-typing-dot:nth-child(3) {
+        animation-delay: -0.8s;
+    }
 }
 
 /*

@@ -31,13 +31,37 @@ export function TypingIndicator({
         >
             {typists.length > 0 && (
                 <>
-                    <span aria-hidden="true" className="mr-1">
-                        ···
-                    </span>
+                    <TypingDots />
                     {describe(typists)}
                 </>
             )}
         </p>
+    );
+}
+
+/**
+ * The animated ellipsis.
+ *
+ * `aria-hidden`, because the sentence beside it already says somebody is typing
+ * and the surrounding region is `aria-live` — announcing three decorative dots
+ * on a loop would make a screen reader unusable while anybody is composing.
+ *
+ * Rendered only while somebody is actually typing, so the loop is not running
+ * against an empty room; it unmounts with the sentence rather than idling.
+ */
+function TypingDots() {
+    return (
+        <span
+            aria-hidden="true"
+            className="mr-1.5 inline-flex items-baseline gap-0.5 align-baseline"
+        >
+            {[0, 1, 2].map((dot) => (
+                <span
+                    key={dot}
+                    className="snack-typing-dot size-1 rounded-full bg-current"
+                />
+            ))}
+        </span>
     );
 }
 

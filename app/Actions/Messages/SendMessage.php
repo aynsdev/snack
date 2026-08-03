@@ -145,6 +145,23 @@ class SendMessage
             $files->isEmpty() ? new Collection : $message->attachments()->get(),
         );
 
+        /*
+         * The broadcast goes first, ahead of the two jobs below.
+         *
+         * It is a queued job like they are, and a worker takes the queue in
+         * order — so dispatching it last meant every message waited for
+         * full-text indexing *and* the whole notification fan-out before it
+         * reached anybody's screen. Nothing about it depends on either of them:
+         * the mentions it needs were materialized further up, and the payload
+         * is built from relations already in memory.
+         *
+         * Ordering is not a substitute for giving broadcasts their own worker
+         * when the background queue gets busy, but it costs nothing and it is
+         * the difference between "instant" and "eventually" on a single worker,
+         * which is what most deployments actually run.
+         */
+        MessageSent::dispatch($message);
+
         // The vector folds in the filenames, so it is queued after the claim.
         IndexMessage::dispatch($message->id);
 
@@ -154,8 +171,6 @@ class SendMessage
          * before would race the rows it depends on and silently notify nobody.
          */
         DeliverMessageNotifications::dispatch($message->id);
-
-        MessageSent::dispatch($message);
 
         /*
          * The reply itself goes to the thread's own channel, which only people
