@@ -21,7 +21,7 @@ class InvitationAcceptanceController extends Controller
 {
     public function __construct(private readonly RegistrationGate $gate) {}
 
-    public function show(string $token, Request $request): Response
+    public function show(string $token, Request $request): RedirectResponse|Response
     {
         $invitation = WorkspaceInvitation::findByToken($token);
 
@@ -32,6 +32,14 @@ class InvitationAcceptanceController extends Controller
         }
 
         $invitation->load(['workspace', 'inviter']);
+
+        // Already inside: there is nothing left to accept, so skip the landing
+        // page rather than offering a button that the policy would refuse.
+        if ($request->user()?->belongsToWorkspace($invitation->workspace) === true) {
+            $this->gate->forget();
+
+            return to_route('workspaces.show', ['workspace' => $invitation->workspace->slug]);
+        }
 
         // Stash the token so registration (which is otherwise closed) and the
         // post-login redirect can both pick it up.

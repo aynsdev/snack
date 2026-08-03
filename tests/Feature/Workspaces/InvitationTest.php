@@ -191,6 +191,35 @@ it('accepts an invitation through the web route', function () {
     expect($user->fresh()->belongsToWorkspace($workspace))->toBeTrue();
 });
 
+it('returns an existing account to the invitation after signing in', function () {
+    [$workspace] = makeWorkspaceWithOwner();
+    $user = User::factory()->create(['password' => 'password']);
+
+    $invitation = WorkspaceInvitation::factory()
+        ->forEmail($user->email)
+        ->create(['workspace_id' => $workspace->id, 'invited_by' => $workspace->owner_id]);
+
+    // Opening the link stashes the token; signing in must not lose it.
+    $this->get(route('invitations.show', ['token' => $invitation->plainToken]))->assertOk();
+
+    $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertRedirect(route('invitations.show', ['token' => $invitation->plainToken]));
+});
+
+it('sends an existing member straight into the workspace', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+
+    $invitation = WorkspaceInvitation::factory()
+        ->forEmail($owner->email)
+        ->create(['workspace_id' => $workspace->id, 'invited_by' => $owner->id]);
+
+    $this->actingAs($owner)
+        ->get(route('invitations.show', ['token' => $invitation->plainToken]))
+        ->assertRedirect(route('workspaces.show', $workspace));
+});
+
 it('shows an invalid-invitation page for an unknown token', function () {
     $this->get(route('invitations.show', ['token' => 'not-a-real-token']))
         ->assertOk()

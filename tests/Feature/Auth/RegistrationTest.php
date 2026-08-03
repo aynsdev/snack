@@ -70,14 +70,50 @@ test('an invited visitor can register even when registration is closed', functio
 
     $this->get(route('register'))->assertOk();
 
+    // Registering is a detour on the way to joining, so the new account is
+    // returned to the invitation instead of the empty workspace picker.
     $this->post(route('register.store'), [
         'name' => 'Invited Person',
         'email' => 'invited@snack.test',
         'password' => 'password',
         'password_confirmation' => 'password',
-    ])->assertRedirect(route('dashboard', absolute: false));
+    ])->assertRedirect(route('invitations.show', ['token' => $invitation->plainToken]));
 
     $this->assertAuthenticated();
+});
+
+test('an invited visitor can join straight after registering', function () {
+    config(['snack.allow_public_registration' => false]);
+
+    [$workspace] = makeWorkspaceWithOwner();
+
+    $invitation = WorkspaceInvitation::factory()
+        ->forEmail('invited@snack.test')
+        ->create(['workspace_id' => $workspace->id, 'invited_by' => $workspace->owner_id]);
+
+    $this->get(route('invitations.show', ['token' => $invitation->plainToken]));
+
+    $this->post(route('register.store'), [
+        'name' => 'Invited Person',
+        'email' => 'invited@snack.test',
+        'password' => 'password',
+        'password_confirmation' => 'password',
+    ]);
+
+    // The invitation now recognises the freshly created account and offers to
+    // join rather than asking them to sign up again.
+    $this->get(route('invitations.show', ['token' => $invitation->plainToken]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('auth/invitation')
+            ->where('isAuthenticated', true)
+            ->where('emailMatches', true));
+
+    $this->post(route('invitations.accept', ['token' => $invitation->plainToken]))
+        ->assertRedirect(route('workspaces.show', $workspace));
+
+    expect(User::where('email', 'invited@snack.test')->sole()->belongsToWorkspace($workspace))
+        ->toBeTrue();
 });
 
 test('an invited visitor cannot register with a different email address', function () {

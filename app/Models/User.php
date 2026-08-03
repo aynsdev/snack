@@ -54,6 +54,17 @@ class User extends Authenticatable implements PasskeyUser
     use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
     /**
+     * Mirrors the column default so a just-created instance already carries a
+     * presence: registration hands that in-memory model straight to the guard,
+     * and everything that renders a person reads `presence_status`.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'presence_status' => PresenceStatus::Offline->value,
+    ];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

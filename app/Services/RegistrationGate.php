@@ -47,6 +47,23 @@ class RegistrationGate
     }
 
     /**
+     * The token of the still-redeemable invitation held in the session.
+     *
+     * Authentication responses need the token rather than the model, because
+     * the invitation is addressed by its plaintext token in the URL.
+     */
+    public function pendingToken(): ?string
+    {
+        if ($this->pendingInvitation() === null) {
+            return null;
+        }
+
+        $token = session()->get(self::SESSION_KEY);
+
+        return is_string($token) ? $token : null;
+    }
+
+    /**
      * Whether the current visitor may register at all.
      */
     public function isOpen(): bool
