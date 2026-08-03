@@ -4,6 +4,7 @@ use App\Enums\ChannelRole;
 use App\Enums\ChannelType;
 use App\Enums\MemberStatus;
 use App\Enums\WorkspaceRole;
+use App\Events\ChannelActivity;
 use App\Events\ChannelCreated;
 use App\Events\ChannelRead;
 use App\Events\ConversationActivity;
@@ -50,6 +51,7 @@ pest()->extend(TestCase::class)
         // listener untouched, and tests can still assert on dispatch with
         // Event::assertDispatched().
         Event::fake([
+            ChannelActivity::class,
             ChannelCreated::class,
             ChannelRead::class,
             ConversationActivity::class,

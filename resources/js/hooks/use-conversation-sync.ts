@@ -2,6 +2,7 @@ import { router } from '@inertiajs/react';
 import { useEcho } from '@laravel/echo-react';
 import { useCallback, useEffect, useRef } from 'react';
 import { useActiveConversationId } from '@/hooks/use-active-channel';
+import { useNotificationSound } from '@/hooks/use-notification-sound';
 import {
     useCurrentWorkspace,
     useSidebarConversations,
@@ -116,6 +117,7 @@ function useConversationActivityNotifier() {
     const current = useCurrentWorkspace();
     const { conversations, muted } = useSidebarConversations();
     const activeConversationId = useActiveConversationId();
+    const playArrival = useNotificationSound();
 
     /*
      * `useEcho` captures its callback against a fixed dependency list, so
@@ -141,61 +143,78 @@ function useConversationActivityNotifier() {
         };
     });
 
-    return useCallback((conversationId: string) => {
-        const state = latest.current;
-        // Destructured so the null check below still holds inside `onClick`;
-        // narrowing on a property does not survive into a nested closure.
-        const { workspaceSlug } = state;
+    return useCallback(
+        (conversationId: string) => {
+            const state = latest.current;
+            // Destructured so the null check below still holds inside `onClick`;
+            // narrowing on a property does not survive into a nested closure.
+            const { workspaceSlug } = state;
 
-        /*
-         * The conversation on screen is handled by its own timeline, which has
-         * the message itself and can say more than this can. Both events reach
-         * a participant who is looking at it, so without this the reader gets
-         * two banners for one message.
-         */
-        if (
-            conversationId === state.activeConversationId ||
-            workspaceSlug === null ||
-            !pageIsUnattended()
-        ) {
-            return;
-        }
+            /*
+             * The conversation on screen is handled by its own timeline, which has
+             * the message itself and can say more than this can. Both events reach
+             * a participant who is looking at it, so without this the reader gets
+             * two alerts for one message.
+             */
+            if (
+                conversationId === state.activeConversationId ||
+                workspaceSlug === null
+            ) {
+                return;
+            }
 
-        // Muted conversations are still in the payload — they are rendered in
-        // their own collapsed section — so being absent from the unmuted list
-        // is not enough to conclude anything.
-        if (state.muted.some((one) => one.id === conversationId)) {
-            return;
-        }
+            // Muted conversations are still in the payload — they are rendered in
+            // their own collapsed section — so being absent from the unmuted list
+            // is not enough to conclude anything.
+            if (state.muted.some((one) => one.id === conversationId)) {
+                return;
+            }
 
-        const conversation = state.conversations.find(
-            (one) => one.id === conversationId,
-        );
+            const conversation = state.conversations.find(
+                (one) => one.id === conversationId,
+            );
 
-        // A conversation the sidebar has not seen yet: the first message of a
-        // brand new DM arrives before the payload naming it does. The refresh
-        // that follows will bring the title, but the notification is worth
-        // more now than a better-worded one would be later.
-        const title =
-            conversation === undefined
-                ? 'New message'
-                : conversation.display_name;
+            // A conversation the sidebar has not seen yet: the first message of a
+            // brand new DM arrives before the payload naming it does. The refresh
+            // that follows will bring the title, but the notification is worth
+            // more now than a better-worded one would be later.
+            const title =
+                conversation === undefined
+                    ? 'New message'
+                    : conversation.display_name;
 
-        if (conversation?.notification_level === 'nothing') {
-            return;
-        }
+            if (conversation?.notification_level === 'nothing') {
+                return;
+            }
 
-        showNotification({
-            title,
-            body: 'Sent you a message',
-            tag: `conversation:${conversationId}`,
-            onClick: () =>
-                router.visit(
-                    showConversation.url({
-                        workspace: workspaceSlug,
-                        conversation: conversationId,
-                    }),
-                ),
-        });
-    }, []);
+            /*
+             * The sound plays whether or not the reader is at their desk — a DM
+             * landing in a conversation they cannot see is exactly the case a sound
+             * is for, and gating it on the page being unattended (as the banner
+             * below still is) meant the only alert for an off-screen direct message
+             * was one the reader had to already be away to receive.
+             */
+            playArrival();
+
+            // The banner stays gated: an OS notification for something a glance at
+            // the sidebar would show is how people learn to switch them off.
+            if (!pageIsUnattended()) {
+                return;
+            }
+
+            showNotification({
+                title,
+                body: 'Sent you a message',
+                tag: `conversation:${conversationId}`,
+                onClick: () =>
+                    router.visit(
+                        showConversation.url({
+                            workspace: workspaceSlug,
+                            conversation: conversationId,
+                        }),
+                    ),
+            });
+        },
+        [playArrival],
+    );
 }

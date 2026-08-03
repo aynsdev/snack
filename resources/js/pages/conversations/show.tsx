@@ -374,6 +374,7 @@ function ConversationHeader({
                     <div className="flex min-w-0 flex-1 items-center gap-2">
                         <PresenceDot
                             status={counterpart.presence_status}
+                            userId={counterpart.id}
                             size="sm"
                             withLabel
                         />

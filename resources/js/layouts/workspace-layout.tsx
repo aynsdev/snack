@@ -2,10 +2,12 @@ import { router } from '@inertiajs/react';
 import { PanelLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
+import { ChannelSync } from '@/components/snack/channel-sync';
 import { ConversationSync } from '@/components/snack/conversation-sync';
 import { WorkspaceRail } from '@/components/snack/workspace-rail';
 import { WorkspaceSidebar } from '@/components/snack/workspace-sidebar';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { LivePresenceProvider } from '@/hooks/use-live-presence';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePresence } from '@/hooks/use-presence';
 import { useCurrentUser, useCurrentWorkspace } from '@/hooks/use-workspace';
@@ -56,62 +58,78 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     }
 
     return (
-        <div className="flex h-dvh overflow-hidden bg-background">
-            {/*
-             * Mounted once, here, so the DM list and its badges stay current
-             * while the reader is somewhere else in the workspace. Rendered
-             * inside this branch because it needs a signed-in user, and not
-             * inside the sidebar because that is mounted twice on mobile.
-             */}
-            {currentUser !== null && (
-                <ConversationSync userId={currentUser.id} />
-            )}
-
-            <div className="hidden md:flex">
-                <WorkspaceRail currentWorkspaceSlug={current.workspace.slug} />
-            </div>
-
-            <aside className="hidden w-64 shrink-0 border-r border-sidebar-border md:block lg:w-72">
-                <WorkspaceSidebar />
-            </aside>
-
-            {isMobile && (
-                <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-                    <SheetContent side="left" className="w-[19rem] p-0">
-                        <SheetTitle className="sr-only">
-                            {current.workspace.name} navigation
-                        </SheetTitle>
-
-                        <div className="flex h-full">
-                            <WorkspaceRail
-                                currentWorkspaceSlug={current.workspace.slug}
-                            />
-                            <div className="min-w-0 flex-1">
-                                <WorkspaceSidebar
-                                    onNavigate={() => setSidebarOpen(false)}
-                                />
-                            </div>
-                        </div>
-                    </SheetContent>
-                </Sheet>
-            )}
-
-            <div className="flex min-w-0 flex-1 flex-col">
-                {isMobile && (
-                    <button
-                        type="button"
-                        onClick={() => setSidebarOpen(true)}
-                        className="flex items-center gap-2 border-b border-border px-4 py-2.5 text-sm hover:bg-accent md:hidden"
-                    >
-                        <PanelLeft aria-hidden="true" className="size-4" />
-                        <span className="font-medium">
-                            {current.workspace.name}
-                        </span>
-                    </button>
+        /*
+         * Wraps the whole shell so every avatar in it — sidebar, DM list,
+         * message rows, the conversation header — reads the same live presence
+         * overlay. Scoped to the workspace because that is the channel the
+         * updates arrive on and the audience entitled to them.
+         */
+        <LivePresenceProvider workspaceId={current.workspace.id}>
+            <div className="flex h-dvh overflow-hidden bg-background">
+                {/*
+                 * Mounted once, here, so the DM and channel lists and their
+                 * badges stay current while the reader is somewhere else in the
+                 * workspace. Rendered inside this branch because they need a
+                 * signed-in user, and not inside the sidebar because that is
+                 * mounted twice on mobile — which would double every refresh.
+                 */}
+                {currentUser !== null && (
+                    <>
+                        <ConversationSync userId={currentUser.id} />
+                        <ChannelSync userId={currentUser.id} />
+                    </>
                 )}
 
-                <main className="flex min-h-0 flex-1">{children}</main>
+                <div className="hidden md:flex">
+                    <WorkspaceRail
+                        currentWorkspaceSlug={current.workspace.slug}
+                    />
+                </div>
+
+                <aside className="hidden w-64 shrink-0 border-r border-sidebar-border md:block lg:w-72">
+                    <WorkspaceSidebar />
+                </aside>
+
+                {isMobile && (
+                    <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+                        <SheetContent side="left" className="w-[19rem] p-0">
+                            <SheetTitle className="sr-only">
+                                {current.workspace.name} navigation
+                            </SheetTitle>
+
+                            <div className="flex h-full">
+                                <WorkspaceRail
+                                    currentWorkspaceSlug={
+                                        current.workspace.slug
+                                    }
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <WorkspaceSidebar
+                                        onNavigate={() => setSidebarOpen(false)}
+                                    />
+                                </div>
+                            </div>
+                        </SheetContent>
+                    </Sheet>
+                )}
+
+                <div className="flex min-w-0 flex-1 flex-col">
+                    {isMobile && (
+                        <button
+                            type="button"
+                            onClick={() => setSidebarOpen(true)}
+                            className="flex items-center gap-2 border-b border-border px-4 py-2.5 text-sm hover:bg-accent md:hidden"
+                        >
+                            <PanelLeft aria-hidden="true" className="size-4" />
+                            <span className="font-medium">
+                                {current.workspace.name}
+                            </span>
+                        </button>
+                    )}
+
+                    <main className="flex min-h-0 flex-1">{children}</main>
+                </div>
             </div>
-        </div>
+        </LivePresenceProvider>
     );
 }

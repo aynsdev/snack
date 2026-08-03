@@ -4,11 +4,13 @@ namespace App\Actions\Messages;
 
 use App\Actions\Attachments\LinkAttachments;
 use App\Enums\MessageType;
+use App\Events\ChannelActivity;
 use App\Events\MessageSent;
 use App\Events\ThreadActivity;
 use App\Jobs\DeliverMessageNotifications;
 use App\Jobs\IndexMessage;
 use App\Models\Channel;
+use App\Models\ChannelMember;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\MessageAttachment;
@@ -162,6 +164,20 @@ class SendMessage
          */
         MessageSent::dispatch($message);
 
+        /*
+         * And the signal that badges the channel for everyone *not* looking at
+         * it. Conversations get this from SendConversationMessage; channels had
+         * no equivalent at all, which is why a message in another channel
+         * produced nothing until the reader happened to navigate.
+         *
+         * Replies are excluded for the same reason they leave `last_message_at`
+         * alone above: the container's badge counts what the container's
+         * timeline shows, and it does not show replies.
+         */
+        if ($root === null && $container instanceof Channel) {
+            $this->announceChannelActivity($container, $sender);
+        }
+
         // The vector folds in the filenames, so it is queued after the claim.
         IndexMessage::dispatch($message->id);
 
@@ -229,6 +245,29 @@ class SendMessage
             'message_count' => $channel->message_count + 1,
             'last_message_at' => $message->created_at,
         ])->syncOriginalAttributes(['message_count', 'last_message_at']);
+    }
+
+    /**
+     * Tell the channel's other members something arrived.
+     *
+     * The sender is excluded: their own timeline already received the broadcast
+     * and their sidebar has nothing to badge. Members who have muted the channel
+     * are *not* excluded here — the client decides what to do with the signal,
+     * and the unread count still has to be right for a muted channel, which is
+     * rendered quietly rather than not at all.
+     */
+    private function announceChannelActivity(Channel $channel, User $sender): void
+    {
+        $recipients = ChannelMember::query()
+            ->where('channel_id', $channel->id)
+            ->where('user_id', '!=', $sender->id)
+            ->pluck('user_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        if ($recipients !== []) {
+            ChannelActivity::dispatch($channel->id, $recipients);
+        }
     }
 
     /**

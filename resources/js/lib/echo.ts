@@ -70,8 +70,10 @@ export const events = {
     reactionChanged: '.reaction.changed',
     pinChanged: '.pin.changed',
     channelRead: '.channel.read',
+    channelActivity: '.channel.activity',
     conversationStarted: '.conversation.started',
     conversationActivity: '.conversation.activity',
     conversationRead: '.conversation.read',
     conversationUpdated: '.conversation.updated',
+    presenceChanged: '.presence.changed',
 } as const;

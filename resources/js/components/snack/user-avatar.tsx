@@ -30,7 +30,11 @@ export function UserAvatar({
     user: Pick<
         SnackUser,
         'name' | 'initials' | 'avatar_url' | 'presence_status'
-    >;
+    > &
+        // Optional rather than required: plenty of callers render a person the
+        // server named without an id. Supplying it is what opts the dot into
+        // live updates.
+        Partial<Pick<SnackUser, 'id'>>;
     size?: AvatarSize;
     showPresence?: boolean;
     /** Match this to the surface behind the avatar. */
@@ -52,6 +56,7 @@ export function UserAvatar({
             {showPresence && (
                 <PresenceDot
                     status={user.presence_status}
+                    userId={user.id}
                     size={size === 'xs' || size === 'sm' ? 'sm' : 'md'}
                     className={cn(
                         'absolute -right-0.5 -bottom-0.5 rounded-full ring-2',

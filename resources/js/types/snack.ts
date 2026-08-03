@@ -702,6 +702,27 @@ export type ConversationSignalEvent = {
     conversation_id: string;
 };
 
+/**
+ * Payload of the `channel.activity` broadcast — the channel counterpart of
+ * {@see ConversationSignalEvent}. The id and nothing else: the client re-reads
+ * its unread counts rather than trusting a number off the wire.
+ */
+export type ChannelSignalEvent = {
+    channel_id: number;
+};
+
+/**
+ * Payload of the `presence.changed` broadcast.
+ *
+ * Carries the id and the new status and nothing else: it fans out to every
+ * member of the workspace, so it can say only what everyone there is already
+ * entitled to see.
+ */
+export type PresenceChangedEvent = {
+    user_id: number;
+    presence_status: PresenceStatus;
+};
+
 /** Payload of the `conversation.read` broadcast, for a user's own devices. */
 export type ConversationReadEvent = {
     conversation_id: string;
