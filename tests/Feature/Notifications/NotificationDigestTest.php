@@ -136,15 +136,26 @@ it('only sends at the member\'s own digest hour', function () {
 
     [, $owner] = digestSubscriber(timezone: 'UTC');
 
-    // 03:00 UTC is not 08:00 anywhere the member is, so nothing goes out —
-    // which is the whole reason the command wakes hourly instead of daily.
-    $this->travelTo(now()->setTime(3, 0), function () {
+    /*
+     * The clock is set in the *member's* zone, not the application's.
+     * `now()->setTime(...)` would read as whatever `app.timezone` happens to
+     * be, so this test passed only while that was UTC and silently started
+     * failing the day it was changed — the command was never wrong, it asks
+     * `Carbon::now($user->timezone)` and always did.
+     */
+    $subscriberClock = fn (int $hour, int $minute = 0) => now()
+        ->setTimezone('UTC')
+        ->setTime($hour, $minute);
+
+    // 03:00 is not 08:00 anywhere the member is, so nothing goes out — which is
+    // the whole reason the command wakes hourly instead of daily.
+    $this->travelTo($subscriberClock(3), function () {
         $this->artisan('snack:send-digests')->assertSuccessful();
     });
 
     Notification::assertNothingSent();
 
-    $this->travelTo(now()->setTime(8, 30), function () {
+    $this->travelTo($subscriberClock(8, 30), function () {
         $this->artisan('snack:send-digests')->assertSuccessful();
     });
 

@@ -2,16 +2,20 @@
 
 namespace App\Providers;
 
+use App\Actions\Presence\RecordPresence;
+use App\Models\User;
 use App\Models\Workspace;
 use App\Notifications\Channels\WorkspaceDatabaseChannel;
 use App\Support\WorkspaceContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Foundation\DevCommands;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -38,7 +42,29 @@ class AppServiceProvider extends ServiceProvider
         $this->configureRouteBindings();
         $this->configureRateLimiters();
         $this->configureNotifications();
+        $this->configurePresence();
         $this->configureDevCommands();
+    }
+
+    /**
+     * Withdraw somebody's presence the moment they sign out.
+     *
+     * The scheduled sweep would get there eventually, but "eventually" is up to
+     * five minutes of a green dot next to somebody who has demonstrably left,
+     * and signing out is the one departure the application is actually told
+     * about. Taking it immediately is free.
+     *
+     * Signing *in* is deliberately not handled here: the client's first
+     * heartbeat fires as the workspace mounts, a moment later, and one writer
+     * for "this person is here" is easier to reason about than two.
+     */
+    protected function configurePresence(): void
+    {
+        Event::listen(function (Logout $event) {
+            if ($event->user instanceof User) {
+                app(RecordPresence::class)->offline($event->user);
+            }
+        });
     }
 
     /**
@@ -108,6 +134,16 @@ class AppServiceProvider extends ServiceProvider
          * anyone attaches to a message and far less than a script could.
          */
         RateLimiter::for('uploads', fn (Request $request) => Limit::perMinute(60)
+            ->by((string) $request->user()->id));
+
+        /*
+         * Heartbeats. One tab beats once a minute, but people legitimately keep
+         * Snack open in several at once and every one of them beats, plus a beat
+         * each time a tab is focused. Generous enough that a wall of tabs is
+         * fine, low enough that this cannot be used to hammer a write per
+         * request.
+         */
+        RateLimiter::for('presence', fn (Request $request) => Limit::perMinute(60)
             ->by((string) $request->user()->id));
     }
 

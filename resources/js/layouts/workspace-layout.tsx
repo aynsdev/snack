@@ -7,6 +7,7 @@ import { WorkspaceRail } from '@/components/snack/workspace-rail';
 import { WorkspaceSidebar } from '@/components/snack/workspace-sidebar';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { usePresence } from '@/hooks/use-presence';
 import { useCurrentUser, useCurrentWorkspace } from '@/hooks/use-workspace';
 
 export type WorkspaceLayoutProps = {
@@ -40,6 +41,14 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     // latter would set state during render-after-effect and cascade an extra
     // render on every single navigation, drawer or not.
     useEffect(() => router.on('navigate', () => setSidebarOpen(false)), []);
+
+    /*
+     * Presence beats from the shell, above the `current === null` branch below,
+     * for two reasons: hooks may not be called conditionally, and presence is a
+     * property of the person rather than of a workspace — somebody sitting on
+     * the workspace picker is still here.
+     */
+    usePresence(currentUser !== null);
 
     // Rendered outside a workspace: the picker, or a redirect in flight.
     if (current === null) {

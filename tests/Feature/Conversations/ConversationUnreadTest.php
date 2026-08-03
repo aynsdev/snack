@@ -269,3 +269,27 @@ it('refuses to change preferences for a conversation the user is not in', functi
         ]), ['is_muted' => true])
         ->assertNotFound();
 });
+
+it('keeps unread direct messages out of the global mentions badge', function () {
+    [$workspace] = makeWorkspaceWithOwner();
+    $ada = joinWorkspace($workspace);
+    $bo = joinWorkspace($workspace);
+    $conversation = makeConversation($workspace, [$ada, $bo]);
+
+    makeConversationMessage($conversation, $bo, 'Directly to you.');
+
+    $this->actingAs($ada);
+
+    $unread = $this->get(route('workspaces.show', ['workspace' => $workspace->slug]))
+        ->inertiaProps('snack')['current']['unread'];
+
+    /*
+     * The conversation's own row is still badged loudly — that is the badge the
+     * reader can act on. The sidebar's "Mentions" entry is not: it links to a
+     * page that lists mention rows, and this message produced none, so counting
+     * it here would send the reader to an empty list.
+     */
+    expect((array) $unread['conversations'][$conversation->public_id])
+        ->toBe(['messages' => 1, 'mentions' => 1])
+        ->and($unread['mentions'])->toBe(0);
+});

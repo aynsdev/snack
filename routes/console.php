@@ -51,3 +51,19 @@ Schedule::command('snack:reindex-messages')
 Schedule::command('snack:send-digests')
     ->hourly()
     ->withoutOverlapping();
+
+/*
+ * Expires presence claims whose heartbeats stopped.
+ *
+ * Every minute, because this is the one piece of state where being stale is the
+ * whole failure: a green dot next to somebody who closed their laptop an hour
+ * ago is worse than no dot at all, since people act on it. The work is two
+ * indexed lookups over a set that is normally empty.
+ *
+ * `withoutOverlapping` for the usual reason — a slow run must not have a second
+ * process demoting the same people underneath it — with a short expiry so a
+ * killed run cannot wedge presence until someone notices.
+ */
+Schedule::command('snack:sweep-presence')
+    ->everyMinute()
+    ->withoutOverlapping(5);

@@ -27,6 +27,7 @@ use App\Http\Controllers\Messages\ThreadSubscriptionController;
 use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\Notifications\NotificationPreferenceController;
 use App\Http\Controllers\Notifications\NotificationReadController;
+use App\Http\Controllers\Presence\PresenceController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\UploadController;
@@ -101,6 +102,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // The starter kit's dashboard entry point now lands people in a workspace.
     Route::redirect('dashboard', '/workspaces')->name('dashboard');
+
+    /*
+     * Presence.
+     *
+     * Outside the workspace prefix because presence describes the person, not
+     * the room they are currently in — someone signed into two workspaces has
+     * one availability, and scoping this would give them two that overwrite
+     * each other.
+     */
+    Route::post('presence', [PresenceController::class, 'store'])
+        ->middleware('throttle:presence')
+        ->name('presence.store');
+
+    Route::delete('presence', [PresenceController::class, 'destroy'])
+        ->middleware('throttle:presence')
+        ->name('presence.destroy');
 });
 
 /*

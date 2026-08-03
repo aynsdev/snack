@@ -395,4 +395,36 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Presence
+    |--------------------------------------------------------------------------
+    |
+    | How the green dot is kept honest.
+    |
+    | Presence is a claim with an expiry, not a flag. A browser that is closed,
+    | crashed, or dropped off wifi sends nothing at all — there is no "goodbye"
+    | to rely on — so a status that is only ever written by the client stays
+    | Online forever. Every value here exists to make the claim decay:
+    |
+    | - "heartbeat_seconds" is how often an open tab renews the claim.
+    | - "away_after_seconds" is when a silent tab is assumed idle rather than
+    |   gone. Roughly two missed beats, so one dropped request does not flicker
+    |   somebody to Away while they are typing.
+    | - "offline_after_seconds" is when it is assumed gone. Deliberately several
+    |   missed beats: calling somebody offline while they are reading is the
+    |   error people actually notice.
+    |
+    | The client also reports Away directly when its tab is hidden, which is
+    | faster and more accurate than any timer here. The windows are the backstop
+    | for the case the client cannot report at all.
+    |
+    */
+
+    'presence' => [
+        'heartbeat_seconds' => (int) env('SNACK_PRESENCE_HEARTBEAT_SECONDS', 60),
+        'away_after_seconds' => (int) env('SNACK_PRESENCE_AWAY_AFTER_SECONDS', 150),
+        'offline_after_seconds' => (int) env('SNACK_PRESENCE_OFFLINE_AFTER_SECONDS', 300),
+    ],
+
 ];

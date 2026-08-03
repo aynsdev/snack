@@ -113,8 +113,19 @@ return [
              * stored time is compared against PHP's now() — which is what
              * App\Services\NotificationDelivery does to decide whether somebody
              * is idle, and where this was found.
+             *
+             * # Why this follows app.timezone rather than being pinned to UTC
+             *
+             * It is PHP's zone that decides what the naive string *means*. A
+             * hardcoded UTC here was correct only while app.timezone was also
+             * UTC; once that moved to Asia/Manila the two disagreed, and every
+             * written timestamp landed eight hours from the instant intended —
+             * far enough that `last_seen_at` read back in the *future*, so
+             * "has it been ten minutes" was permanently false and no digest
+             * email could ever be sent. Deriving it removes the chance of the
+             * two drifting apart again.
              */
-            'timezone' => env('DB_TIMEZONE', 'UTC'),
+            'timezone' => env('DB_TIMEZONE') ?: config('app.timezone'),
         ],
 
         'sqlsrv' => [

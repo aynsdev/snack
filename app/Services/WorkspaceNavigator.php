@@ -140,12 +140,19 @@ class WorkspaceNavigator
                 'conversations' => (object) $conversationUnread,
 
                 /*
-                 * Real @-mentions, plus unread DMs — every message in a
-                 * conversation you are in is addressed to you, so the sidebar
-                 * treats it as loudly as being named.
+                 * Real @-mentions only.
+                 *
+                 * This badge labels the "Mentions" link, and that page lists
+                 * `mentions` rows and nothing else — so anything counted here
+                 * that is not a mention row sends the reader to an empty list.
+                 * Unread DMs used to be added in, on the reasoning that every
+                 * message in a conversation is addressed to you; true, but it
+                 * made the badge disagree with the page it points at, which is
+                 * the one thing a badge may never do. DMs are already badged
+                 * loudly on their own sidebar rows, where clicking through
+                 * actually shows them.
                  */
-                'mentions' => $this->unread->mentionCount($workspace, $user)
-                    + array_sum(array_column($conversationUnread, 'mentions')),
+                'mentions' => $this->unread->mentionCount($workspace, $user),
 
                 // How many followed threads have unread replies — see
                 // UnreadCounter::threadCount() for why it counts threads and
