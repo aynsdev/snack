@@ -40,7 +40,10 @@ class WorkspaceInvitationNotification extends Notification implements ShouldQueu
 
         return (new MailMessage)
             ->subject("{$inviter->name} invited you to {$workspace->name} on Snack")
-            ->greeting('Small chats. Big work.')
+            // The tagline used to live here, and now sits under the wordmark in
+            // every mail header, so a greeting that repeated it said the same
+            // six words twice on one screen.
+            ->greeting("You're invited.")
             ->line("{$inviter->name} has invited you to join the **{$workspace->name}** workspace on Snack as a {$this->invitation->role->label()}.")
             ->action('Join '.$workspace->name, $url)
             ->line("This invitation expires {$this->invitation->expires_at->diffForHumans()}.")
