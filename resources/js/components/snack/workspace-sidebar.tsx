@@ -19,6 +19,7 @@ import { ChannelListItem } from '@/components/snack/channel-list-item';
 import { ConversationListItem } from '@/components/snack/conversation-list-item';
 import { NewMessageDialog } from '@/components/snack/new-message-dialog';
 import { NotificationPermissionPrompt } from '@/components/snack/notification-permission-prompt';
+import { PersonListItem } from '@/components/snack/person-list-item';
 import {
     Collapsible,
     CollapsibleContent,
@@ -45,6 +46,7 @@ import {
     useCurrentWorkspace,
     useSidebarChannels,
     useSidebarConversations,
+    useSidebarPeople,
     useUnreadState,
     useWorkspace,
 } from '@/hooks/use-workspace';
@@ -61,7 +63,7 @@ import { index as searchIndex } from '@/routes/search';
 import { index as threadsIndex } from '@/routes/threads';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
 import { edit as workspaceSettings } from '@/routes/workspace-settings';
-import type { Channel, Conversation } from '@/types';
+import type { Channel, Conversation, WorkspacePerson } from '@/types';
 
 /**
  * The second column: workspace identity, global navigation, and the channel
@@ -80,8 +82,8 @@ export function WorkspaceSidebar({
     const current = useCurrentWorkspace();
     const currentUser = useCurrentUser();
     const { channels, muted } = useSidebarChannels();
-    const { conversations, muted: mutedConversations } =
-        useSidebarConversations();
+    const { groups, mutedGroups } = useSidebarConversations();
+    const people = useSidebarPeople();
     const unread = useUnreadState();
     const activeChannelSlug = useActiveChannelSlug();
     const activeConversationId = useActiveConversationId();
@@ -224,15 +226,21 @@ export function WorkspaceSidebar({
                         ) : null
                     }
                 >
-                    {conversations.length === 0 ? (
+                    {groups.length === 0 && people.length === 0 ? (
                         <p className="px-2 py-1.5 text-xs text-muted-foreground">
                             {workspace.abilities.start_conversations
-                                ? 'No conversations yet. Start one with the + above.'
+                                ? 'Nobody else is in this workspace yet.'
                                 : 'You have no direct messages.'}
                         </p>
                     ) : (
                         <ul className="space-y-0.5">
-                            {conversations.map((conversation) => (
+                            {/*
+                             * Groups above people. A group is a room somebody
+                             * deliberately made, so it belongs with the other
+                             * things you navigate to; the roster underneath is
+                             * a directory you scan, and it is the longer list.
+                             */}
+                            {groups.map((conversation) => (
                                 <li key={conversation.id}>
                                     <ConversationRow
                                         conversation={conversation}
@@ -246,11 +254,26 @@ export function WorkspaceSidebar({
                                     />
                                 </li>
                             ))}
+
+                            {people.map((person) => (
+                                <li key={person.user.id}>
+                                    <PersonRow
+                                        person={person}
+                                        workspaceSlug={workspace.slug}
+                                        isActive={
+                                            person.conversation !== null &&
+                                            person.conversation.id ===
+                                                activeConversationId
+                                        }
+                                        onNavigate={onNavigate}
+                                    />
+                                </li>
+                            ))}
                         </ul>
                     )}
                 </SidebarSection>
 
-                {(muted.length > 0 || mutedConversations.length > 0) && (
+                {(muted.length > 0 || mutedGroups.length > 0) && (
                     <SidebarSection title="Muted" defaultOpen={false}>
                         <ul className="space-y-0.5">
                             {muted.map((channel) => (
@@ -266,7 +289,7 @@ export function WorkspaceSidebar({
                                 </li>
                             ))}
 
-                            {mutedConversations.map((conversation) => (
+                            {mutedGroups.map((conversation) => (
                                 <li key={`conversation-${conversation.id}`}>
                                     <ConversationRow
                                         conversation={conversation}
@@ -339,6 +362,40 @@ function ConversationRow({
                 conversation={conversation}
                 workspaceSlug={workspaceSlug}
                 viewerId={viewerId}
+                isActive={isActive}
+                unreadMessages={counts?.messages ?? 0}
+            />
+        </div>
+    );
+}
+
+/**
+ * A person in the DM list, badged with the unread count of the conversation
+ * they have with the viewer — when there is one. Somebody you have never
+ * messaged has nothing to be unread.
+ */
+function PersonRow({
+    person,
+    workspaceSlug,
+    isActive,
+    onNavigate,
+}: {
+    person: WorkspacePerson;
+    workspaceSlug: string;
+    isActive: boolean;
+    onNavigate?: () => void;
+}) {
+    const unread = useUnreadState();
+    const counts =
+        person.conversation === null
+            ? undefined
+            : unread.conversations[person.conversation.id];
+
+    return (
+        <div onClick={onNavigate}>
+            <PersonListItem
+                person={person}
+                workspaceSlug={workspaceSlug}
                 isActive={isActive}
                 unreadMessages={counts?.messages ?? 0}
             />

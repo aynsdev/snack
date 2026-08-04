@@ -98,10 +98,16 @@ return [
     | not pay for all of them on every request, and a sidebar that long is
     | navigated by search rather than by scrolling.
     |
+    | "people_limit" bounds the roster the DM list is built from. The sidebar
+    | offers everyone in the workspace, not only the people already messaged, so
+    | this is the point at which that stops being a list and starts being a
+    | directory — past it, the new-message picker's search is the way in.
+    |
     */
 
     'conversations' => [
         'sidebar_limit' => 30,
+        'people_limit' => 100,
         'max_participants' => 50,
     ],
 

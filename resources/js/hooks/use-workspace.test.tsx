@@ -4,11 +4,17 @@ import {
     useCurrentWorkspace,
     useSidebarChannels,
     useSidebarConversations,
+    useSidebarPeople,
     useUnreadState,
     useWorkspace,
     useWorkspaceAbilities,
 } from '@/hooks/use-workspace';
-import type { Channel, Conversation, CurrentWorkspace } from '@/types';
+import type {
+    Channel,
+    Conversation,
+    CurrentWorkspace,
+    WorkspacePerson,
+} from '@/types';
 
 const usePage = vi.hoisted(() => vi.fn());
 
@@ -52,9 +58,32 @@ function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
     };
 }
 
+function makePerson(
+    id: number,
+    name: string,
+    conversation: Conversation | null = null,
+): WorkspacePerson {
+    return {
+        user: {
+            id,
+            name,
+            username: name.toLowerCase(),
+            initials: name.slice(0, 1),
+            avatar_url: null,
+            title: null,
+            department: null,
+            presence_status: 'online',
+            status_emoji: null,
+            status_message: null,
+        },
+        conversation,
+    };
+}
+
 function makeCurrent(
     channels: Channel[] = [],
     conversations: Conversation[] = [],
+    people: WorkspacePerson[] = [],
 ): CurrentWorkspace {
     return {
         workspace: {
@@ -79,6 +108,7 @@ function makeCurrent(
         },
         channels,
         conversations,
+        people,
         unread: {
             channels: { 1: { messages: 3, mentions: 1 } },
             conversations: { conv_01HZX: { messages: 2, mentions: 2 } },
@@ -226,11 +256,94 @@ describe('useSidebarConversations', () => {
         expect(result.current.muted.map((c) => c.id)).toEqual(['conv_b']);
     });
 
+    it('separates groups from direct conversations', () => {
+        mockPage(
+            makeCurrent(
+                [],
+                [
+                    makeConversation({ id: 'conv_direct' }),
+                    makeConversation({ id: 'conv_group', type: 'group' }),
+                    makeConversation({
+                        id: 'conv_muted_group',
+                        type: 'group',
+                        is_muted: true,
+                    }),
+                ],
+            ),
+        );
+
+        const { result } = renderHook(() => useSidebarConversations());
+
+        /*
+         * Direct conversations are rendered from the people roster, so the
+         * sidebar's own list must not carry them too — that would be the same
+         * thread twice, once titled by the person and once by the row.
+         */
+        expect(result.current.groups.map((c) => c.id)).toEqual(['conv_group']);
+        expect(result.current.mutedGroups.map((c) => c.id)).toEqual([
+            'conv_muted_group',
+        ]);
+    });
+
+    it('leaves a muted direct message out of the muted groups', () => {
+        mockPage(
+            makeCurrent(
+                [],
+                [makeConversation({ id: 'conv_direct', is_muted: true })],
+            ),
+        );
+
+        const { result } = renderHook(() => useSidebarConversations());
+
+        // It stays on its person's row wearing the bell icon; moving it would
+        // drop a member out of a list of all the members.
+        expect(result.current.mutedGroups).toEqual([]);
+        expect(result.current.muted.map((c) => c.id)).toEqual(['conv_direct']);
+    });
+
     it('returns empty lists outside a workspace', () => {
         mockPage(null);
 
         const { result } = renderHook(() => useSidebarConversations());
 
-        expect(result.current).toEqual({ conversations: [], muted: [] });
+        expect(result.current).toEqual({
+            conversations: [],
+            muted: [],
+            groups: [],
+            mutedGroups: [],
+        });
+    });
+});
+
+describe('useSidebarPeople', () => {
+    it('passes the roster through in the order the server sent it', () => {
+        mockPage(
+            makeCurrent(
+                [],
+                [],
+                [
+                    makePerson(2, 'Bo', makeConversation({ id: 'conv_bo' })),
+                    makePerson(3, 'Cy'),
+                ],
+            ),
+        );
+
+        const { result } = renderHook(() => useSidebarPeople());
+
+        expect(result.current.map((person) => person.user.name)).toEqual([
+            'Bo',
+            'Cy',
+        ]);
+        // Somebody never messaged is still in the list, with no thread behind
+        // them — that is what makes this a roster and not a list of threads.
+        expect(result.current[1].conversation).toBeNull();
+    });
+
+    it('returns an empty roster outside a workspace', () => {
+        mockPage(null);
+
+        const { result } = renderHook(() => useSidebarPeople());
+
+        expect(result.current).toEqual([]);
     });
 });

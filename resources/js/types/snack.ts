@@ -674,11 +674,32 @@ export type UnreadCounts = {
     mentions: number;
 };
 
+/**
+ * One row of the sidebar's direct message list: a person, and the one-to-one
+ * conversation with them if it exists yet.
+ *
+ * Mirrors an entry of App\Services\WorkspaceNavigator::sidebarPeople(). A null
+ * `conversation` is the normal state for most of the workspace — the thread is
+ * created by the click that opens it, not by rendering the list.
+ */
+export type WorkspacePerson = {
+    user: SnackUser;
+    conversation: Conversation | null;
+};
+
 /** The navigation payload for the workspace the user is currently inside. */
 export type CurrentWorkspace = {
     workspace: Workspace;
     channels: Channel[];
+    /**
+     * Every conversation the viewer is in, direct and group alike. The sidebar
+     * renders the groups from here and the direct ones through `people`, but
+     * this stays the complete set: huddles, container labels, and unread
+     * lookups all resolve a conversation by id against it.
+     */
     conversations: Conversation[];
+    /** Everyone else in the workspace, which is what the DM list is built from. */
+    people: WorkspacePerson[];
     unread: UnreadState;
 };
 

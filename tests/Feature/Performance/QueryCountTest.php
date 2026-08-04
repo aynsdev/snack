@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\NotificationReason;
+use App\Models\ConversationParticipant;
 use App\Models\Mention;
 use App\Models\Message;
 use App\Models\MessageAttachment;
@@ -224,5 +225,38 @@ it('serves the channel list in a constant number of queries', function () {
         }
 
         return route('channels.index', $workspace);
+    });
+});
+
+/**
+ * The sidebar's DM roster: one person per workspace member, each carrying the
+ * direct conversation the viewer has with them.
+ *
+ * The member directory test above already pins the roster query itself. This
+ * pins the join to the *conversations*, which is the half that reads a relation
+ * per row — the roster titles and badges each thread from its participants — and
+ * so is the half that turns into an N+1 the moment an eager load goes missing.
+ * It rides on the shared props, so any workspace page measures it.
+ */
+it('serves the DM roster in a constant number of queries', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $channel = makeChannel($workspace);
+    addToChannel($channel, $owner);
+
+    expectConstantQueries($owner, function (int $rows) use ($workspace, $owner, $channel): string {
+        ConversationParticipant::query()
+            ->whereIn('conversation_id', $workspace->conversations()->select('id'))
+            ->delete();
+        $workspace->conversations()->delete();
+        $workspace->members()->where('user_id', '!=', $owner->id)->delete();
+
+        foreach (range(1, $rows) as $ignored) {
+            makeConversation($workspace, [$owner, joinWorkspace($workspace)]);
+        }
+
+        return route('channels.show', [
+            'workspace' => $workspace->slug,
+            'channel' => $channel->slug,
+        ]);
     });
 });
