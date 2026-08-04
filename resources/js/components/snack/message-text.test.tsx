@@ -94,4 +94,21 @@ describe('MessageText', () => {
             'quoted',
         );
     });
+
+    it('renders a bulleted list as list items', () => {
+        const { container } = render(<MessageText body={'- milk\n- eggs'} />);
+
+        expect(container.querySelector('ul')).not.toBeNull();
+        expect(container.querySelectorAll('li')).toHaveLength(2);
+    });
+
+    it('renders a numbered list as an ordered list', () => {
+        const { container } = render(<MessageText body={'1. first'} />);
+
+        expect(container.querySelector('ol')).toHaveTextContent('first');
+        // Tailwind's reset hides the markers unless they are asked for back.
+        expect(container.querySelector('ol')?.className).toContain(
+            'list-decimal',
+        );
+    });
 });
