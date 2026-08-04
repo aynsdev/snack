@@ -35,10 +35,10 @@ import {
 import {
     useActiveChannelSlug,
     useActiveConversationId,
-    useIsDirectMessagesView,
     useIsHuddlesView,
     useIsThreadsView,
 } from '@/hooks/use-active-channel';
+import { useSidebarSection } from '@/hooks/use-sidebar-section';
 import {
     useCurrentUser,
     useCurrentWorkspace,
@@ -96,8 +96,12 @@ export function WorkspaceSidebar({
      * The rail on the left already said which part of the workspace you are in,
      * so repeating the channel list beside a conversation makes the reader scan
      * past everything they did not choose to find the row they did.
+     *
+     * The section rather than the URL: a conversation opened from the roster at
+     * the bottom of *this* sidebar must leave this sidebar standing. See
+     * {@see useSidebarSection}.
      */
-    const isDirectMessages = useIsDirectMessagesView();
+    const isDirectMessages = useSidebarSection() === 'direct-messages';
 
     const [composing, setComposing] = useState(false);
     const [dmFilter, setDmFilter] = useState('');
