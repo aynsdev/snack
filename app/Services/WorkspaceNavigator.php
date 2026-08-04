@@ -2,12 +2,16 @@
 
 namespace App\Services;
 
+use App\Enums\ConversationType;
 use App\Http\Resources\ChannelResource;
 use App\Http\Resources\ConversationResource;
+use App\Http\Resources\UserResource;
 use App\Http\Resources\WorkspaceResource;
 use App\Models\Channel;
+use App\Models\Conversation;
 use App\Models\User;
 use App\Models\Workspace;
+use Illuminate\Support\Collection;
 
 /**
  * Builds the navigation payload shared with every workspace page: the
@@ -119,6 +123,119 @@ class WorkspaceNavigator
     }
 
     /**
+     * The people the DM list is built from: everyone else in the workspace,
+     * each carrying the direct conversation the viewer already has with them,
+     * or null when there is none yet.
+     *
+     * # Why the roster and not the threads
+     *
+     * A colleague you have not messaged is still someone you can message.
+     * Listing conversations meant the only way to see a person in the sidebar
+     * was to *start* a thread with them, so the list you actually wanted — the
+     * team — could only be had by creating a conversation row per member.
+     * Nothing here creates anything: a person without a thread is a name, and
+     * the conversation is opened on the click that needs it.
+     *
+     * Guests get an empty roster, matching {@see DirectoryController} — they may
+     * not start conversations, so offering them the member directory here would
+     * be a back door to the same list the picker refuses them.
+     *
+     * Both queries are fixed cost: one for the roster, one for the viewer's
+     * direct conversations, joined in memory.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function sidebarPeople(Workspace $workspace, User $user): array
+    {
+        if ($user->roleIn($workspace)?->canStartConversations() !== true) {
+            return [];
+        }
+
+        $direct = $this->directConversationsByCounterpart($workspace, $user);
+
+        $people = $workspace->activeUsers()
+            ->whereKeyNot($user->id)
+            ->orderBy('users.name')
+            ->limit((int) config('snack.conversations.people_limit', 100))
+            ->get()
+            ->map(function (User $person) use ($direct): array {
+                $conversation = $direct->get($person->id);
+
+                return [
+                    'user' => (new UserResource($person))->resolve(request()),
+                    'conversation' => $conversation === null
+                        ? null
+                        : (new ConversationResource($conversation))->resolve(request()),
+                ];
+            })
+            ->all();
+
+        $this->sortPeople($people);
+
+        return $people;
+    }
+
+    /**
+     * The viewer's one-to-one conversations in this workspace, keyed by the
+     * other person's id.
+     *
+     * Loaded whole rather than reusing {@see sidebarConversations()}, which is
+     * capped: a person must still show their unread badge when the thread with
+     * them falls outside the most recent thirty.
+     *
+     * @return Collection<int, Conversation>
+     */
+    private function directConversationsByCounterpart(Workspace $workspace, User $user): Collection
+    {
+        return $workspace->conversations()
+            ->where('type', ConversationType::Direct)
+            ->visibleTo($user)
+            ->with([
+                'activeUsers',
+                'participants' => fn ($query) => $query->where('user_id', $user->id),
+            ])
+            ->get()
+            // A direct conversation whose other side is no longer an active
+            // participant has no person to hang under, and keying it anyway
+            // would file every such row under the same empty key.
+            ->filter(fn (Conversation $conversation): bool => $conversation->counterparts($user)->isNotEmpty())
+            ->keyBy(fn (Conversation $conversation): int => $conversation->counterparts($user)->first()->id);
+    }
+
+    /**
+     * Recently active threads first, then everyone else by name.
+     *
+     * The roster is alphabetical underneath, but a DM list that ignored
+     * activity would bury the person you have been talking to all morning
+     * somewhere under the Ms. This preserves the ordering the list had when it
+     * held conversations alone, and appends the rest of the workspace to it.
+     *
+     * Sorting in memory rather than in SQL because the two halves come from
+     * different queries; the roster is bounded by `people_limit`, so this is
+     * over a list that is small by construction.
+     *
+     * @param  array<int, array<string, mixed>>  $people
+     */
+    private function sortPeople(array &$people): void
+    {
+        usort($people, function (array $left, array $right): int {
+            // Both are UTC ISO-8601, so they compare lexically.
+            $leftAt = $left['conversation']['last_message_at'] ?? null;
+            $rightAt = $right['conversation']['last_message_at'] ?? null;
+
+            if ($leftAt !== $rightAt) {
+                return match (true) {
+                    $leftAt === null => 1,
+                    $rightAt === null => -1,
+                    default => strcmp((string) $rightAt, (string) $leftAt),
+                };
+            }
+
+            return strcasecmp((string) $left['user']['name'], (string) $right['user']['name']);
+        });
+    }
+
+    /**
      * The full navigation payload for a workspace page.
      *
      * @return array<string, mixed>
@@ -132,6 +249,11 @@ class WorkspaceNavigator
             'workspace' => (new WorkspaceResource($workspace))->resolve(request()),
             'channels' => $this->sidebarChannels($workspace, $user),
             'conversations' => $this->sidebarConversations($workspace, $user),
+
+            // The DM list itself. `conversations` above stays the complete set
+            // — huddles, container labels, and unread lookups all read it — and
+            // the sidebar renders the groups from it alongside these people.
+            'people' => $this->sidebarPeople($workspace, $user),
 
             'unread' => [
                 // Cast so an empty PHP array serializes as `{}` rather than

@@ -8,6 +8,7 @@ import type {
     UnreadState,
     Workspace,
     WorkspaceAbilities,
+    WorkspacePerson,
     WorkspaceSummary,
 } from '@/types';
 
@@ -111,15 +112,47 @@ export function useUnreadState(): UnreadState {
 export function useSidebarConversations(): {
     conversations: Conversation[];
     muted: Conversation[];
+    /**
+     * Group conversations only. Direct ones are rendered from the people
+     * roster instead, so listing them here as well would show the same thread
+     * twice under two different names.
+     */
+    groups: Conversation[];
+    /** The muted half of `groups`, for the collapsed Muted section. */
+    mutedGroups: Conversation[];
 } {
     const current = useCurrentWorkspace();
 
     return useMemo(() => {
         const all = current?.conversations ?? [];
+        const unmuted = all.filter((conversation) => !conversation.is_muted);
+        const muted = all.filter((conversation) => conversation.is_muted);
+        const isGroup = (conversation: Conversation) =>
+            conversation.type !== 'direct';
 
         return {
-            conversations: all.filter((conversation) => !conversation.is_muted),
-            muted: all.filter((conversation) => conversation.is_muted),
+            conversations: unmuted,
+            muted,
+            groups: unmuted.filter(isGroup),
+            /*
+             * A muted direct message stays on its person's row, wearing the
+             * bell icon. Moving it down here would take a colleague out of the
+             * roster because of a notification setting, leaving a list of "all
+             * the members" with members missing from it.
+             */
+            mutedGroups: muted.filter(isGroup),
         };
     }, [current?.conversations]);
+}
+
+/**
+ * The people the DM list renders: everyone else in the workspace, each with
+ * their existing one-to-one conversation or null.
+ *
+ * Ordering is decided server-side — the threads with recent activity first,
+ * then the rest of the roster by name — so this only passes it through. Empty
+ * for a guest, who has no member directory.
+ */
+export function useSidebarPeople(): WorkspacePerson[] {
+    return useCurrentWorkspace()?.people ?? [];
 }
