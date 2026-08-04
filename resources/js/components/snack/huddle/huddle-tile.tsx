@@ -1,5 +1,5 @@
 import { Track } from 'livekit-client';
-import { MicOff, MonitorUp } from 'lucide-react';
+import { Maximize2, MicOff, MonitorUp } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { HuddleParticipantView } from '@/hooks/use-huddle';
@@ -20,10 +20,20 @@ import { cn } from '@/lib/utils';
 export function HuddleTile({
     participant,
     size = 'compact',
+    selected = false,
+    onSelect,
 }: {
     participant: HuddleParticipantView;
-    /** `expanded` drops the tray's cramped type scale for the full-screen grid. */
-    size?: 'compact' | 'expanded';
+    /**
+     * `expanded` drops the tray's cramped type scale for the full-screen grid.
+     * `focused` additionally lets the tile fill its container instead of holding
+     * 16:9, so a spotlit screen share uses the whole height available to it.
+     */
+    size?: 'compact' | 'expanded' | 'focused';
+    /** Whether this is the tile currently spotlit, for the filmstrip. */
+    selected?: boolean;
+    /** Makes the tile a button. Absent, it is inert. */
+    onSelect?: () => void;
 }) {
     const getInitials = useInitials();
     const video = useRef<HTMLVideoElement>(null);
@@ -88,14 +98,41 @@ export function HuddleTile({
     );
 
     const hasVideo = participant.isCameraEnabled || participant.isScreenSharing;
-    const expanded = size === 'expanded';
+    const focused = size === 'focused';
+    const expanded = focused || size === 'expanded';
+
+    /*
+     * A button only when it does something. Rendering an inert `<button>` around
+     * every tile would put each participant in the tab order twice over for no
+     * action, which is worse for a keyboard user than a plain region.
+     */
+    const Root = onSelect === undefined ? 'div' : 'button';
 
     return (
-        <div
+        <Root
+            {...(onSelect === undefined
+                ? {}
+                : {
+                      type: 'button' as const,
+                      onClick: onSelect,
+                      'aria-pressed': selected,
+                      title: focused
+                          ? 'Back to everyone'
+                          : `Focus ${participant.isLocal ? 'yourself' : participant.name}`,
+                  })}
             className={cn(
-                'relative aspect-video overflow-hidden bg-muted ring-2 transition-colors',
+                'group relative overflow-hidden bg-muted ring-2 transition-colors',
+                // A focused tile fills whatever it is given; everything else
+                // holds 16:9 so a grid of them stays a grid.
+                focused ? 'size-full' : 'aspect-video',
                 expanded ? 'rounded-2xl' : 'rounded-xl',
-                participant.isSpeaking ? 'ring-brand' : 'ring-transparent',
+                selected
+                    ? 'ring-brand'
+                    : participant.isSpeaking
+                      ? 'ring-brand'
+                      : 'ring-transparent',
+                onSelect !== undefined &&
+                    'cursor-pointer focus-visible:ring-brand focus-visible:outline-none',
             )}
         >
             {/*
@@ -163,9 +200,24 @@ export function HuddleTile({
                 </div>
             )}
 
+            {/*
+             * The affordance for the click the whole tile already accepts.
+             * Shown on hover and on keyboard focus rather than permanently: a
+             * grid of faces each wearing a button is noise, but a tile that does
+             * something and says nothing is a feature nobody finds.
+             */}
+            {onSelect !== undefined && !focused && (
+                <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute top-1.5 right-1.5 rounded-md bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                >
+                    <Maximize2 className="size-3" />
+                </span>
+            )}
+
             <div
                 className={cn(
-                    'absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent',
+                    'absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent text-left',
                     expanded ? 'px-3 pt-8 pb-2' : 'px-2 pt-6 pb-1.5',
                 )}
             >
@@ -198,6 +250,6 @@ export function HuddleTile({
                     {participant.isLocal ? 'You' : participant.name}
                 </span>
             </div>
-        </div>
+        </Root>
     );
 }
