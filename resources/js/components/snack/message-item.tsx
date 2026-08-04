@@ -116,9 +116,22 @@ export function MessageItem({
         >
             <div className="w-9 shrink-0 pt-0.5">
                 {grouped ? (
+                    /*
+                     * Faded rather than hidden, and that is the whole point.
+                     * `hidden` takes the timestamp out of flow, so revealing it
+                     * on hover grew the row — the gutter is narrower than
+                     * "10:51 PM", so the line wrapped in two and the message
+                     * jumped under the pointer. Kept in flow at zero opacity it
+                     * costs the same height whether or not anyone is hovering,
+                     * which is what the virtualizer measures.
+                     *
+                     * Right-aligned and unwrapped: a long time string overflows
+                     * leftwards into the row's own padding, where there is room
+                     * for it, instead of into the message body.
+                     */
                     <time
                         dateTime={message.created_at ?? undefined}
-                        className="hidden text-[0.625rem] leading-5 text-muted-foreground tabular-nums group-hover:block"
+                        className="block text-right text-[0.625rem] leading-5 whitespace-nowrap text-muted-foreground tabular-nums opacity-0 transition-opacity group-hover:opacity-100"
                     >
                         {formatTime(message.created_at)}
                     </time>

@@ -339,3 +339,125 @@ it('keeps a non-member out of the centre entirely', function () {
         ->get(route('notifications.index', ['workspace' => $workspace->slug]))
         ->assertNotFound();
 });
+
+// -- Reading the message behind the row --------------------------------------
+
+/**
+ * The inbox is what is *waiting*, not a log of everything ever raised.
+ *
+ * A row that survives the reader having gone and read the message it points at
+ * is a badge people learn to ignore — and a direct message makes it unmissable,
+ * since every line raises one. So the read pointer clears them, bounded by
+ * exactly the same rule the unread counts use: only what sits at or below the
+ * pointer.
+ */
+it('marks a mention read when the channel is read', function () {
+    [$workspace, $owner, $member, $channel] = notifiableChannel();
+
+    notifyFor(makeMessage($channel, $owner, "@{$member->username} hi"), $owner);
+
+    $this->actingAs($member)
+        ->postJson(route('channels.read.store', [
+            'workspace' => $workspace->slug,
+            'channel' => $channel->slug,
+        ]))
+        ->assertOk();
+
+    expect(Notification::query()->forWorkspace($workspace, $member)->sole()->isRead())->toBeTrue();
+});
+
+it('marks a direct message read when the conversation is read', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $member = joinWorkspace($workspace);
+
+    $conversation = makeConversation($workspace, [$owner, $member]);
+
+    notifyFor(makeConversationMessage($conversation, $owner, 'are you about?'), $owner);
+
+    $this->actingAs($member)
+        ->postJson(route('conversations.read.store', [
+            'workspace' => $workspace->slug,
+            'conversation' => $conversation,
+        ]))
+        ->assertOk();
+
+    expect(Notification::query()->forWorkspace($workspace, $member)->sole()->isRead())->toBeTrue();
+});
+
+it('leaves a mention above the pointer unread', function () {
+    [$workspace, $owner, $member, $channel] = notifiableChannel();
+
+    $first = makeMessage($channel, $owner, "@{$member->username} one");
+    notifyFor($first, $owner);
+    notifyFor(makeMessage($channel, $owner, "@{$member->username} two"), $owner);
+
+    $this->actingAs($member)
+        ->postJson(route('channels.read.store', [
+            'workspace' => $workspace->slug,
+            'channel' => $channel->slug,
+        ]), ['last_read_message_id' => $first->id])
+        ->assertOk();
+
+    // Bounded by the pointer, exactly as the mention and unread counts are: the
+    // second message is still further down than the reader has reached.
+    expect(Notification::query()->forWorkspace($workspace, $member)->whereNull('read_at')->count())->toBe(1);
+});
+
+it('leaves a thread reply unread when only the channel is read', function () {
+    [$workspace, $owner, $member, $channel] = notifiableChannel();
+
+    $root = makeMessage($channel, $member, 'thoughts?');
+
+    ThreadSubscription::query()->create([
+        'user_id' => $member->id,
+        'root_message_id' => $root->id,
+    ]);
+
+    $reply = Message::factory()
+        ->inChannel($channel)
+        ->from($owner)
+        ->create(['parent_message_id' => $root->id]);
+
+    notifyFor($reply, $owner);
+
+    // Something posted at the top level *after* the reply, so the channel's
+    // pointer lands above it. Ids are monotonic, so without the guard reading
+    // the channel would clear a reply the reader never opened the thread to see.
+    makeMessage($channel, $owner, 'unrelated');
+
+    $this->actingAs($member)
+        ->postJson(route('channels.read.store', [
+            'workspace' => $workspace->slug,
+            'channel' => $channel->slug,
+        ]))
+        ->assertOk();
+
+    expect(Notification::query()->forWorkspace($workspace, $member)->sole()->isRead())->toBeFalse();
+});
+
+it('marks a thread reply read when the thread is read', function () {
+    [$workspace, $owner, $member, $channel] = notifiableChannel();
+
+    $root = makeMessage($channel, $member, 'thoughts?');
+
+    ThreadSubscription::query()->create([
+        'user_id' => $member->id,
+        'root_message_id' => $root->id,
+    ]);
+
+    $reply = Message::factory()
+        ->inChannel($channel)
+        ->from($owner)
+        ->create(['parent_message_id' => $root->id]);
+
+    notifyFor($reply, $owner);
+
+    $this->actingAs($member)
+        ->postJson(route('threads.read.store', [
+            'workspace' => $workspace->slug,
+            'message' => $root->id,
+        ]), ['last_read_reply_id' => $reply->id])
+        ->assertOk();
+
+    expect(Notification::query()->forWorkspace($workspace, $member)->sole()->isRead())->toBeTrue();
+});

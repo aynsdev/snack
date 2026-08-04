@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Messages;
 
 use App\Actions\Messages\SubscribeToThread;
+use App\Actions\Notifications\MarkNotificationsRead;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Messages\MarkThreadReadRequest;
 use App\Models\Message;
@@ -22,7 +23,10 @@ use Illuminate\Http\JsonResponse;
  */
 class ThreadReadController extends Controller
 {
-    public function __construct(private readonly SubscribeToThread $subscriptions) {}
+    public function __construct(
+        private readonly SubscribeToThread $subscriptions,
+        private readonly MarkNotificationsRead $notifications,
+    ) {}
 
     public function store(
         Workspace $workspace,
@@ -35,6 +39,18 @@ class ThreadReadController extends Controller
 
         if ($target !== null) {
             $this->subscriptions->markRead($rootId, $request->user(), $target);
+
+            /*
+             * The inbox rows for those replies, which the container's own read
+             * pointer deliberately leaves alone — a reply sits below that
+             * pointer as soon as anything is posted after its root, whether or
+             * not the thread was ever opened. This is where it is opened.
+             *
+             * Not conditional on a subscription: a mention can pull somebody
+             * into a thread they do not follow, and their row has to clear when
+             * they read it just the same.
+             */
+            $this->notifications->forThread($workspace, $request->user(), $rootId, $target);
         }
 
         return response()->json([

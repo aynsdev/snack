@@ -2,6 +2,7 @@
 
 namespace App\Actions\Channels;
 
+use App\Actions\Notifications\MarkNotificationsRead;
 use App\Events\ChannelRead;
 use App\Models\Channel;
 use App\Models\ChannelMember;
@@ -18,6 +19,8 @@ use App\Models\User;
  */
 class MarkChannelRead
 {
+    public function __construct(private readonly MarkNotificationsRead $notifications) {}
+
     /**
      * @param  int|null  $messageId  The newest message the client has displayed.
      *                               Null means "everything currently in the channel".
@@ -54,6 +57,10 @@ class MarkChannelRead
         ])->save();
 
         $this->clearMentions($channel, $user, $target);
+
+        // The inbox row raised by the same message, so the Activity badge counts
+        // what is still waiting rather than what has already been read.
+        $this->notifications->forContainer($channel->workspace, $user, $channel, $target);
 
         ChannelRead::dispatch($user->id, $channel->id, $target);
 

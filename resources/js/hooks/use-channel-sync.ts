@@ -65,15 +65,26 @@ export function useChannelSync(userId: number) {
     );
 
     /*
-     * Being added to a channel by somebody else. A separate subscription rather
-     * than another name on the one above, because it deliberately does *not*
-     * call `notify`: there is no message to announce, and the alert path would
-     * bail anyway — it looks the channel up in the sidebar list, which is the
-     * very thing this event says is out of date.
+     * The silent refreshes. A separate subscription rather than more names on
+     * the one above, because these deliberately do *not* call `notify`: neither
+     * is a message to announce, and the alert path would bail anyway — it looks
+     * the channel up in the sidebar list, which for a new membership is the very
+     * thing the event says is out of date.
+     *
+     * `channelRead` is what clears the badge for the channel being read. The
+     * count is computed server-side when the page renders, which is *before* the
+     * reader's client has reported what it displayed — so without this the badge
+     * and the mention pill on a channel you are looking at stay lit until some
+     * later navigation happens to re-render the sidebar, one step behind the
+     * whole time. Conversations have had this from the start; the asymmetry is
+     * the bug.
+     *
+     * It also does what the event was written for: the same person's other tabs
+     * and devices clear the badge when any one of them reads the channel.
      */
     useEcho<ChannelSignalEvent>(
         channels.user(userId),
-        [events.channelMembershipGranted],
+        [events.channelMembershipGranted, events.channelRead],
         () => refresh(),
         [userId, refresh],
     );
