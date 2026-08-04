@@ -56,6 +56,7 @@ function makeNotification(
         is_read: false,
         read_at: null,
         created_at: '2026-07-31T09:00:00+00:00',
+        count: 1,
         message_id: 1,
         thread_root_id: null,
         preview: 'take a look',
@@ -108,7 +109,7 @@ describe('useNotifications', () => {
         ]);
     });
 
-    it('ignores an arrival it has already rendered', () => {
+    it('does not duplicate an arrival it has already rendered', () => {
         const { result } = render([makeNotification('a')]);
 
         // The same notification can be delivered twice — a reconnect replays
@@ -116,6 +117,43 @@ describe('useNotifications', () => {
         act(() => arrivals.callback?.(makeNotification('a')));
 
         expect(result.current.notifications).toHaveLength(1);
+    });
+
+    it('replaces a row the server has folded another message into', () => {
+        const { result } = render([
+            makeNotification('b'),
+            makeNotification('a', { type: 'direct_message' }),
+        ]);
+
+        /*
+         * NotificationCoalescer rewrites the unread row for a conversation and
+         * re-broadcasts it under the same id, so this arrival is an update
+         * rather than a duplicate. Keeping the copy already on screen would
+         * leave the reader looking at the first message of a conversation that
+         * has since moved on.
+         */
+        act(() =>
+            arrivals.callback?.(
+                makeNotification('a', {
+                    type: 'direct_message',
+                    count: 3,
+                    preview: 'and one more thing',
+                }),
+            ),
+        );
+
+        expect(result.current.notifications).toHaveLength(2);
+        expect(result.current.notifications[0]).toMatchObject({
+            id: 'a',
+            count: 3,
+            preview: 'and one more thing',
+        });
+
+        // Hoisted to the top, which is what the server did to created_at.
+        expect(result.current.notifications.map((n) => n.id)).toEqual([
+            'a',
+            'b',
+        ]);
     });
 
     it('asks the server for a fresh badge rather than counting locally', () => {

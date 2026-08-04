@@ -498,29 +498,41 @@ export function HuddleProvider({ children }: { children: ReactNode }) {
  */
 function RemoteAudio({ participant }: { participant: Participant }) {
     const ref = useRef<HTMLAudioElement>(null);
+    const attached = useRef<Track | null>(null);
 
     /*
      * The publication is looked up inside the effect rather than during render.
      * A participant who has not published yet has no track at all, and the
      * effect re-runs when the snapshot that produced this render changes — which
      * is exactly when TrackSubscribed fired.
+     *
+     * Idempotent for the same reason {@see HuddleTile} is: this runs on every
+     * render, and re-attaching an unchanged track would restart playback several
+     * times a second while anybody is speaking — which is audible as a stutter,
+     * not just as a flicker.
      */
     useEffect(() => {
         const element = ref.current;
-        const track = participant.getTrackPublication(
-            Track.Source.Microphone,
-        )?.track;
+        const track =
+            participant.getTrackPublication(Track.Source.Microphone)?.track ??
+            null;
 
-        if (element === null || track === undefined) {
+        if (element === null || track === attached.current) {
             return;
         }
 
-        track.attach(element);
-
-        return () => {
-            track.detach(element);
-        };
+        attached.current?.detach(element);
+        attached.current = track;
+        track?.attach(element);
     });
+
+    useEffect(
+        () => () => {
+            attached.current?.detach();
+            attached.current = null;
+        },
+        [],
+    );
 
     return <audio ref={ref} autoPlay />;
 }
