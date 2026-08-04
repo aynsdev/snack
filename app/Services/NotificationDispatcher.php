@@ -6,6 +6,7 @@ use App\Enums\NotificationReason;
 use App\Http\Resources\ContainerSummary;
 use App\Models\Message;
 use App\Models\User;
+use App\Models\Workspace;
 use App\Notifications\MessageNotification;
 use Illuminate\Support\Facades\Notification;
 
@@ -23,7 +24,10 @@ use Illuminate\Support\Facades\Notification;
  */
 class NotificationDispatcher
 {
-    public function __construct(private readonly NotificationRecipients $recipients) {}
+    public function __construct(
+        private readonly NotificationRecipients $recipients,
+        private readonly NotificationCoalescer $coalescer,
+    ) {}
 
     public function dispatch(int $messageId): void
     {
@@ -45,28 +49,54 @@ class NotificationDispatcher
         $payload = $this->payload($message);
         $workspace = $message->workspace;
 
-        /*
-         * Grouped by reason so each distinct notification is constructed once
-         * and sent to everyone who shares it, rather than once per person.
-         * Laravel still queues delivery per notifiable, which is what keeps one
-         * bounced email from holding up the other ninety-nine.
-         */
+        // Grouped by reason so each distinct notification is built and sent
+        // once, to everyone who shares it.
         foreach ($this->groupByReason($recipients) as $reason => $userIds) {
-            $users = User::query()->whereIn('id', $userIds)->get();
-
-            if ($users->isEmpty()) {
-                continue;
-            }
-
-            Notification::send(
-                $users,
-                new MessageNotification(
-                    NotificationReason::from($reason),
-                    $workspace,
-                    $payload,
-                ),
-            );
+            $this->deliver(NotificationReason::from($reason), $workspace, $userIds, $payload);
         }
+    }
+
+    /**
+     * Everyone who shares one reason, in one send.
+     *
+     * Constructed once per reason rather than once per person. Laravel still
+     * queues delivery per notifiable, which is what keeps one bounced email from
+     * holding up the other ninety-nine.
+     *
+     * @param  array<int, int>  $userIds
+     * @param  array<string, mixed>  $payload
+     */
+    private function deliver(
+        NotificationReason $reason,
+        Workspace $workspace,
+        array $userIds,
+        array $payload,
+    ): void {
+        /*
+         * Anyone still holding an open row for this container has it rewritten
+         * in place instead of being sent a second one — see
+         * {@see NotificationCoalescer} for why a chatty DM should not be worth an
+         * inbox row per line. They drop out here, so no notification is
+         * constructed for them at all and no second email goes out.
+         */
+        $absorbed = $this->coalescer->absorb($reason, $workspace, $userIds, $payload);
+
+        $remaining = array_values(array_diff($userIds, $absorbed));
+
+        if ($remaining === []) {
+            return;
+        }
+
+        $users = User::query()->whereIn('id', $remaining)->get();
+
+        if ($users->isEmpty()) {
+            return;
+        }
+
+        Notification::send(
+            $users,
+            new MessageNotification($reason, $workspace, $payload),
+        );
     }
 
     /**

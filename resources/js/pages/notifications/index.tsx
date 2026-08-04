@@ -165,7 +165,11 @@ function NotificationRow({
                     </div>
 
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                        {headline(notification.type, actor?.name ?? 'Someone')}
+                        {headline(
+                            notification.type,
+                            actor?.name ?? 'Someone',
+                            notification.count,
+                        )}
                     </p>
 
                     {/*
@@ -188,13 +192,25 @@ const REASON_ICONS: Record<NotificationReason, typeof AtSign> = {
     thread_reply: Reply,
 };
 
-/** Mirrors App\Enums\NotificationReason::headline(). */
-function headline(reason: NotificationReason, actorName: string): string {
+/**
+ * Mirrors App\Enums\NotificationReason::headline(), plus the count.
+ *
+ * A row standing for several messages says so here rather than in a badge: the
+ * headline is the line that explains what happened, and "sent you 4 messages"
+ * is the whole explanation. The preview below it is the last of them.
+ */
+function headline(
+    reason: NotificationReason,
+    actorName: string,
+    count: number,
+): string {
     switch (reason) {
         case 'mention':
             return `${actorName} mentioned you`;
         case 'direct_message':
-            return `${actorName} sent you a message`;
+            return count > 1
+                ? `${actorName} sent you ${count} messages`
+                : `${actorName} sent you a message`;
         case 'thread_reply':
             return `${actorName} replied in a thread`;
         default:

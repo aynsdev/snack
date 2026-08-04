@@ -67,6 +67,34 @@ enum NotificationReason: string
     }
 
     /**
+     * Whether a second one of these folds into the unread row already sitting in
+     * the inbox instead of writing its own.
+     *
+     * # Why only direct messages
+     *
+     * A DM is the one reason here that fires on *traffic* rather than on an act
+     * aimed at you: every message in the conversation raises one, so a friend
+     * typing four short lines instead of one long one costs four inbox rows and
+     * four emails describing the same interruption. Folding them makes the row
+     * count follow conversations rather than keystrokes, which is what the
+     * inbox is for.
+     *
+     * A mention is deliberately excluded. Being named three times is three
+     * things to go and look at, possibly in three different channels, and
+     * collapsing them would hide two of them behind a count.
+     *
+     * A thread reply sits between the two and is left alone for now: a followed
+     * thread is already a narrower thing to subscribe to than a conversation.
+     * Returning true here is all it would take to change that.
+     *
+     * @see App\Services\NotificationCoalescer for the window this happens in.
+     */
+    public function coalescesWhileUnread(): bool
+    {
+        return $this === self::DirectMessage;
+    }
+
+    /**
      * @return array<int, string>
      */
     public static function values(): array

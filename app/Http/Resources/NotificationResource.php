@@ -34,6 +34,10 @@ class NotificationResource extends JsonResource
             'read_at' => $this->read_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
 
+            // How many messages this row stands for. Above 1 only for a reason
+            // that coalesces — see App\Services\NotificationCoalescer.
+            'count' => (int) data_get($this->data, 'count', 1),
+
             'message_id' => data_get($this->data, 'message_id'),
             'thread_root_id' => data_get($this->data, 'thread_root_id'),
             'preview' => data_get($this->data, 'preview', ''),

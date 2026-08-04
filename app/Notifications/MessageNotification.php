@@ -107,6 +107,17 @@ class MessageNotification extends Notification implements ScopedToWorkspace, Sho
         return [
             'reason' => $this->reason->value,
             'workspace_id' => $this->workspace->id,
+
+            /*
+             * How many messages this one row now stands for. Always 1 here —
+             * {@see App\Services\NotificationCoalescer} is what raises it, by
+             * rewriting a row rather than by sending another notification — but
+             * stated explicitly so every row carries the field and the client
+             * never has to treat its absence as a third case.
+             *
+             * Spread last so a coalesced payload's own count wins.
+             */
+            'count' => 1,
             ...$this->payload,
         ];
     }

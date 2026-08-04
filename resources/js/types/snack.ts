@@ -319,6 +319,14 @@ export type NotificationEntry = {
     is_read: boolean;
     read_at: string | null;
     created_at: string | null;
+    /**
+     * How many messages this one row stands for.
+     *
+     * Above 1 when App\Services\NotificationCoalescer has folded later direct
+     * messages into a row still sitting unread, in which case the fields below
+     * describe the *latest* of them.
+     */
+    count: number;
     message_id: number | null;
     /** Set when the notification is about a thread reply. */
     thread_root_id: number | null;

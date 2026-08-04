@@ -484,6 +484,17 @@ return [
 
         'idle_minutes' => (int) env('SNACK_NOTIFICATION_IDLE_MINUTES', 10),
 
+        // How long an unread direct-message row keeps absorbing the ones that
+        // follow it — see NotificationReason::coalescesWhileUnread().
+        //
+        // Bounded rather than open-ended on purpose. Folding only while the row
+        // is unread would mean somebody who never opens their notification
+        // centre eventually stops being emailed about direct messages at all,
+        // because one ancient row would keep swallowing every new conversation.
+        // A window makes the worst case "one row and one email per hour per
+        // conversation" instead of "silence".
+        'coalesce_minutes' => (int) env('SNACK_NOTIFICATION_COALESCE_MINUTES', 60),
+
         'digest' => [
             'hour' => (int) env('SNACK_DIGEST_HOUR', 8),
 

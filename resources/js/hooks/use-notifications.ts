@@ -75,16 +75,24 @@ export function useNotifications({
         `App.Models.User.${userId}`,
         (payload) => {
             /*
-             * A user can hold one socket while looking at two workspaces in two
-             * tabs. The payload names its own workspace, but this list is
-             * already scoped to one — so anything for a different container set
-             * is dropped rather than rendered under the wrong heading.
+             * An id already in the list is not a duplicate to ignore — it is
+             * that row having been rewritten.
+             *
+             * App\Services\NotificationCoalescer folds a repeat direct message
+             * into the unread row already standing for that conversation and
+             * re-broadcasts it under the *same* id, so the arrival carries a new
+             * preview, a new message to jump to, and a higher count. Keeping the
+             * copy already on screen would leave the reader looking at the first
+             * message of a conversation that has since moved on.
+             *
+             * Replaced and hoisted to the top, which is what the server did to
+             * `created_at`. A genuinely new notification has an id nobody holds
+             * and is simply prepended.
              */
-            setNotifications((current) =>
-                current.some((entry) => entry.id === payload.id)
-                    ? current
-                    : [payload, ...current],
-            );
+            setNotifications((current) => [
+                payload,
+                ...current.filter((entry) => entry.id !== payload.id),
+            ]);
 
             // The badge is server-owned; ask for the fresh count rather than
             // incrementing a local copy that could drift.
