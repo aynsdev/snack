@@ -42,6 +42,10 @@ vi.mock('@/lib/api', () => ({
     ApiError: class ApiError extends Error {},
 }));
 
+const inertia = vi.hoisted(() => ({ reload: vi.fn() }));
+
+vi.mock('@inertiajs/react', () => ({ router: inertia }));
+
 const { useThread } = await import('@/hooks/use-thread');
 
 const currentUser: SnackUser = {
@@ -327,6 +331,23 @@ describe('useThread', () => {
         expect(api.post).toHaveBeenCalledWith(
             expect.stringContaining('/thread/read'),
             { last_read_reply_id: 11 },
+        );
+    });
+
+    it('re-reads the badge once the replies are marked read', async () => {
+        const { result } = mount();
+
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        await act(async () => result.current.markAsRead());
+
+        /*
+         * Reading the replies stamps the inbox rows they raised, so the Activity
+         * count is now wrong until it is asked for again. The panel opens
+         * without a navigation, so nothing else would ever re-read it.
+         */
+        await waitFor(() =>
+            expect(inertia.reload).toHaveBeenCalledWith({ only: ['snack'] }),
         );
     });
 

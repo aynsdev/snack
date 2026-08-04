@@ -254,6 +254,40 @@ it('clears the mention badge when the channel is read', function () {
     expect($counter->mentionCount($workspace, $bo))->toBe(0);
 });
 
+it('clears the mention badge when the conversation is read', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+
+    $bo = joinWorkspace($workspace);
+    $bo->forceFill(['username' => 'bo'])->save();
+
+    $conversation = makeConversation($workspace, [$owner, $bo]);
+
+    // Through the endpoint, not the factory: the mention row is written by
+    // App\Actions\Messages\SyncMentions on the send path.
+    $this->actingAs($owner);
+    $this->postJson(
+        route('conversations.messages.store', [
+            'workspace' => $workspace->slug,
+            'conversation' => $conversation,
+        ]),
+        ['body' => 'Morning @bo'],
+    )->assertCreated();
+
+    $counter = app(UnreadCounter::class);
+    expect($counter->mentionCount($workspace, $bo))->toBe(1);
+
+    $this->actingAs($bo);
+    $this->postJson(route('conversations.read.store', [
+        'workspace' => $workspace->slug,
+        'conversation' => $conversation,
+    ]))->assertOk();
+
+    // Being named in a DM writes the same row as being named in a channel, so
+    // reading it has to clear the same row — otherwise the Mentions list keeps
+    // highlighting a message the reader has already answered.
+    expect($counter->mentionCount($workspace, $bo))->toBe(0);
+});
+
 it('leaves a mention unread if the reader has not reached it', function () {
     [$workspace, $owner, $channel, $bo] = makeMentionFixture();
 

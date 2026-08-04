@@ -1,3 +1,4 @@
+import { router } from '@inertiajs/react';
 import { useEcho } from '@laravel/echo-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useReactions } from '@/hooks/use-reactions';
@@ -517,6 +518,14 @@ export function useThread({
                 }),
                 { last_read_reply_id: newestSeen.current },
             )
+            /*
+             * Reading the replies also stamps the inbox rows they raised, and
+             * that count is server-owned — so it is asked for rather than
+             * adjusted here. Channels and DMs get the same refresh from their
+             * read broadcast; a thread has none, and the panel opens without a
+             * navigation, so nothing else would ever re-read the badge.
+             */
+            .then(() => router.reload({ only: ['snack'] }))
             .catch((cause: unknown) => {
                 if (!(cause instanceof ApiError)) {
                     throw cause;

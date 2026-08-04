@@ -177,8 +177,13 @@ class UnreadCounter
      *
      * Deliberately not a sum over the mention and thread badges. Those answer
      * "what is waiting in this container"; this answers "what has been raised to
-     * me", and the two diverge the moment a mention is read from the channel
-     * without the notification being opened.
+     * me", and one event can raise both — a mention writes a mention row *and*
+     * an inbox row, so adding them would count it twice.
+     *
+     * The two used to diverge as well, because reading a channel cleared the
+     * mention while leaving the inbox row standing: the badge went on counting
+     * messages the reader had already answered. {@see App\Actions\Notifications\MarkNotificationsRead::forContainer()}
+     * is what closed that, so both now clear from the same read pointer.
      */
     public function notificationCount(Workspace $workspace, User $user): int
     {
