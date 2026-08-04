@@ -19,6 +19,7 @@
  *
  *   `code`      **bold**      _italic_      ~~strike~~
  *   > quote     ```fenced code```           bare http(s) links
+ *   - bullet    1. numbered
  */
 
 export type InlineNode =
@@ -45,6 +46,7 @@ export type MentionKind = 'user' | 'everyone' | 'here';
 export type BlockNode =
     | { type: 'paragraph'; children: InlineNode[] }
     | { type: 'quote'; children: InlineNode[] }
+    | { type: 'list'; ordered: boolean; items: InlineNode[][] }
     | { type: 'codeblock'; language: string | null; value: string };
 
 /**
@@ -79,6 +81,16 @@ const INLINE_PATTERN = new RegExp(
 );
 
 const FENCE = /^```([a-z0-9+#-]*)\s*$/i;
+
+/**
+ * A list item, either kind.
+ *
+ * The space after the marker is required, so "-1 degrees" and "1.5x" stay
+ * prose. One line is one item; a list is a run of them, which is as much
+ * structure as a chat message needs.
+ */
+const BULLET = /^[-*] (.*)$/;
+const NUMBERED = /^\d+\.\s(.*)$/;
 
 /**
  * Parse a message body into blocks.
@@ -122,6 +134,37 @@ export function parseMessage(body: string): BlockNode[] {
                 language: fence[1] || null,
                 value: code.join('\n'),
             });
+
+            continue;
+        }
+
+        const item = line.match(BULLET) ?? line.match(NUMBERED);
+
+        if (item !== null) {
+            flushParagraph();
+
+            const ordered = NUMBERED.test(line);
+            const items: InlineNode[][] = [];
+
+            /*
+             * A run ends when the marker changes, so a numbered list written
+             * under a bulleted one reads as two lists rather than one with a
+             * confused first half.
+             */
+            while (index < lines.length) {
+                const next = lines[index].match(ordered ? NUMBERED : BULLET);
+
+                if (next === null) {
+                    break;
+                }
+
+                items.push(parseInline(next[1]));
+                index++;
+            }
+
+            index--;
+
+            blocks.push({ type: 'list', ordered, items });
 
             continue;
         }

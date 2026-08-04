@@ -80,6 +80,71 @@ describe('parseMessage', () => {
 
         expect(blocks[0].type).toBe('paragraph');
     });
+
+    it('parses a bulleted list as one block of items', () => {
+        expect(parseMessage('- milk\n- eggs')).toEqual([
+            {
+                type: 'list',
+                ordered: false,
+                items: [
+                    [{ type: 'text', value: 'milk' }],
+                    [{ type: 'text', value: 'eggs' }],
+                ],
+            },
+        ]);
+    });
+
+    it('parses a numbered list and ignores the numbers written', () => {
+        // The renderer numbers the items, so a list typed 1/1/1 still counts up
+        // — which is what happens when someone pastes one in.
+        const blocks = parseMessage('1. first\n1. second');
+
+        expect(blocks).toEqual([
+            {
+                type: 'list',
+                ordered: true,
+                items: [
+                    [{ type: 'text', value: 'first' }],
+                    [{ type: 'text', value: 'second' }],
+                ],
+            },
+        ]);
+    });
+
+    it('formats inside a list item', () => {
+        const blocks = parseMessage('- ask @ada about **it**');
+
+        expect(blocks[0]).toMatchObject({
+            items: [
+                [
+                    { type: 'text', value: 'ask ' },
+                    { type: 'mention', kind: 'user', handle: 'ada' },
+                    { type: 'text', value: ' about ' },
+                    { type: 'bold', children: [{ type: 'text', value: 'it' }] },
+                ],
+            ],
+        });
+    });
+
+    it('ends a run when the marker changes', () => {
+        const blocks = parseMessage('- one\n1. two');
+
+        expect(blocks).toHaveLength(2);
+        expect(blocks[0]).toMatchObject({ type: 'list', ordered: false });
+        expect(blocks[1]).toMatchObject({ type: 'list', ordered: true });
+    });
+
+    it('leaves prose that opens with a dash or a decimal alone', () => {
+        // "-5 degrees" and "1.5x faster" are sentences, not lists.
+        expect(parseMessage('-5 degrees tonight')[0].type).toBe('paragraph');
+        expect(parseMessage('1.5x faster')[0].type).toBe('paragraph');
+    });
+
+    it('does not read a list marker inside a code block', () => {
+        expect(parseMessage('```\n- not an item\n```')).toEqual([
+            { type: 'codeblock', language: null, value: '- not an item' },
+        ]);
+    });
 });
 
 describe('parseInline', () => {

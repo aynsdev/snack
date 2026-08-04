@@ -115,6 +115,164 @@ describe('MessageComposer', () => {
     });
 
     /**
+     * The formatting row.
+     *
+     * It writes the same markers a person could type, into the same textarea,
+     * so the tests assert on the text in the box — that is the whole contract.
+     * Anything else would mean the composer had grown a second representation
+     * of a message body.
+     */
+    describe('formatting', () => {
+        it('wraps the selected text in the marker the button promises', async () => {
+            const user = userEvent.setup();
+
+            render(<MessageComposer channelName="#general" onSend={vi.fn()} />);
+
+            const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+            await user.type(box, 'make me bold');
+            box.setSelectionRange(8, 12);
+
+            await user.click(screen.getByRole('button', { name: 'Bold' }));
+
+            expect(box).toHaveValue('make me **bold**');
+        });
+
+        it('keeps the selection so a second press undoes the first', async () => {
+            const user = userEvent.setup();
+
+            render(<MessageComposer channelName="#general" onSend={vi.fn()} />);
+
+            const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+            await user.type(box, 'word');
+            box.setSelectionRange(0, 4);
+
+            await user.click(screen.getByRole('button', { name: 'Italic' }));
+            await user.click(screen.getByRole('button', { name: 'Italic' }));
+
+            expect(box).toHaveValue('word');
+        });
+
+        it('marks the line the caret is on for a list', async () => {
+            const user = userEvent.setup();
+
+            render(<MessageComposer channelName="#general" onSend={vi.fn()} />);
+
+            const box = screen.getByRole('textbox');
+            await user.type(box, 'milk');
+            await user.click(
+                screen.getByRole('button', { name: 'Bulleted list' }),
+            );
+
+            expect(box).toHaveValue('- milk');
+        });
+
+        it('sends the markers as part of the body', async () => {
+            const onSend = vi.fn();
+            const user = userEvent.setup();
+
+            render(<MessageComposer channelName="#general" onSend={onSend} />);
+
+            const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+            await user.type(box, 'shipped');
+            box.setSelectionRange(0, 7);
+
+            await user.click(screen.getByRole('button', { name: 'Bold' }));
+            await user.type(box, '{Enter}');
+
+            expect(onSend).toHaveBeenCalledWith('**shipped**', []);
+        });
+
+        it('formats from the keyboard as well as the toolbar', async () => {
+            const user = userEvent.setup();
+
+            render(<MessageComposer channelName="#general" onSend={vi.fn()} />);
+
+            const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+            await user.type(box, 'word');
+            box.setSelectionRange(0, 4);
+
+            await user.keyboard('{Control>}b{/Control}');
+
+            expect(box).toHaveValue('**word**');
+        });
+
+        it('offers no button for syntax the grammar does not have', () => {
+            render(<MessageComposer channelName="#general" onSend={vi.fn()} />);
+
+            // A message body has no underline, so a button for it could only
+            // write characters that render as themselves.
+            expect(
+                screen.queryByRole('button', { name: 'Underline' }),
+            ).not.toBeInTheDocument();
+        });
+
+        it('hides and restores the row', async () => {
+            const user = userEvent.setup();
+
+            render(<MessageComposer channelName="#general" onSend={vi.fn()} />);
+
+            await user.click(
+                screen.getByRole('button', { name: 'Hide formatting' }),
+            );
+
+            expect(
+                screen.queryByRole('button', { name: 'Bold' }),
+            ).not.toBeInTheDocument();
+
+            await user.click(
+                screen.getByRole('button', { name: 'Show formatting' }),
+            );
+
+            expect(
+                screen.getByRole('button', { name: 'Bold' }),
+            ).toBeInTheDocument();
+        });
+
+        it('opens a handle from the mention button', async () => {
+            const user = userEvent.setup();
+
+            render(
+                <MessageComposer
+                    channelName="#general"
+                    mentionSource={{ kind: 'local', people: [] }}
+                    onSend={vi.fn()}
+                />,
+            );
+
+            const box = screen.getByRole('textbox');
+            await user.type(box, 'ask');
+            await user.click(
+                screen.getByRole('button', { name: 'Mention someone' }),
+            );
+
+            // The space matters: "ask@ada" is not a mention to the tokenizer.
+            expect(box).toHaveValue('ask @');
+        });
+
+        it('offers no mention button where there is nobody to mention', () => {
+            render(<MessageComposer channelName="#general" onSend={vi.fn()} />);
+
+            expect(
+                screen.queryByRole('button', { name: 'Mention someone' }),
+            ).not.toBeInTheDocument();
+        });
+
+        it('offers no formatting where posting is refused', () => {
+            render(
+                <MessageComposer
+                    channelName="#announcements"
+                    disabled
+                    onSend={vi.fn()}
+                />,
+            );
+
+            expect(
+                screen.queryByRole('button', { name: 'Bold' }),
+            ).not.toBeInTheDocument();
+        });
+    });
+
+    /**
      * Attachments are opt-in: without a workspace to upload to there is no
      * endpoint to talk to, so the control must not be offered at all rather
      * than offered and broken.

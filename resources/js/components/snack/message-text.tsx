@@ -47,6 +47,25 @@ function Block({ block }: { block: BlockNode }) {
         );
     }
 
+    if (block.type === 'list') {
+        // Tailwind's reset strips list styling, so the marker is put back
+        // explicitly — without it every item renders as a bare line and the
+        // list is invisible.
+        const className = 'space-y-0.5 pl-5 marker:text-muted-foreground';
+
+        const items = block.items.map((item, index) => (
+            <li key={index}>
+                <Inline nodes={item} />
+            </li>
+        ));
+
+        return block.ordered ? (
+            <ol className={cn(className, 'list-decimal')}>{items}</ol>
+        ) : (
+            <ul className={cn(className, 'list-disc')}>{items}</ul>
+        );
+    }
+
     if (block.type === 'quote') {
         return (
             <blockquote className="border-l-2 border-brand/60 pl-3 text-muted-foreground">
