@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Activity\ActivityController;
 use App\Http\Controllers\Channels\ChannelArchiveController;
 use App\Http\Controllers\Channels\ChannelController;
+use App\Http\Controllers\Channels\ChannelMemberController;
 use App\Http\Controllers\Channels\ChannelMembershipController;
 use App\Http\Controllers\Channels\ChannelPreferenceController;
 use App\Http\Controllers\Channels\ChannelReadController;
@@ -17,6 +19,7 @@ use App\Http\Controllers\Conversations\MessageController as ConversationMessageC
 use App\Http\Controllers\Conversations\ParticipantController;
 use App\Http\Controllers\Files\DownloadController;
 use App\Http\Controllers\Files\FileBrowserController;
+use App\Http\Controllers\Huddles\HuddleHistoryController;
 use App\Http\Controllers\InvitationAcceptanceController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\Messages\MentionController;
@@ -170,6 +173,16 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::delete('channels/{channel}/membership', [ChannelMembershipController::class, 'destroy'])
             ->name('channels.membership.destroy');
 
+        /*
+         * Adding *other* people, which is a different endpoint from the pair
+         * above rather than a parameter on it: joining yourself is gated on the
+         * channel being open to you, adding someone else on administering the
+         * channel. Sharing a route would make which policy applies depend on
+         * what is in the body.
+         */
+        Route::post('channels/{channel}/members', [ChannelMemberController::class, 'store'])
+            ->name('channels.members.store');
+
         // Muting a channel and setting its notification level. The mirror of
         // conversations.preferences.update, and private to the member who asks:
         // silencing a busy channel must not silence it for anyone else.
@@ -238,6 +251,11 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->middleware('throttle:message-reads')
             ->name('conversations.directory.index');
 
+        // The DM home the navigation rail points at. Declared before the
+        // {conversation} routes below so the bare word is never read as an id.
+        Route::get('dms', [ConversationController::class, 'index'])
+            ->name('conversations.index');
+
         Route::post('dms', [ConversationController::class, 'store'])
             ->middleware('throttle:messages')
             ->name('conversations.store');
@@ -294,6 +312,26 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::get('threads', [ThreadController::class, 'index'])->name('threads.index');
         Route::get('mentions', [MentionController::class, 'index'])->name('mentions.index');
         Route::get('saved', [SaveController::class, 'index'])->name('saved.index');
+
+        /*
+         * Activity: notifications, mentions, and followed threads as tabs over
+         * the one question they all answer.
+         *
+         * The three routes above keep their own addresses — they are still
+         * linked, still bookmarked, and the sidebar still points at Threads —
+         * and every one of them reads the same App\Services\ActivityFeed as the
+         * tab that mirrors it.
+         */
+        Route::get('activity', [ActivityController::class, 'index'])
+            ->name('activity.index');
+
+        /*
+         * Huddles that have happened. A huddle leaves no message behind, so
+         * without this record a call missed by ten minutes is indistinguishable
+         * from one that never happened.
+         */
+        Route::get('huddles', [HuddleHistoryController::class, 'index'])
+            ->name('huddles.index');
 
         /*
          * The notification centre.

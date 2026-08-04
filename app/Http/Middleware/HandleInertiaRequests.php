@@ -68,6 +68,15 @@ class HandleInertiaRequests extends Middleware
             'flash' => fn (): array => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
+
+                /*
+                 * Set by the redirect out of the workspace root — see
+                 * WorkspaceController::show. It means "this room is where the
+                 * server put you", which is not the same claim as the URL, and
+                 * is the difference between opening the app and following a
+                 * link to a particular conversation.
+                 */
+                'entered_workspace' => $request->session()->get('entered_workspace', false),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

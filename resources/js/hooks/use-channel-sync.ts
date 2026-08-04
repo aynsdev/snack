@@ -63,6 +63,20 @@ export function useChannelSync(userId: number) {
         },
         [userId, refresh, notify],
     );
+
+    /*
+     * Being added to a channel by somebody else. A separate subscription rather
+     * than another name on the one above, because it deliberately does *not*
+     * call `notify`: there is no message to announce, and the alert path would
+     * bail anyway — it looks the channel up in the sidebar list, which is the
+     * very thing this event says is out of date.
+     */
+    useEcho<ChannelSignalEvent>(
+        channels.user(userId),
+        [events.channelMembershipGranted],
+        () => refresh(),
+        [userId, refresh],
+    );
 }
 
 /**

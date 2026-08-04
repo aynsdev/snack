@@ -1,0 +1,231 @@
+import { Link } from '@inertiajs/react';
+import {
+    Bookmark,
+    CheckSquare,
+    Folder,
+    House,
+    Images,
+    Inbox,
+    MessageSquare,
+} from 'lucide-react';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+    useIsActivityView,
+    useIsDirectMessagesView,
+    useIsFilesView,
+    useIsHomeView,
+    useIsSavedView,
+} from '@/hooks/use-active-channel';
+import { useUnreadState, useWorkspace } from '@/hooks/use-workspace';
+import { cn } from '@/lib/utils';
+import { index as activityIndex } from '@/routes/activity';
+import { index as dmsIndex } from '@/routes/conversations';
+import { index as filesIndex } from '@/routes/files';
+import { index as savedIndex } from '@/routes/saved';
+import { show as showWorkspace } from '@/routes/workspaces';
+
+/**
+ * The second column: where in the workspace you are.
+ *
+ * Everything here is scoped to the workspace beside it — each destination is a
+ * `/w/{workspace}/…` route and the rail only renders inside the workspace
+ * shell — so switching workspaces switches this column with it.
+ *
+ * # Why a separate column from the sidebar
+ *
+ * The sidebar lists *things* — channels, people — and changes constantly as you
+ * join and leave them. This lists the parts of the product, which do not
+ * change. Mixing the two meant Threads and Files sat above the channel list
+ * looking like channels, and every new destination made the list you actually
+ * navigate by longer.
+ *
+ * Threads deliberately stays in the sidebar as well. It is where a reply you are
+ * waiting on lives, which is a per-workspace list you check as often as a
+ * channel, and Activity gathering it does not make that less true.
+ */
+export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
+    const workspace = useWorkspace();
+    const unread = useUnreadState();
+
+    const isHome = useIsHomeView();
+    const isDirectMessages = useIsDirectMessagesView();
+    const isActivity = useIsActivityView();
+    const isSaved = useIsSavedView();
+    const isFiles = useIsFilesView();
+
+    const directMessages = Object.values(unread.conversations).reduce(
+        (total, counts) => total + counts.messages,
+        0,
+    );
+
+    return (
+        <nav
+            aria-label="Workspace sections"
+            /* Bordered on both sides, not just against the sidebar: the seam
+               with the workspace rail is where the two dark columns would
+               otherwise read as one. */
+            className="flex w-[4.75rem] shrink-0 flex-col items-center gap-1 border-x border-rail-foreground/10 bg-nav py-3 text-rail-foreground"
+        >
+            <ul className="flex flex-col items-center gap-1">
+                <NavRailItem
+                    icon={House}
+                    label="Home"
+                    href={showWorkspace(workspace.slug)}
+                    isActive={isHome}
+                    onNavigate={onNavigate}
+                />
+
+                <NavRailItem
+                    icon={MessageSquare}
+                    label="DMs"
+                    href={dmsIndex(workspace.slug)}
+                    badge={directMessages}
+                    isActive={isDirectMessages}
+                    onNavigate={onNavigate}
+                />
+
+                <NavRailItem
+                    icon={Inbox}
+                    label="Activity"
+                    href={activityIndex(workspace.slug)}
+                    /*
+                     * The notification count alone, not a sum of the three lists
+                     * behind the page. A mention writes a notification too, so
+                     * adding them would count one event twice — and this badge
+                     * has to agree with the number of unread rows the reader
+                     * then sees.
+                     */
+                    badge={unread.notifications}
+                    isActive={isActivity}
+                    onNavigate={onNavigate}
+                />
+
+                <NavRailItem
+                    icon={Bookmark}
+                    label="Saved"
+                    href={savedIndex(workspace.slug)}
+                    isActive={isSaved}
+                    onNavigate={onNavigate}
+                />
+
+                <NavRailItem
+                    icon={Folder}
+                    label="Files"
+                    href={filesIndex(workspace.slug)}
+                    isActive={isFiles}
+                    onNavigate={onNavigate}
+                />
+
+                {/*
+                 * Announced rather than hidden. Both are places people will look
+                 * for — "where do we keep the logo?" is asked in every workspace
+                 * — and a labelled gap answers that question honestly, where an
+                 * empty rail sends them off to ask it in #general.
+                 */}
+                <NavRailItem icon={Images} label="Assets" comingSoon />
+                <NavRailItem icon={CheckSquare} label="Tasks" comingSoon />
+            </ul>
+        </nav>
+    );
+}
+
+function NavRailItem({
+    icon: Icon,
+    label,
+    href,
+    badge = 0,
+    isActive = false,
+    comingSoon = false,
+    onNavigate,
+}: {
+    icon: typeof House;
+    label: string;
+    /** A Wayfinder route definition. Omitted for a destination that does not
+     *  exist yet. */
+    href?: string | { url: string; method: 'get' };
+    badge?: number;
+    isActive?: boolean;
+    comingSoon?: boolean;
+    onNavigate?: () => void;
+}) {
+    const className = cn(
+        'group relative flex w-[3.75rem] flex-col items-center gap-1 rounded-xl px-1 py-2 transition-colors',
+        isActive
+            ? 'bg-rail-active/15 text-rail-active'
+            : 'text-rail-muted hover:bg-rail-foreground/10 hover:text-rail-foreground',
+        comingSoon && 'cursor-default opacity-45 hover:bg-transparent',
+    );
+
+    const content = (
+        <>
+            {/* The same active pill the workspace rail uses, so "you are here"
+                is one visual idea across both columns rather than two. */}
+            <span
+                aria-hidden="true"
+                className={cn(
+                    'absolute top-1/2 -left-2 w-1 -translate-y-1/2 rounded-r-full bg-rail-active transition-all',
+                    isActive ? 'h-8 opacity-100' : 'h-2 opacity-0',
+                )}
+            />
+
+            <span className="relative">
+                <Icon aria-hidden="true" className="size-5" />
+
+                {badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2.5 min-w-4 rounded-full bg-mention px-1 py-0.5 text-center text-[0.625rem] leading-none font-bold text-mention-foreground tabular-nums">
+                        {badge > 99 ? '99+' : badge}
+                        <span className="sr-only"> unread</span>
+                    </span>
+                )}
+            </span>
+
+            <span className="text-[0.6875rem] leading-none font-medium">
+                {label}
+            </span>
+        </>
+    );
+
+    if (comingSoon || href === undefined) {
+        return (
+            <li>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        {/*
+                         * A button rather than a disabled one: `disabled` swallows
+                         * the pointer events the tooltip needs, so the row would
+                         * be dimmed with no way to find out why.
+                         */}
+                        <button
+                            type="button"
+                            aria-disabled="true"
+                            onClick={(event) => event.preventDefault()}
+                            className={className}
+                        >
+                            {content}
+                        </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                        {label} — coming soon
+                    </TooltipContent>
+                </Tooltip>
+            </li>
+        );
+    }
+
+    return (
+        <li>
+            <Link
+                href={href}
+                onClick={onNavigate}
+                aria-current={isActive ? 'page' : undefined}
+                className={className}
+            >
+                {content}
+            </Link>
+        </li>
+    );
+}

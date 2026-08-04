@@ -41,6 +41,44 @@ class ConversationController extends Controller
     ) {}
 
     /**
+     * Opening "DMs" opens a conversation, not a menu.
+     *
+     * Redirects into the top of the DM list — the most recently active thread,
+     * which is the row the reader would have clicked anyway. Landing on a list
+     * beside a list would make them choose twice to get where they were going.
+     *
+     * Falls through to the roster page only when there is nothing to open yet.
+     * The alternative — starting a conversation with whoever sorts first — would
+     * mean a GET that creates a thread with somebody nobody chose, and a crawler
+     * or a prefetch could do it.
+     */
+    public function index(Workspace $workspace, Request $request): Response|RedirectResponse
+    {
+        $conversation = $workspace->conversations()
+            ->visibleTo($request->user())
+            // The sidebar's own ordering — see WorkspaceNavigator — so "the top
+            // of the list" means the same thing here as it looks like there.
+            ->orderByRaw('last_message_at DESC NULLS LAST')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($conversation !== null) {
+            return to_route('conversations.show', [
+                'workspace' => $workspace->slug,
+                'conversation' => $conversation,
+            ]);
+        }
+
+        /*
+         * Deliberately propless. Every row it renders — the people, their
+         * conversations, the unread counts — is already on the shared `snack`
+         * prop that dresses every workspace page, because the sidebar renders
+         * the same list.
+         */
+        return Inertia::render('conversations/index');
+    }
+
+    /**
      * Open a conversation with a set of people, creating it only if it is new.
      *
      * Redirects rather than answering with the conversation, because the client

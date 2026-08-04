@@ -44,6 +44,14 @@ export type NotificationLevel = 'all' | 'mentions' | 'nothing';
  */
 export type NotificationReason = 'mention' | 'direct_message' | 'thread_reply';
 
+/**
+ * Mirrors App\Enums\ActivityTab: which slice of the Activity page is open.
+ *
+ * `all` is the three lists interleaved by time rather than a fourth list of its
+ * own, which is why the page can render every tab from the same rows.
+ */
+export type ActivityTab = 'all' | 'notifications' | 'mentions' | 'threads';
+
 /** Mirrors App\Enums\PresenceStatus. */
 export type PresenceStatus = 'online' | 'away' | 'offline' | 'do_not_disturb';
 
@@ -625,6 +633,28 @@ export type Huddle = {
  * request and never appears in a broadcast, which is why it is not part of
  * {@see Huddle}.
  */
+/**
+ * One row of the huddle history.
+ *
+ * Deliberately not {@see Huddle}: that shape is what a *live* huddle broadcasts,
+ * and carries who is in the room right now. This is the record of a call that
+ * has finished — everyone has left one of those — so `participants` is everyone
+ * who was ever on it, and `duration_seconds` is computed by the server rather
+ * than from two timestamps and the reader's own clock.
+ */
+export type HuddleHistoryEntry = {
+    id: string;
+    /** Where the call happened, in the shape every out-of-context list uses. */
+    container: ThreadContainer | null;
+    started_at: string;
+    ended_at: string | null;
+    is_live: boolean;
+    /** Null while it is still running, and therefore still accruing one. */
+    duration_seconds: number | null;
+    started_by: SnackUser | null;
+    participants: SnackUser[];
+};
+
 export type HuddleConnection = {
     /** The LiveKit signalling URL. Sent per response so the media server can
      *  move without a rebuilt bundle. */
@@ -713,6 +743,11 @@ export type SnackProps = {
 export type FlashMessages = {
     success: string | null;
     error: string | null;
+    /**
+     * True when the server chose the room on screen — the redirect out of the
+     * workspace root — rather than the reader asking for it by URL.
+     */
+    entered_workspace: boolean;
 };
 
 // -- Real-time payloads ------------------------------------------------------

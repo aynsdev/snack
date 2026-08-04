@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { withQueryClient } from '@/tests/query';
 import type { Channel, Message, MessagePage, SnackUser } from '@/types';
 
 /**
@@ -84,19 +85,27 @@ function makeMessage(id: number, overrides: Partial<Message> = {}): Message {
     };
 }
 
-function setup(initial: Partial<MessagePage> = {}) {
-    return renderHook(() =>
-        useChannelMessages({
-            channel,
-            workspaceSlug: 'snack-hq',
-            initial: {
-                messages: [makeMessage(1)],
-                has_more: false,
-                next_cursor: null,
-                ...initial,
-            },
-            currentUser,
-        }),
+function setup(
+    initial: Partial<MessagePage> = {},
+    // The timeline keeps its messages in the query cache; without a client
+    // above it the hook has nowhere to read or write them. Passing one in is
+    // what lets a test mount two timelines against the same cache.
+    wrapper = withQueryClient(),
+) {
+    return renderHook(
+        () =>
+            useChannelMessages({
+                channel,
+                workspaceSlug: 'snack-hq',
+                initial: {
+                    messages: [makeMessage(1)],
+                    has_more: false,
+                    next_cursor: null,
+                    ...initial,
+                },
+                currentUser,
+            }),
+        { wrapper },
     );
 }
 
@@ -376,5 +385,36 @@ describe('useChannelMessages', () => {
         });
 
         expect(result.current.messages[0].body).toBe('message 1');
+    });
+
+    it('keeps the history it loaded when the timeline is unmounted', async () => {
+        api.get.mockResolvedValue({
+            messages: [makeMessage(0, { body: 'older' })],
+            has_more: false,
+            next_cursor: null,
+        });
+
+        const wrapper = withQueryClient();
+        const first = setup({ has_more: true, next_cursor: 1 }, wrapper);
+
+        await act(async () => {
+            first.result.current.loadOlder();
+        });
+
+        expect(first.result.current.messages.map((m) => m.id)).toEqual([0, 1]);
+
+        first.unmount();
+        api.get.mockClear();
+
+        /*
+         * Walking back into a channel returns the reader to the history they
+         * had scrolled through — the whole reason the timeline moved into the
+         * query cache — rather than to the newest page and another request for
+         * the page they just read.
+         */
+        const second = setup({ has_more: true, next_cursor: 1 }, wrapper);
+
+        expect(second.result.current.messages.map((m) => m.id)).toEqual([0, 1]);
+        expect(api.get).not.toHaveBeenCalled();
     });
 });

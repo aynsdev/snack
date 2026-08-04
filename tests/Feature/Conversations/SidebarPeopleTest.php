@@ -157,6 +157,67 @@ it('orders recently active threads above the rest of the roster', function () {
     expect(sidebarPersonNames($workspace))->toBe(['Di', 'Cy', 'Bo', 'Zed']);
 });
 
+it('serves the DM home from the props the page already has', function () {
+    [$workspace] = makeWorkspaceWithOwner();
+    $ada = joinWorkspace($workspace, User::factory()->create(['name' => 'Ada']));
+    joinWorkspace($workspace, User::factory()->create(['name' => 'Bo']));
+
+    $this->actingAs($ada);
+
+    /*
+     * The page the navigation rail's DMs item points at, in the one case where
+     * it renders: nothing to open yet. It draws the roster from the shared
+     * `snack` prop rather than props of its own — asking the server for the same
+     * list twice on one request is how a page and the sidebar beside it start
+     * disagreeing.
+     */
+    $this->get(route('conversations.index', ['workspace' => $workspace->slug]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('conversations/index')
+            ->has('snack.current.people', 2));
+
+    // And landing there did not start a thread with whoever sorts first.
+    expect(Conversation::count())->toBe(0);
+});
+
+it('opens the top of the DM list rather than a list of lists', function () {
+    [$workspace] = makeWorkspaceWithOwner();
+    $ada = joinWorkspace($workspace, User::factory()->create(['name' => 'Ada']));
+    $bo = joinWorkspace($workspace, User::factory()->create(['name' => 'Bo']));
+    $cy = joinWorkspace($workspace, User::factory()->create(['name' => 'Cy']));
+
+    makeConversation($workspace, [$ada, $bo])
+        ->update(['last_message_at' => now()->subDay()]);
+    $newest = makeConversation($workspace, [$ada, $cy]);
+    $newest->update(['last_message_at' => now()]);
+
+    $this->actingAs($ada);
+
+    // The row the reader would have clicked anyway. Landing on a list beside a
+    // list would make them choose twice to get where they were going.
+    $this->get(route('conversations.index', ['workspace' => $workspace->slug]))
+        ->assertRedirect(route('conversations.show', [
+            'workspace' => $workspace->slug,
+            'conversation' => $newest->public_id,
+        ]));
+});
+
+it('never opens a conversation someone else is in', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $ada = joinWorkspace($workspace, User::factory()->create(['name' => 'Ada']));
+    $bo = joinWorkspace($workspace, User::factory()->create(['name' => 'Bo']));
+
+    // Somebody else's thread, more recent than anything Ada has.
+    makeConversation($workspace, [$owner, $bo])->update(['last_message_at' => now()]);
+
+    $this->actingAs($ada);
+
+    $this->get(route('conversations.index', ['workspace' => $workspace->slug]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('conversations/index'));
+});
+
 it('gives a guest no roster, but keeps the conversations they are in', function () {
     [$workspace, $owner] = makeWorkspaceWithOwner();
     $guest = joinWorkspace($workspace, User::factory()->create(['name' => 'Guest']), WorkspaceRole::Guest);

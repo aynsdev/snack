@@ -1,9 +1,12 @@
 import { useEchoPresence } from '@laravel/echo-react';
-import { useCallback, useRef, useState } from 'react';
+import type { InfiniteData } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactions } from '@/hooks/use-reactions';
 import { ApiError, api } from '@/lib/api';
 import { events } from '@/lib/echo';
 import { createNonce } from '@/lib/nonce';
+import { timelineKey } from '@/lib/query-keys';
 import {
     destroy as messageDestroy,
     update as messageUpdate,
@@ -26,32 +29,48 @@ import type {
 export type TimelineEndpoints = {
     /** The broadcast channel to follow, from `channels` in lib/echo.ts. */
     broadcastChannel: string;
-    /** A page of history older than `cursor`. */
-    history: (cursor: number) => string;
+    /** A page of history older than `cursor`, or the newest page for null. */
+    history: (cursor: number | null) => string;
     send: () => string;
     /** Null when this container has no read state to advance. */
     markRead: (() => string) | null;
 };
 
+/** The cache entry behind one timeline: newest page first, older pages after. */
+type TimelineData = InfiniteData<MessagePage, number | null>;
+
 /**
  * The state of one timeline — a channel's or a conversation's.
  *
- * # Why the client owns this list
+ * # Where the messages live
  *
- * Three sources write to a timeline: paginated history, messages arriving over
- * the WebSocket, and the user's own sends before the server has confirmed them.
- * Inertia props are server-owned and replaced wholesale on each visit, so
- * holding the timeline in props would mean the three race each other and a
- * broadcast landing mid-request could erase a message. One store here is the
- * only place any of them can write.
+ * In the TanStack Query cache, as one infinite query per container, keyed by its
+ * broadcast channel. Page 0 is the newest page and every page after it is older,
+ * which is the order the server paginates in.
+ *
+ * The cache is the *only* copy. Three sources write to a timeline — paginated
+ * history, messages arriving over the WebSocket, and the user's own sends before
+ * the server has confirmed them — and the failure this design exists to prevent
+ * is any two of them holding separate lists that drift. Arrivals, edits,
+ * deletions, and reactions are therefore written into the cache with
+ * `setQueryData` rather than into component state beside it.
+ *
+ * Living in the cache rather than in `useState` also means the pages survive
+ * this hook unmounting: walking from a channel to a DM and back returns the
+ * reader to the history they had scrolled through, instead of to the newest page
+ * and a spinner. That is the whole reason for the move.
+ *
+ * The socket is what keeps a timeline fresh, so the query never refetches on its
+ * own — see lib/query-client.ts for why every automatic refetch is disabled.
  *
  * # Reconciling optimistic sends
  *
- * A sent message is shown immediately as a `PendingMessage` keyed by a nonce. It
- * is replaced when the POST returns the real row. The broadcast is *not*
- * suppressed for the author — their other tabs need it — so the same message can
- * arrive twice, by two routes, in either order. De-duplication is by id, which is
- * correct regardless of which lands first.
+ * A sent message is shown immediately as a `PendingMessage` keyed by a nonce,
+ * held in component state because it is not server data and has no id to cache
+ * it under. It is replaced when the POST returns the real row. The broadcast is
+ * *not* suppressed for the author — their other tabs need it — so the same
+ * message can arrive twice, by two routes, in either order. De-duplication is by
+ * id, which is correct regardless of which lands first.
  *
  * # Why one hook for both containers
  *
@@ -60,10 +79,6 @@ export type TimelineEndpoints = {
  * duplicated: an ordering rule, a de-duplication rule, a rollback. The two
  * containers differ only in which URLs they talk to and which channel they
  * follow, so that is all the caller supplies.
- *
- * The hook assumes it is remounted when the container changes; callers mount it
- * with `key={container.id}` so switching resets state rather than leaking one
- * conversation's messages into another.
  */
 export function useMessageTimeline({
     endpoints,
@@ -74,65 +89,216 @@ export function useMessageTimeline({
 }: {
     endpoints: TimelineEndpoints;
     workspaceSlug: string;
+    /** The newest page, rendered into the page's Inertia props by the server. */
     initial: MessagePage;
     currentUser: SnackUser | null;
     /** Called for messages from other people, for the notification sound. */
     onMessageReceived?: (message: Message) => void;
 }) {
-    const [messages, setMessages] = useState<Message[]>(initial.messages);
+    const queryClient = useQueryClient();
     const [pending, setPending] = useState<PendingMessage[]>([]);
-    const [cursor, setCursor] = useState<number | null>(initial.next_cursor);
-    const [hasMore, setHasMore] = useState(initial.has_more);
-    const [loadingOlder, setLoadingOlder] = useState(false);
+
+    const queryKey = useMemo(
+        () => timelineKey(endpoints.broadcastChannel),
+        [endpoints.broadcastChannel],
+    );
+
+    const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
+        useInfiniteQuery({
+            queryKey,
+            queryFn: ({ pageParam }) =>
+                api.get<MessagePage>(endpoints.history(pageParam)),
+
+            // Null is "the newest page", which is what the endpoint returns
+            // when no cursor is given. It is only ever fetched if the cache
+            // has been evicted — the first page arrives as an Inertia prop.
+            initialPageParam: null as number | null,
+            getNextPageParam: (last: MessagePage) =>
+                last.has_more ? last.next_cursor : undefined,
+            initialData: { pages: [initial], pageParams: [null] },
+        });
+
+    /*
+     * Fold the server-rendered page into whatever the cache already holds.
+     *
+     * `initialData` is ignored once there is a cache entry, so without this a
+     * reader returning to a busy channel would see the history they left and
+     * none of what the server just rendered for them. Merged rather than
+     * substituted: page 0 also holds messages that arrived over the socket
+     * after this prop was built, and replacing it would drop them.
+     *
+     * # Why the signature, and not the prop
+     *
+     * Depending on `initial` alone would make this run whenever the caller
+     * happened to rebuild that object — which for a page rendering its props
+     * inline is *every render*. Each run would restore page 0 to the
+     * server-rendered set, so every arrival, edit, and deletion the socket had
+     * applied since would be undone one render later. Content decides instead:
+     * the same page rebuilt is the same page.
+     */
+    const signature = [
+        initial.messages.length,
+        initial.messages[0]?.id ?? 0,
+        initial.messages.at(-1)?.id ?? 0,
+        initial.next_cursor ?? 0,
+    ].join(':');
+
+    const seeded = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (seeded.current === signature) {
+            return;
+        }
+
+        seeded.current = signature;
+
+        queryClient.setQueryData<TimelineData>(queryKey, (current) => {
+            if (current === undefined) {
+                return { pages: [initial], pageParams: [null] };
+            }
+
+            const [newest, ...older] = current.pages;
+
+            return {
+                ...current,
+                pages: [
+                    {
+                        // The freshly rendered page decides how much history is
+                        // behind it; the cached copy's cursor describes a page
+                        // that no longer has the same last row.
+                        ...initial,
+                        messages: mergeById(newest.messages, initial.messages),
+                    },
+                    ...older,
+                ],
+            };
+        });
+    }, [initial, signature, queryClient, queryKey]);
+
+    /**
+     * Every page flattened into one list, oldest first, de-duplicated by id.
+     *
+     * Ordering by id rather than timestamp because ids are monotonic and
+     * assigned by one authority; two messages a millisecond apart can carry the
+     * same timestamp, and clock skew across app servers can invert them.
+     *
+     * De-duplicating here rather than trusting the pages to be disjoint is what
+     * makes the merge above safe: a message can legitimately appear in both the
+     * page the server just rendered and the page the cache already held.
+     */
+    const messages = useMemo(() => {
+        const byId = new Map<number, Message>();
+
+        for (const page of data.pages) {
+            for (const message of page.messages) {
+                byId.set(message.id, message);
+            }
+        }
+
+        return [...byId.values()].sort((left, right) => left.id - right.id);
+    }, [data]);
 
     /*
      * The newest id the client has actually displayed, tracked in a ref so the
      * read-marking callback does not need to be rebuilt on every message.
      */
-    const newestSeen = useRef<number | null>(
-        initial.messages.at(-1)?.id ?? null,
+    const newestSeen = useRef<number | null>(null);
+
+    useEffect(() => {
+        const newest = messages.at(-1)?.id ?? null;
+
+        if (newest !== null && newest > (newestSeen.current ?? 0)) {
+            newestSeen.current = newest;
+        }
+    }, [messages]);
+
+    /** Rewrite the cached pages. A no-op when the timeline is not cached. */
+    const writePages = useCallback(
+        (rewrite: (pages: MessagePage[]) => MessagePage[]) => {
+            queryClient.setQueryData<TimelineData>(queryKey, (current) =>
+                current === undefined
+                    ? current
+                    : { ...current, pages: rewrite(current.pages) },
+            );
+        },
+        [queryClient, queryKey],
+    );
+
+    /** Apply a change to whichever page holds this message, if any is loaded. */
+    const patch = useCallback(
+        (messageId: number, change: (message: Message) => Message) => {
+            writePages((pages) =>
+                pages.map((page) =>
+                    page.messages.some((message) => message.id === messageId)
+                        ? {
+                              ...page,
+                              messages: page.messages.map((message) =>
+                                  message.id === messageId
+                                      ? change(message)
+                                      : message,
+                              ),
+                          }
+                        : page,
+                ),
+            );
+        },
+        [writePages],
     );
 
     /**
-     * Insert or replace a message, keeping the list ordered by id.
+     * Insert or replace a message.
      *
-     * Ordering by id rather than timestamp because ids are monotonic and
-     * assigned by one authority; two messages a millisecond apart can carry the
-     * same timestamp, and clock skew across app servers can invert them.
+     * A message already loaded is replaced where it sits; a new one belongs at
+     * the newest end, which is page 0. Nothing re-sorts here — the flattening
+     * above orders the whole timeline by id, so no writer has to know where in
+     * the list its message goes.
      */
-    const upsert = useCallback((incoming: Message) => {
-        setMessages((current) => {
-            const index = current.findIndex((m) => m.id === incoming.id);
-
-            if (index !== -1) {
-                const next = [...current];
-                /*
-                 * Keep the viewer-specific fields from the HTTP-loaded copy. A
-                 * broadcast cannot carry either — there is no single viewer to
-                 * compute them for — so taking the incoming `undefined` would
-                 * make the author's own edit controls vanish, and un-bookmark a
-                 * message they had saved, the moment it echoed back.
-                 */
-                next[index] = {
-                    ...incoming,
-                    can: incoming.can ?? current[index].can,
-                    is_saved: incoming.is_saved ?? current[index].is_saved,
-                };
-
-                return next;
-            }
-
+    const upsert = useCallback(
+        (incoming: Message) => {
             if (incoming.id > (newestSeen.current ?? 0)) {
                 newestSeen.current = incoming.id;
             }
 
-            const at = current.findIndex((m) => m.id > incoming.id);
+            writePages((pages) => {
+                const known = pages.some((page) =>
+                    page.messages.some((message) => message.id === incoming.id),
+                );
 
-            return at === -1
-                ? [...current, incoming]
-                : [...current.slice(0, at), incoming, ...current.slice(at)];
-        });
-    }, []);
+                if (known) {
+                    return pages.map((page) => ({
+                        ...page,
+                        messages: page.messages.map((message) =>
+                            message.id === incoming.id
+                                ? /*
+                                   * Keep the viewer-specific fields from the
+                                   * HTTP-loaded copy. A broadcast cannot carry
+                                   * either — there is no single viewer to
+                                   * compute them for — so taking the incoming
+                                   * `undefined` would make the author's own edit
+                                   * controls vanish, and un-bookmark a message
+                                   * they had saved, the moment it echoed back.
+                                   */
+                                  {
+                                      ...incoming,
+                                      can: incoming.can ?? message.can,
+                                      is_saved:
+                                          incoming.is_saved ?? message.is_saved,
+                                  }
+                                : message,
+                        ),
+                    }));
+                }
+
+                const [newest, ...older] = pages;
+
+                return [
+                    { ...newest, messages: [...newest.messages, incoming] },
+                    ...older,
+                ];
+            });
+        },
+        [writePages],
+    );
 
     /**
      * Replace one message's reaction summary.
@@ -142,15 +308,9 @@ export function useMessageTimeline({
      */
     const applyReactions = useCallback(
         (messageId: number, reactions: Message['reactions']) => {
-            setMessages((current) =>
-                current.map((message) =>
-                    message.id === messageId
-                        ? { ...message, reactions }
-                        : message,
-                ),
-            );
+            patch(messageId, (message) => ({ ...message, reactions }));
         },
-        [],
+        [patch],
     );
 
     /**
@@ -159,15 +319,12 @@ export function useMessageTimeline({
      * Nothing broadcasts this — a save is visible only to the person who made
      * it — so the only copy that needs updating is the one on screen.
      */
-    const applySaved = useCallback((messageId: number, isSaved: boolean) => {
-        setMessages((current) =>
-            current.map((message) =>
-                message.id === messageId
-                    ? { ...message, is_saved: isSaved }
-                    : message,
-            ),
-        );
-    }, []);
+    const applySaved = useCallback(
+        (messageId: number, isSaved: boolean) => {
+            patch(messageId, (message) => ({ ...message, is_saved: isSaved }));
+        },
+        [patch],
+    );
 
     const { toggle: react } = useReactions({
         workspaceSlug,
@@ -201,8 +358,11 @@ export function useMessageTimeline({
         endpoints.broadcastChannel,
         events.messageDeleted,
         (payload) =>
-            setMessages((current) =>
-                current.filter((m) => m.id !== payload.id),
+            writePages((pages) =>
+                pages.map((page) => ({
+                    ...page,
+                    messages: page.messages.filter((m) => m.id !== payload.id),
+                })),
             ),
         [endpoints.broadcastChannel],
     );
@@ -231,50 +391,29 @@ export function useMessageTimeline({
         endpoints.broadcastChannel,
         events.threadActivity,
         (payload) =>
-            setMessages((current) =>
-                current.map((message) =>
-                    message.id === payload.root_id
-                        ? {
-                              ...message,
-                              reply_count: payload.reply_count,
-                              last_reply_at: payload.last_reply_at,
-                          }
-                        : message,
-                ),
-            ),
+            patch(payload.root_id, (message) => ({
+                ...message,
+                reply_count: payload.reply_count,
+                last_reply_at: payload.last_reply_at,
+            })),
         [endpoints.broadcastChannel],
     );
 
     // -- History ------------------------------------------------------------
 
-    const loadOlder = useCallback(async () => {
-        if (!hasMore || loadingOlder || cursor === null) {
+    /**
+     * Fetch the page before the oldest one loaded.
+     *
+     * The guard against re-entry is the query's own: a second call while a page
+     * is in flight resolves to the same request rather than fetching it twice.
+     */
+    const loadOlder = useCallback(() => {
+        if (!hasNextPage || isFetchingNextPage) {
             return;
         }
 
-        setLoadingOlder(true);
-
-        try {
-            const page = await api.get<MessagePage>(endpoints.history(cursor));
-
-            setMessages((current) => {
-                // The cursor makes overlap impossible in principle, but a
-                // double-fire while a request is in flight would otherwise
-                // duplicate a whole page.
-                const known = new Set(current.map((m) => m.id));
-
-                return [
-                    ...page.messages.filter((m) => !known.has(m.id)),
-                    ...current,
-                ];
-            });
-
-            setCursor(page.next_cursor);
-            setHasMore(page.has_more);
-        } finally {
-            setLoadingOlder(false);
-        }
-    }, [cursor, endpoints, hasMore, loadingOlder]);
+        void fetchNextPage();
+    }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
     // -- Mutations ----------------------------------------------------------
 
@@ -361,11 +500,7 @@ export function useMessageTimeline({
 
             // Applied locally first so the edit lands with the keystroke, then
             // rolled back if the server disagrees.
-            setMessages((current) =>
-                current.map((m) =>
-                    m.id === id ? { ...m, body, is_edited: true } : m,
-                ),
-            );
+            patch(id, (message) => ({ ...message, body, is_edited: true }));
 
             try {
                 const { message } = await api.patch<{ message: Message }>(
@@ -385,14 +520,19 @@ export function useMessageTimeline({
                 throw error;
             }
         },
-        [messages, upsert, workspaceSlug],
+        [messages, patch, upsert, workspaceSlug],
     );
 
     const remove = useCallback(
         async (id: number) => {
             const previous = messages.find((m) => m.id === id);
 
-            setMessages((current) => current.filter((m) => m.id !== id));
+            writePages((pages) =>
+                pages.map((page) => ({
+                    ...page,
+                    messages: page.messages.filter((m) => m.id !== id),
+                })),
+            );
 
             try {
                 await api.delete(
@@ -412,7 +552,7 @@ export function useMessageTimeline({
                 throw error;
             }
         },
-        [messages, upsert, workspaceSlug],
+        [messages, upsert, workspaceSlug, writePages],
     );
 
     /**
@@ -440,8 +580,8 @@ export function useMessageTimeline({
     return {
         messages,
         pending,
-        hasMore,
-        loadingOlder,
+        hasMore: hasNextPage,
+        loadingOlder: isFetchingNextPage,
         loadOlder,
         send,
         retry,
@@ -452,4 +592,21 @@ export function useMessageTimeline({
         applySaved,
         markAsRead,
     };
+}
+
+/**
+ * Union of two pages of messages by id, with the second winning a tie.
+ *
+ * Used to fold a freshly rendered page into a cached one, where "the same
+ * message" may carry a newer body, a newer reaction summary, or the
+ * viewer-specific fields only an HTTP load can compute.
+ */
+function mergeById(existing: Message[], incoming: Message[]): Message[] {
+    const byId = new Map(existing.map((message) => [message.id, message]));
+
+    for (const message of incoming) {
+        byId.set(message.id, message);
+    }
+
+    return [...byId.values()];
 }

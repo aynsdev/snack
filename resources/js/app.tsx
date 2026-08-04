@@ -1,4 +1,5 @@
 import { createInertiaApp } from '@inertiajs/react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
@@ -6,6 +7,7 @@ import { initializeColorTheme } from '@/hooks/use-color-theme';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import WorkspaceLayout from '@/layouts/workspace-layout';
+import { queryClient } from '@/lib/query-client';
 
 // Configures the Reverb/Echo connection as a side effect, before any component
 // subscribes to a channel.
@@ -53,10 +55,18 @@ createInertiaApp({
     strictMode: true,
     withApp(app) {
         return (
-            <TooltipProvider delayDuration={0}>
-                {app}
-                <Toaster />
-            </TooltipProvider>
+            /*
+             * Outside the app, so a timeline's cached pages outlive the page
+             * component that fetched them — walking from a channel to a DM and
+             * back returns to the history the reader had scrolled through
+             * rather than to the newest page and a spinner.
+             */
+            <QueryClientProvider client={queryClient}>
+                <TooltipProvider delayDuration={0}>
+                    {app}
+                    <Toaster />
+                </TooltipProvider>
+            </QueryClientProvider>
         );
     },
     progress: {

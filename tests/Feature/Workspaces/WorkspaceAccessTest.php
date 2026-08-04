@@ -27,6 +27,47 @@ it('drops an active member into their first channel', function () {
         ]));
 });
 
+/**
+ * The landing channel is the server's choice, not the reader's, and the page it
+ * lands on has to be able to tell the difference — on a phone the shell opens
+ * its navigation over a room you did not pick, and leaves a room you did alone.
+ */
+it('marks the landing channel as the one the server chose', function () {
+    [$workspace] = makeWorkspaceWithOwner();
+    $member = joinWorkspace($workspace);
+
+    $channel = makeChannel($workspace, attributes: ['is_default' => true]);
+    addToChannel($channel, $member);
+
+    $this->actingAs($member)
+        ->get(route('workspaces.show', $workspace))
+        ->assertSessionHas('entered_workspace', true);
+
+    // Followed through, because the flash is only useful if the page on the
+    // other side of the redirect can actually read it.
+    $this->actingAs($member)
+        ->followingRedirects()
+        ->get(route('workspaces.show', $workspace))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('flash.entered_workspace', true));
+});
+
+it('leaves a channel asked for by name unmarked', function () {
+    [$workspace] = makeWorkspaceWithOwner();
+    $member = joinWorkspace($workspace);
+
+    $channel = makeChannel($workspace);
+    addToChannel($channel, $member);
+
+    $this->actingAs($member)
+        ->get(route('channels.show', [
+            'workspace' => $workspace->slug,
+            'channel' => $channel->slug,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('flash.entered_workspace', false));
+});
+
 it('shows an empty state to a member who is in no channels', function () {
     [$workspace] = makeWorkspaceWithOwner();
     $member = joinWorkspace($workspace);

@@ -86,6 +86,48 @@ export function useIsFilesView(): boolean {
 }
 
 /**
+ * Whether the current page belongs to Activity.
+ *
+ * True on the tabbed page itself *and* on the three standalone views it
+ * gathers, because the rail names a section rather than a page: arriving at
+ * Threads from the sidebar must not make the section it belongs to go dark.
+ */
+export function useIsActivityView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/(activity|notifications|mentions|threads)(?:[/?#]|$)/.test(
+        currentUrl,
+    );
+}
+
+/**
+ * Whether the current page is anywhere in direct messages — the DM home or a
+ * conversation inside it.
+ */
+export function useIsDirectMessagesView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/dms(?:[/?#]|$)/.test(currentUrl);
+}
+
+/**
+ * Whether the current page is Home: the workspace root, or a channel in it.
+ *
+ * Channels count because Home *is* the channel view — the rail's first stop is
+ * where conversation happens, and the sidebar beside it is the list of rooms.
+ */
+export function useIsHomeView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    // The workspace root, which only ever redirects into a channel, and the
+    // channel views themselves — including "Browse channels".
+    return (
+        /^\/w\/[^/]+\/?(?:[?#]|$)/.test(currentUrl) ||
+        /^\/w\/[^/]+\/channels(?:[/?#]|$)/.test(currentUrl)
+    );
+}
+
+/**
  * Whether the current page is search.
  *
  * Matches with a query string attached, unlike the others, because search is the
@@ -96,4 +138,13 @@ export function useIsSearchView(): boolean {
     const { currentUrl } = useCurrentUrl();
 
     return /^\/w\/[^/]+\/search(?:[/?#]|$)/.test(currentUrl);
+}
+
+/**
+ * Whether the current page is the workspace's huddle history.
+ */
+export function useIsHuddlesView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/huddles(?:[/?#]|$)/.test(currentUrl);
 }

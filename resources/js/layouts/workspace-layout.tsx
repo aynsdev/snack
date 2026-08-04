@@ -1,14 +1,16 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { PanelLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChannelSync } from '@/components/snack/channel-sync';
 import { ConversationSync } from '@/components/snack/conversation-sync';
 import { HuddleTray } from '@/components/snack/huddle/huddle-tray';
 import { HuddleSync } from '@/components/snack/huddle-sync';
+import { NavRail } from '@/components/snack/nav-rail';
 import { WorkspaceRail } from '@/components/snack/workspace-rail';
 import { WorkspaceSidebar } from '@/components/snack/workspace-sidebar';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { useIsActivityView } from '@/hooks/use-active-channel';
 import { HuddleProvider } from '@/hooks/use-huddle';
 import { LivePresenceProvider } from '@/hooks/use-live-presence';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -28,7 +30,10 @@ export type WorkspaceLayoutProps = {
  *
  * Desktop-first, as the brief asks. Below `md` the rail and sidebar collapse
  * into a single drawer so the message area keeps the full width, which is the
- * only column that matters on a phone.
+ * only column that matters on a phone. The drawer takes the whole screen rather
+ * than a slice of it: at phone widths a 19rem panel left the sidebar's own three
+ * columns fighting over about 12rem, so channel names truncated to nothing while
+ * a strip of unreachable conversation sat beside them.
  *
  * The shell is `h-dvh overflow-hidden` and only the message list scrolls: that
  * is what keeps the composer pinned when iOS shows and hides its URL bar.
@@ -37,6 +42,8 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     const current = useCurrentWorkspace();
     const currentUser = useCurrentUser();
     const isMobile = useIsMobile();
+    const isActivityView = useIsActivityView();
+    const enteredWorkspace = usePage().props.flash.entered_workspace;
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     // Close the drawer whenever navigation lands somewhere new; otherwise it
@@ -46,6 +53,32 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     // latter would set state during render-after-effect and cascade an extra
     // render on every single navigation, drawer or not.
     useEffect(() => router.on('navigate', () => setSidebarOpen(false)), []);
+
+    /*
+     * Opening Snack on a phone shows the sidebar, not a room.
+     *
+     * The server picks a landing channel and redirects into it — see
+     * WorkspaceController::show — which is right on a desktop, where the sidebar
+     * is beside it. On a phone the room fills the screen, so the app opened onto
+     * one arbitrary conversation with no visible way to reach any other; the
+     * only clue there was anywhere else to go was a small header button.
+     *
+     * Gated on the flash rather than on the URL, because the channel page is the
+     * same page whether the server chose it or a shared link did, and a link to
+     * a particular conversation must open that conversation.
+     */
+    const entering = useRef(enteredWorkspace);
+
+    useEffect(() => {
+        if (entering.current && isMobile) {
+            setSidebarOpen(true);
+        }
+
+        // Whatever the viewport was on arrival is the answer. Without this a
+        // later rotation or resize would reopen the drawer over a room the
+        // reader has since chosen for themselves.
+        entering.current = false;
+    }, [isMobile]);
 
     /*
      * Presence beats from the shell, above the `current === null` branch below,
@@ -95,15 +128,41 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
                         <WorkspaceRail
                             currentWorkspaceSlug={current.workspace.slug}
                         />
+
+                        {/*
+                         * Between the workspaces and their contents, because
+                         * that is what it selects: which part of *this*
+                         * workspace you are in. Every destination in it is
+                         * workspace-scoped, so it belongs on the workspace side
+                         * of the rail that switches them.
+                         */}
+                        <NavRail />
                     </div>
 
-                    <aside className="hidden w-64 shrink-0 border-r border-sidebar-border md:block lg:w-72">
-                        <WorkspaceSidebar />
-                    </aside>
+                    {/*
+                     * Activity gets the full width. It is a reading view over
+                     * things that came from all over the workspace, and a list
+                     * of rooms beside it is a list of places none of those rows
+                     * are in — the rail on the left is enough to leave by.
+                     */}
+                    {!isActivityView && (
+                        <aside className="hidden w-64 shrink-0 border-r border-sidebar-border md:block lg:w-72">
+                            <WorkspaceSidebar />
+                        </aside>
+                    )}
 
                     {isMobile && (
                         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-                            <SheetContent side="left" className="w-[19rem] p-0">
+                            {/*
+                             * Full width, overriding the sheet's own `w-3/4`
+                             * and `sm:max-w-sm` — both of which are sized for a
+                             * drawer beside content, and this one is standing in
+                             * for the whole navigation column.
+                             */}
+                            <SheetContent
+                                side="left"
+                                className="w-full max-w-none p-0 sm:max-w-none"
+                            >
                                 <SheetTitle className="sr-only">
                                     {current.workspace.name} navigation
                                 </SheetTitle>
@@ -114,8 +173,12 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
                                             current.workspace.slug
                                         }
                                     />
+                                    <NavRail
+                                        onNavigate={() => setSidebarOpen(false)}
+                                    />
                                     <div className="min-w-0 flex-1">
                                         <WorkspaceSidebar
+                                            inDrawer
                                             onNavigate={() =>
                                                 setSidebarOpen(false)
                                             }
