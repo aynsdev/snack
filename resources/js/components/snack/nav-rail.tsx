@@ -14,12 +14,13 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
+    useActiveConversationId,
     useIsActivityView,
-    useIsDirectMessagesView,
     useIsFilesView,
     useIsHomeView,
     useIsSavedView,
 } from '@/hooks/use-active-channel';
+import { enterSection, useSidebarSection } from '@/hooks/use-sidebar-section';
 import { useUnreadState, useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import { index as activityIndex } from '@/routes/activity';
@@ -51,8 +52,22 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
     const workspace = useWorkspace();
     const unread = useUnreadState();
 
-    const isHome = useIsHomeView();
-    const isDirectMessages = useIsDirectMessagesView();
+    /*
+     * Both of these follow the section rather than the URL, because a
+     * conversation belongs to whichever one it was opened from — see
+     * {@see useSidebarSection}. A DM opened from the workspace sidebar is still
+     * Home: the sidebar beside it is the channel list, and the rail saying
+     * otherwise would point at a column that is not there.
+     */
+    const isDirectMessages = useSidebarSection() === 'direct-messages';
+
+    // Unconditionally, on their own lines: a hook behind `||` would stop being
+    // called the moment the left side was true.
+    const isHomeUrl = useIsHomeView();
+    const isConversation = useActiveConversationId() !== null;
+
+    const isHome = isHomeUrl || (isConversation && !isDirectMessages);
+
     const isActivity = useIsActivityView();
     const isSaved = useIsSavedView();
     const isFiles = useIsFilesView();
@@ -85,7 +100,20 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
                     href={dmsIndex(workspace.slug)}
                     badge={directMessages}
                     isActive={isDirectMessages}
-                    onNavigate={onNavigate}
+                    /*
+                     * The one destination that has to announce itself: `/dms`
+                     * redirects into the newest conversation, so the URL this
+                     * click lands on is the same one a DM opened from the
+                     * channel sidebar lands on. Skipped for a modified click,
+                     * which opens a tab and leaves this one where it is.
+                     */
+                    onNavigate={(event) => {
+                        if (!isModifiedClick(event)) {
+                            enterSection('direct-messages');
+                        }
+
+                        onNavigate?.();
+                    }}
                 />
 
                 <NavRailItem
@@ -133,6 +161,21 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
     );
 }
 
+/**
+ * A click the browser handles itself — a new tab, a new window, a download.
+ * Inertia ignores these too, so anything that changes this tab's own state has
+ * to ignore them as well.
+ */
+function isModifiedClick(event: React.MouseEvent<Element>): boolean {
+    return (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey ||
+        event.button !== 0
+    );
+}
+
 function NavRailItem({
     icon: Icon,
     label,
@@ -150,7 +193,7 @@ function NavRailItem({
     badge?: number;
     isActive?: boolean;
     comingSoon?: boolean;
-    onNavigate?: () => void;
+    onNavigate?: (event: React.MouseEvent<Element>) => void;
 }) {
     const className = cn(
         'group relative flex w-[3.75rem] flex-col items-center gap-1 rounded-xl px-1 py-2 transition-colors',

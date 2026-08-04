@@ -115,6 +115,9 @@ function mockWorkspace() {
 
 beforeEach(() => {
     usePage.mockReset();
+    // Which shape the sidebar takes is remembered across navigations on purpose
+    // — see use-sidebar-section.ts — so it has to be cleared between tests.
+    sessionStorage.clear();
     currentUrl.value = '/w/snack-hq/dms';
     mockWorkspace();
 });
@@ -219,5 +222,45 @@ describe('WorkspaceSidebar outside direct messages', () => {
         expect(
             screen.queryByRole('textbox', { name: 'Filter direct messages' }),
         ).toBeNull();
+    });
+
+    it('stands its ground when a DM is opened from the roster inside it', () => {
+        currentUrl.value = '/w/snack-hq/channels/general';
+
+        const { unmount } = render(<WorkspaceSidebar />);
+
+        unmount();
+
+        // The DM roster is the bottom half of this sidebar, so a click in it
+        // used to replace the whole column — channels, Threads, Huddles — with
+        // the DM list, rearranging the thing the reader had just clicked in.
+        currentUrl.value = '/w/snack-hq/dms/01HZXCONVERSATION';
+
+        render(<WorkspaceSidebar />);
+
+        expect(screen.getByText('Channels')).toBeInTheDocument();
+        expect(
+            screen.getByRole('link', { name: /^Search/ }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole('textbox', { name: 'Filter direct messages' }),
+        ).toBeNull();
+    });
+
+    it('gives way to the DM list for a conversation opened from it', () => {
+        currentUrl.value = '/w/snack-hq/dms';
+
+        const { unmount } = render(<WorkspaceSidebar />);
+
+        unmount();
+
+        currentUrl.value = '/w/snack-hq/dms/01HZXCONVERSATION';
+
+        render(<WorkspaceSidebar />);
+
+        expect(
+            screen.getByRole('textbox', { name: 'Filter direct messages' }),
+        ).toBeInTheDocument();
+        expect(screen.queryByText('Channels')).toBeNull();
     });
 });

@@ -1,23 +1,36 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NavRail } from '@/components/snack/nav-rail';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { UnreadState } from '@/types';
 
 const usePage = vi.hoisted(() => vi.fn());
-const currentUrl = vi.hoisted(() => ({ value: '/w/snack-hq/channels/general' }));
+const currentUrl = vi.hoisted(() => ({
+    value: '/w/snack-hq/channels/general',
+}));
 
 vi.mock('@inertiajs/react', () => ({
     usePage,
     Link: ({
         children,
         href,
+        onClick,
         ...props
     }: {
         children: React.ReactNode;
         href: string | { url: string };
+        onClick?: (event: React.MouseEvent<HTMLElement>) => void;
     }) => (
-        <a href={typeof href === 'string' ? href : href.url} {...props}>
+        <a
+            href={typeof href === 'string' ? href : href.url}
+            // The real Link intercepts the click and visits over XHR; without
+            // this jsdom tries to navigate the document instead.
+            onClick={(event) => {
+                event.preventDefault();
+                onClick?.(event);
+            }}
+            {...props}
+        >
             {children}
         </a>
     ),
@@ -87,6 +100,9 @@ function renderRail() {
 
 beforeEach(() => {
     usePage.mockReset();
+    // The rail's section outlives its components on purpose — see
+    // use-sidebar-section.ts — so it has to be cleared between tests.
+    sessionStorage.clear();
     currentUrl.value = '/w/snack-hq/channels/general';
 });
 
@@ -140,6 +156,95 @@ describe('NavRail', () => {
         renderRail();
 
         // The rail names a section, and channels are what Home contains.
+        expect(screen.getByRole('link', { name: /Home/ })).toHaveAttribute(
+            'aria-current',
+            'page',
+        );
+    });
+
+    it('stays on Home for a DM opened from the channel sidebar', () => {
+        mockWorkspace();
+
+        const { unmount } = renderRail();
+
+        unmount();
+
+        // The roster sits under the channels, so the sidebar does not change
+        // shape on this click — and the rail moving its pill to DMs would point
+        // at a column that is not there.
+        currentUrl.value = '/w/snack-hq/dms/01HZXCONVERSATION';
+
+        renderRail();
+
+        expect(screen.getByRole('link', { name: /Home/ })).toHaveAttribute(
+            'aria-current',
+            'page',
+        );
+        expect(screen.getByRole('link', { name: /DMs/ })).not.toHaveAttribute(
+            'aria-current',
+        );
+    });
+
+    it('stays on DMs for a conversation opened from the DM list', () => {
+        currentUrl.value = '/w/snack-hq/dms';
+        mockWorkspace();
+
+        const { unmount } = renderRail();
+
+        unmount();
+
+        currentUrl.value = '/w/snack-hq/dms/01HZXCONVERSATION';
+
+        renderRail();
+
+        expect(screen.getByRole('link', { name: /DMs/ })).toHaveAttribute(
+            'aria-current',
+            'page',
+        );
+        expect(screen.getByRole('link', { name: /Home/ })).not.toHaveAttribute(
+            'aria-current',
+        );
+    });
+
+    it('claims the section when its own link is redirected into a DM', () => {
+        mockWorkspace();
+
+        const { unmount } = renderRail();
+
+        // `/dms` redirects into the newest conversation, so this click lands on
+        // the same URL the channel sidebar's roster lands on. The rail has to
+        // say where it was going for the section to be reachable at all.
+        fireEvent.click(screen.getByRole('link', { name: /DMs/ }));
+
+        unmount();
+
+        currentUrl.value = '/w/snack-hq/dms/01HZXCONVERSATION';
+
+        renderRail();
+
+        expect(screen.getByRole('link', { name: /DMs/ })).toHaveAttribute(
+            'aria-current',
+            'page',
+        );
+    });
+
+    it('leaves this tab alone when its DM link is opened in another', () => {
+        mockWorkspace();
+
+        const { unmount } = renderRail();
+
+        // A ⌘-click hands the navigation to the browser and leaves this tab on
+        // the channel it was reading, so the section must not move either.
+        fireEvent.click(screen.getByRole('link', { name: /DMs/ }), {
+            metaKey: true,
+        });
+
+        unmount();
+
+        currentUrl.value = '/w/snack-hq/dms/01HZXCONVERSATION';
+
+        renderRail();
+
         expect(screen.getByRole('link', { name: /Home/ })).toHaveAttribute(
             'aria-current',
             'page',
