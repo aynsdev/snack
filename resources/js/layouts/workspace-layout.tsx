@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { ChannelSync } from '@/components/snack/channel-sync';
 import { ConversationSync } from '@/components/snack/conversation-sync';
 import { HuddleTray } from '@/components/snack/huddle/huddle-tray';
+import { HuddleSync } from '@/components/snack/huddle-sync';
 import { WorkspaceRail } from '@/components/snack/workspace-rail';
 import { WorkspaceSidebar } from '@/components/snack/workspace-sidebar';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -86,6 +87,7 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
                         <>
                             <ConversationSync userId={currentUser.id} />
                             <ChannelSync userId={currentUser.id} />
+                            <HuddleSync userId={currentUser.id} />
                         </>
                     )}
 
