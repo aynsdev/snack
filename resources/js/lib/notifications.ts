@@ -101,6 +101,25 @@ export type DesktopNotification = {
     tag: string;
     /** Run when the notification is activated. */
     onClick?: () => void;
+    /**
+     * Keep the banner up until it is acted on, instead of letting it auto-hide.
+     *
+     * For things that are still true a minute later and worth acting on then —
+     * a live huddle, not an arrived message. A banner that fades after five
+     * seconds is a missed call for anybody who was looking away, which is
+     * exactly who the notification was for.
+     *
+     * Honoured on desktop Chrome and Edge and quietly ignored elsewhere, so it
+     * is a preference rather than a guarantee.
+     */
+    requireInteraction?: boolean;
+    /**
+     * Let the OS play its own alert sound.
+     *
+     * Off by default because the in-app arrival sound has already played by the
+     * time a banner is raised, and two sounds for one event is worse than none.
+     */
+    audible?: boolean;
 };
 
 /** How much message body to hand the OS; it truncates, but not this politely. */
@@ -130,7 +149,8 @@ export function showNotification(
             icon: '/favicon.png',
             // Re-using a tag updates the banner silently rather than
             // re-alerting; the arrival sound has already played.
-            silent: true,
+            silent: options.audible !== true,
+            requireInteraction: options.requireInteraction === true,
         });
 
         if (options.onClick !== undefined) {
