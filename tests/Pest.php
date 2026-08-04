@@ -6,6 +6,7 @@ use App\Enums\MemberStatus;
 use App\Enums\WorkspaceRole;
 use App\Events\ChannelActivity;
 use App\Events\ChannelCreated;
+use App\Events\ChannelMembershipGranted;
 use App\Events\ChannelRead;
 use App\Events\ConversationActivity;
 use App\Events\ConversationRead;
@@ -56,6 +57,7 @@ pest()->extend(TestCase::class)
         Event::fake([
             ChannelActivity::class,
             ChannelCreated::class,
+            ChannelMembershipGranted::class,
             ChannelRead::class,
             ConversationActivity::class,
             ConversationRead::class,

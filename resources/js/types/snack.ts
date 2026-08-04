@@ -743,6 +743,11 @@ export type SnackProps = {
 export type FlashMessages = {
     success: string | null;
     error: string | null;
+    /**
+     * True when the server chose the room on screen — the redirect out of the
+     * workspace root — rather than the reader asking for it by URL.
+     */
+    entered_workspace: boolean;
 };
 
 // -- Real-time payloads ------------------------------------------------------

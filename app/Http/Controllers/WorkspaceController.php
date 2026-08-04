@@ -51,6 +51,12 @@ class WorkspaceController extends Controller
      * Entering a workspace drops the user into a channel rather than a landing
      * page, which is what makes Snack feel like a chat app instead of a
      * dashboard.
+     *
+     * The redirect flashes `entered_workspace` so the page it lands on can tell
+     * "the server picked this room for you" from "you asked for this room". They
+     * are the same URL either way, and on a phone they want opposite treatment:
+     * the shell opens its navigation over the first, and must leave a shared
+     * link or a notification's destination alone. See WorkspaceLayout.
      */
     public function show(Workspace $workspace, Request $request): RedirectResponse|Response
     {
@@ -60,7 +66,7 @@ class WorkspaceController extends Controller
             return to_route('channels.show', [
                 'workspace' => $workspace->slug,
                 'channel' => $channel->slug,
-            ]);
+            ])->with('entered_workspace', true);
         }
 
         // A guest who has not been added to anything yet, or a workspace whose

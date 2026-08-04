@@ -1,6 +1,7 @@
 import { Deferred, Head, Link } from '@inertiajs/react';
-import { Info, Settings, Users } from 'lucide-react';
+import { Info, Settings, UserPlus, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { AddChannelMembersDialog } from '@/components/snack/add-channel-members-dialog';
 import { ChannelIcon } from '@/components/snack/channel-icon';
 import { ChannelSettingsDialog } from '@/components/snack/channel-settings-dialog';
 import { HuddleBar } from '@/components/snack/huddle/huddle-bar';
@@ -80,6 +81,7 @@ export default function ChannelShow({
     >(null);
 
     const [editing, setEditing] = useState(false);
+    const [addingPeople, setAddingPeople] = useState(false);
 
     /*
      * Memoized for the reason `mentionSource` below is: an object rebuilt every
@@ -142,13 +144,25 @@ export default function ChannelShow({
                 />
 
                 {canManage && (
-                    <ChannelSettingsDialog
-                        channel={channel}
-                        workspaceSlug={workspace.slug}
-                        canAdministerWorkspace={workspace.abilities.administer}
-                        open={editing}
-                        onOpenChange={setEditing}
-                    />
+                    <>
+                        <ChannelSettingsDialog
+                            channel={channel}
+                            workspaceSlug={workspace.slug}
+                            canAdministerWorkspace={
+                                workspace.abilities.administer
+                            }
+                            open={editing}
+                            onOpenChange={setEditing}
+                        />
+
+                        <AddChannelMembersDialog
+                            channel={channel}
+                            workspaceSlug={workspace.slug}
+                            members={members}
+                            open={addingPeople}
+                            onOpenChange={setAddingPeople}
+                        />
+                    </>
                 )}
 
                 {/*
@@ -174,7 +188,12 @@ export default function ChannelShow({
                     title="About this channel"
                     onClose={() => setPanel(null)}
                 >
-                    <ChannelDetails channel={channel} members={members} />
+                    <ChannelDetails
+                        channel={channel}
+                        members={members}
+                        canManage={canManage}
+                        onAddPeople={() => setAddingPeople(true)}
+                    />
                 </RightPanel>
             )}
 
@@ -512,9 +531,13 @@ function ChannelPreviewBar({ channel }: { channel: Channel }) {
 function ChannelDetails({
     channel,
     members,
+    canManage,
+    onAddPeople,
 }: {
     channel: Channel;
     members?: SnackUser[];
+    canManage: boolean;
+    onAddPeople: () => void;
 }) {
     return (
         <div className="space-y-5 p-4">
@@ -531,6 +554,26 @@ function ChannelDetails({
                 <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                     Members
                 </h3>
+
+                {/*
+                 * Beside the roster rather than in the header: this is the one
+                 * place the answer to "who is already in here?" is on screen,
+                 * which is the question you ask right before adding somebody.
+                 * An archived channel takes no new members, and the server
+                 * refuses regardless.
+                 */}
+                {canManage && !channel.is_archived && (
+                    <button
+                        type="button"
+                        onClick={onAddPeople}
+                        className="mb-2 flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                        <span className="flex size-6 items-center justify-center rounded-lg bg-muted">
+                            <UserPlus aria-hidden="true" className="size-3.5" />
+                        </span>
+                        Add people
+                    </button>
+                )}
 
                 <Deferred
                     data="members"

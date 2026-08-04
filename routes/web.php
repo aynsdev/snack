@@ -3,6 +3,7 @@
 use App\Http\Controllers\Activity\ActivityController;
 use App\Http\Controllers\Channels\ChannelArchiveController;
 use App\Http\Controllers\Channels\ChannelController;
+use App\Http\Controllers\Channels\ChannelMemberController;
 use App\Http\Controllers\Channels\ChannelMembershipController;
 use App\Http\Controllers\Channels\ChannelPreferenceController;
 use App\Http\Controllers\Channels\ChannelReadController;
@@ -171,6 +172,16 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->name('channels.membership.store');
         Route::delete('channels/{channel}/membership', [ChannelMembershipController::class, 'destroy'])
             ->name('channels.membership.destroy');
+
+        /*
+         * Adding *other* people, which is a different endpoint from the pair
+         * above rather than a parameter on it: joining yourself is gated on the
+         * channel being open to you, adding someone else on administering the
+         * channel. Sharing a route would make which policy applies depend on
+         * what is in the body.
+         */
+        Route::post('channels/{channel}/members', [ChannelMemberController::class, 'store'])
+            ->name('channels.members.store');
 
         // Muting a channel and setting its notification level. The mirror of
         // conversations.preferences.update, and private to the member who asks:

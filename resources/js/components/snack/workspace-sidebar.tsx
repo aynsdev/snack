@@ -69,9 +69,16 @@ import type { Channel, Conversation, WorkspacePerson } from '@/types';
  */
 export function WorkspaceSidebar({
     onNavigate,
+    inDrawer = false,
 }: {
     /** Lets the mobile drawer close itself when a link is followed. */
     onNavigate?: () => void;
+    /**
+     * Rendered inside the mobile drawer, whose own dismiss button sits in the
+     * top-right corner — which is where this component's header would otherwise
+     * put the compose button. Only the header cares.
+     */
+    inDrawer?: boolean;
 }) {
     const workspace = useWorkspace();
     const current = useCurrentWorkspace();
@@ -105,7 +112,10 @@ export function WorkspaceSidebar({
     if (isDirectMessages) {
         return (
             <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-                <SidebarHeader onCompose={() => setComposing(true)} />
+                <SidebarHeader
+                    onCompose={() => setComposing(true)}
+                    inDrawer={inDrawer}
+                />
 
                 <NewMessageDialog
                     workspaceSlug={workspace.slug}
@@ -137,7 +147,10 @@ export function WorkspaceSidebar({
 
     return (
         <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-            <SidebarHeader onCompose={() => setComposing(true)} />
+            <SidebarHeader
+                onCompose={() => setComposing(true)}
+                inDrawer={inDrawer}
+            />
 
             <NewMessageDialog
                 workspaceSlug={workspace.slug}
@@ -515,11 +528,24 @@ function PersonRow({
     );
 }
 
-function SidebarHeader({ onCompose }: { onCompose: () => void }) {
+function SidebarHeader({
+    onCompose,
+    inDrawer,
+}: {
+    onCompose: () => void;
+    inDrawer: boolean;
+}) {
     const workspace = useWorkspace();
 
     return (
-        <div className="flex items-center justify-between gap-2 px-3 py-3">
+        <div
+            className={cn(
+                'flex items-center justify-between gap-2 px-3 py-3',
+                // Clear of the drawer's dismiss button, which is absolutely
+                // positioned in the same corner as the compose button.
+                inDrawer && 'pr-11',
+            )}
+        >
             <DropdownMenu>
                 <DropdownMenuTrigger className="-ml-1 flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-sidebar-accent">
                     <span className="truncate text-[0.9375rem] font-bold tracking-tight">
