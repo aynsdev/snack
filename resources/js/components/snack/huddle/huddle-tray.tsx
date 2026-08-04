@@ -2,6 +2,7 @@ import { ConnectionState } from 'livekit-client';
 import {
     ChevronDown,
     ChevronUp,
+    Grid2x2,
     Maximize2,
     Mic,
     MicOff,
@@ -38,7 +39,21 @@ export function HuddleTray() {
     const { active, error, dismissError } = useHuddle();
 
     const [expanded, setExpanded] = useState(true);
-    const [stage, setStage] = useState(false);
+
+    /*
+     * The stage, and who it opened onto. `null` is closed.
+     *
+     * Held as one value rather than as a boolean plus an identity so the two
+     * cannot disagree, and so {@see HuddleStage} — which mounts fresh each time
+     * this becomes non-null — can safely seed its own focus state from it. That
+     * is the one case where `useState(prop)` is correct: the prop is read once,
+     * on a mount that only happens when the stage is opened.
+     */
+    const [stage, setStage] = useState<{ focus: string | null } | null>(null);
+
+    // Stable, so the stage's Escape listener re-subscribes only when the
+    // spotlight changes rather than on every re-snapshot of the roster.
+    const closeStage = useCallback(() => setStage(null), []);
 
     /*
      * An error with no call behind it is a join that never landed — most often
@@ -64,8 +79,14 @@ export function HuddleTray() {
         );
     }
 
-    if (stage) {
-        return <HuddleStage active={active} onClose={() => setStage(false)} />;
+    if (stage !== null) {
+        return (
+            <HuddleStage
+                active={active}
+                initialFocus={stage.focus}
+                onClose={closeStage}
+            />
+        );
     }
 
     const connecting = active.state !== ConnectionState.Connected;
@@ -111,7 +132,7 @@ export function HuddleTray() {
 
                 <button
                     type="button"
-                    onClick={() => setStage(true)}
+                    onClick={() => setStage({ focus: null })}
                     title="Expand huddle"
                     className="shrink-0 px-2.5 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
@@ -135,6 +156,14 @@ export function HuddleTray() {
                         <HuddleTile
                             key={participant.identity}
                             participant={participant}
+                            // Clicking a face in the corner panel goes straight
+                            // to that person on the stage. Tapping a
+                            // thumbnail the size of a stamp to see it bigger is
+                            // the obvious gesture, and doing nothing would be a
+                            // dead end.
+                            onSelect={() =>
+                                setStage({ focus: participant.identity })
+                            }
                         />
                     ))}
                 </div>
@@ -145,6 +174,18 @@ export function HuddleTray() {
             </div>
         </div>
     );
+}
+
+/**
+ * The element the document is fullscreen on, or null.
+ *
+ * Normalized because `document.fullscreenElement` is **undefined** rather than
+ * null wherever the Fullscreen API is absent — jsdom, older Safari, an iframe
+ * denied the permission. A bare `!== null` reads all of those as *already
+ * fullscreen*, which silently disables the key handling that defers to it.
+ */
+function fullscreenElement(): Element | null {
+    return document.fullscreenElement ?? null;
 }
 
 /**
@@ -161,16 +202,39 @@ export function HuddleTray() {
  *
  * The tray is *replaced* rather than layered under, so the call has exactly one
  * set of controls on screen — two would raise the question of which one hangs up.
+ *
+ * # Spotlight
+ *
+ * One participant can be focused, which drops everyone else into a filmstrip
+ * along the bottom. This is what makes a shared screen readable: in an even
+ * grid, a colleague's IDE is a thumbnail with unreadable text in it, and the
+ * whole reason to look at a share is to read it.
+ *
+ * `adaptiveStream` on the Room means this also *improves the picture*, not just
+ * its size — LiveKit tracks how large each element actually is and subscribes to
+ * a higher-resolution layer for the one that grew.
  */
 function HuddleStage({
     active,
+    initialFocus,
     onClose,
 }: {
     active: ActiveHuddle;
+    /** Who to open onto, when the stage was opened by clicking a face. */
+    initialFocus: string | null;
     onClose: () => void;
 }) {
     const container = useRef<HTMLDivElement>(null);
     const [isFullscreen, setFullscreen] = useState(false);
+
+    /*
+     * Whose tile is spotlit, by participant identity.
+     *
+     * Seeded from the prop, which is safe here in a way it usually is not: this
+     * component is mounted only when the stage opens, so the prop is read once
+     * on a fresh mount rather than frozen at some earlier render's value.
+     */
+    const [focus, setFocus] = useState<string | null>(initialFocus);
 
     /*
      * The browser owns fullscreen state, not this component: the user can leave
@@ -178,7 +242,7 @@ function HuddleStage({
      * a local boolean would then be a button labelled the wrong way round.
      */
     useEffect(() => {
-        const sync = () => setFullscreen(document.fullscreenElement !== null);
+        const sync = () => setFullscreen(fullscreenElement() !== null);
 
         document.addEventListener('fullscreenchange', sync);
         sync();
@@ -187,7 +251,7 @@ function HuddleStage({
     }, []);
 
     const toggleFullscreen = useCallback(() => {
-        if (document.fullscreenElement !== null) {
+        if (fullscreenElement() !== null) {
             // Rejects in a document that is not fullscreen, which is a race
             // rather than a problem worth surfacing.
             void document.exitFullscreen().catch(() => undefined);
@@ -202,28 +266,39 @@ function HuddleStage({
     }, []);
 
     /*
-     * Escape closes the stage — but only once the browser is done with it.
-     * While fullscreen, the first Escape is consumed by the browser to leave
-     * fullscreen, and closing the overlay on that same press would collapse two
-     * steps into one and drop the user back to a corner panel they did not ask
-     * for.
+     * Escape unwinds one layer at a time: browser fullscreen, then the
+     * spotlight, then the stage.
+     *
+     * Collapsing them would drop somebody who pressed Escape to stop looking at
+     * a screen share all the way back to a corner panel they did not ask for.
+     * The fullscreen step is handled by the browser itself — it consumes that
+     * keypress before the page sees it — so this only has to not *also* act on
+     * it, which is what the `fullscreenElement` check is for.
      */
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape' && document.fullscreenElement === null) {
-                onClose();
+            if (event.key !== 'Escape' || fullscreenElement() !== null) {
+                return;
             }
+
+            if (focus !== null) {
+                setFocus(null);
+
+                return;
+            }
+
+            onClose();
         };
 
         window.addEventListener('keydown', onKeyDown);
 
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [onClose]);
+    }, [focus, onClose]);
 
     // Leaving the stage must not leave the document fullscreen behind it.
     useEffect(
         () => () => {
-            if (document.fullscreenElement !== null) {
+            if (fullscreenElement() !== null) {
                 void document.exitFullscreen().catch(() => undefined);
             }
         },
@@ -232,6 +307,57 @@ function HuddleStage({
 
     const connecting = active.state !== ConnectionState.Connected;
     const people = active.participants;
+
+    /*
+     * A stable description of who is sharing, so the effect below can fire on a
+     * share *starting* rather than on every re-snapshot. `people` is a fresh
+     * array several times a second while anybody speaks, and keying on it would
+     * make the effect run constantly for nothing.
+     */
+    const sharing = people
+        .filter((person) => person.isScreenSharing)
+        .map((person) => person.identity);
+
+    const sharingKey = [...sharing].sort().join(',');
+    const previouslySharing = useRef<string[]>(sharing);
+
+    /*
+     * Somebody starting to share takes the spotlight.
+     *
+     * The whole reason to share a screen is that people should look at it, and
+     * making everyone find and click the right thumbnail first is a
+     * five-second pause on every demo. Only on the *transition* to sharing —
+     * clearing the spotlight afterwards has to stick, or a viewer who
+     * deliberately went back to the grid would be yanked out of it on the next
+     * frame.
+     */
+    useEffect(() => {
+        const current = sharingKey === '' ? [] : sharingKey.split(',');
+
+        const started = current.find(
+            (identity) => !previouslySharing.current.includes(identity),
+        );
+
+        previouslySharing.current = current;
+
+        if (started !== undefined) {
+            setFocus(started);
+        }
+    }, [sharingKey]);
+
+    /*
+     * React's documented way to drop state that a prop has invalidated: compare
+     * during render, so the correction lands in the same commit rather than
+     * painting a spotlight on somebody who has left first.
+     */
+    const focused =
+        focus === null
+            ? null
+            : (people.find((person) => person.identity === focus) ?? null);
+
+    if (focus !== null && focused === null && people.length > 0) {
+        setFocus(null);
+    }
 
     return (
         <div
@@ -261,6 +387,26 @@ function HuddleStage({
                         : `${people.length} people`}
                 </p>
 
+                {/*
+                 * The way out of the spotlight, spelled out. Clicking the big
+                 * tile and pressing Escape both do it, and neither announces
+                 * itself — a viewer who did not choose the spotlight (a share
+                 * starting puts them there) has no reason to guess at either.
+                 */}
+                {focused !== null && (
+                    <button
+                        type="button"
+                        onClick={() => setFocus(null)}
+                        className="shrink-0 rounded-lg bg-white/10 px-2.5 py-1.5 text-xs font-medium text-white/80 transition-colors hover:bg-white/20 hover:text-white"
+                    >
+                        <Grid2x2
+                            aria-hidden="true"
+                            className="mr-1.5 inline size-3.5"
+                        />
+                        Show everyone
+                    </button>
+                )}
+
                 <button
                     type="button"
                     onClick={toggleFullscreen}
@@ -289,25 +435,76 @@ function HuddleStage({
                 </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4">
-                <div
-                    className={cn(
-                        'mx-auto grid h-full content-center gap-3',
-                        // Capped so a call of four does not become four tiles the
-                        // width of a wall on an ultrawide display.
-                        columnsFor(people.length),
-                        people.length === 1 ? 'max-w-4xl' : 'max-w-7xl',
-                    )}
-                >
-                    {people.map((participant) => (
-                        <HuddleTile
-                            key={participant.identity}
-                            participant={participant}
-                            size="expanded"
-                        />
-                    ))}
+            {focused === null ? (
+                <div className="min-h-0 flex-1 overflow-y-auto px-4">
+                    <div
+                        className={cn(
+                            'mx-auto grid h-full content-center gap-3',
+                            // Capped so a call of four does not become four tiles
+                            // the width of a wall on an ultrawide display.
+                            columnsFor(people.length),
+                            people.length === 1 ? 'max-w-4xl' : 'max-w-7xl',
+                        )}
+                    >
+                        {people.map((participant) => (
+                            <HuddleTile
+                                key={participant.identity}
+                                participant={participant}
+                                size="expanded"
+                                onSelect={() => setFocus(participant.identity)}
+                            />
+                        ))}
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <>
+                    {/*
+                     * `min-h-0` on a flex child is what actually lets this
+                     * shrink: a flex item defaults to `min-height: auto`, so
+                     * without it the tile refuses to go below its content size
+                     * and pushes the filmstrip and controls off the bottom of
+                     * the window.
+                     */}
+                    <div className="flex min-h-0 flex-1 items-center justify-center px-4">
+                        <HuddleTile
+                            participant={focused}
+                            size="focused"
+                            selected
+                            onSelect={() => setFocus(null)}
+                        />
+                    </div>
+
+                    {people.length > 1 && (
+                        <div className="flex shrink-0 justify-center gap-2 overflow-x-auto px-4 pt-3">
+                            {people
+                                .filter(
+                                    (person) =>
+                                        person.identity !== focused.identity,
+                                )
+                                .map((participant) => (
+                                    <button
+                                        key={participant.identity}
+                                        type="button"
+                                        onClick={() =>
+                                            setFocus(participant.identity)
+                                        }
+                                        title={`Focus ${participant.isLocal ? 'yourself' : participant.name}`}
+                                        className="w-32 shrink-0 rounded-xl focus-visible:outline-none"
+                                    >
+                                        {/*
+                                         * The tile is inert here — the wrapper
+                                         * carries the click, so the filmstrip
+                                         * scrolls as one row of fixed-width
+                                         * items rather than as tiles that each
+                                         * size themselves.
+                                         */}
+                                        <HuddleTile participant={participant} />
+                                    </button>
+                                ))}
+                        </div>
+                    )}
+                </>
+            )}
 
             <div className="flex items-center justify-center gap-1.5 px-4 py-4">
                 <HuddleControls active={active} tone="dark" />
