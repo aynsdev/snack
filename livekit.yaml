@@ -1,0 +1,78 @@
+# LiveKit media server — the transport behind Snack's huddles.
+#
+# LiveKit is open source (Apache 2.0) and this configuration runs it entirely
+# inside the deployment: no audio, video, or screen share is ever carried by a
+# third party. See docker-compose.livekit.yml for how it is started.
+#
+# Read by livekit-server as `--config /etc/livekit.yaml`.
+#
+# ---------------------------------------------------------------------------
+# THIS FILE IS FOR LAPTOPS. Deploying it will produce a server on which calls
+# connect and nobody can hear anybody — see `use_external_ip` below.
+# ---------------------------------------------------------------------------
+#
+# Production runs on its own host rather than alongside the application, and is
+# configured by LiveKit's own generator rather than by this file:
+#
+#   docker run --rm -it -v$PWD:/output livekit/generate
+#
+# That produces a Caddy-fronted stack which owns ports 80 and 443, provisions
+# its own certificates, and — the reason it is worth a separate host — can offer
+# TURN over TLS on 443. TURN/TLS is indistinguishable from ordinary HTTPS and is
+# the only transport that survives networks blocking both UDP and 7881, so it is
+# what makes huddles work from a corporate VPN. Sharing a box with the
+# application's own web server makes it impossible, because that server already
+# holds 443.
+
+# The signalling port. HTTP and WebSocket, and the only thing the browser talks
+# to before media starts flowing. This is what LIVEKIT_URL points at.
+port: 7880
+
+# API keys, as `key: secret` pairs. Overridden by the LIVEKIT_KEYS environment
+# variable in docker-compose.livekit.yml, which sources the same values Laravel
+# reads — one pair of credentials, defined in .env, so the token Snack signs and
+# the secret the server verifies with cannot drift apart.
+#
+# A throwaway local pair, for laptops only — anybody holding it can mint a token
+# for any room on this server. At least 32 characters, because LiveKit warns
+# below that and then starts anyway, so a short secret survives in exactly the
+# deployments nobody was watching the boot log of.
+keys:
+  devkey: devsecret-not-for-anything-real-0
+
+rtc:
+  # The TCP fallback port. Worth keeping open even when UDP works: corporate
+  # networks and hotel wifi routinely drop the UDP range wholesale, and without
+  # this those users connect, negotiate, and then simply hear nothing.
+  tcp_port: 7881
+
+  # The UDP range media actually flows over. Deliberately narrow — the default
+  # is 50,000 ports, which is impractical to publish through Docker and slow to
+  # map. Twenty ports comfortably covers a small deployment; widen it before
+  # widening `snack.huddles.max_participants` much.
+  port_range_start: 50000
+  port_range_end: 50020
+
+  # Announce the host's own addresses rather than probing for a public IP.
+  #
+  # `use_external_ip` asks a STUN server what the world sees, which is right for
+  # a cloud VM and wrong for a laptop: it answers with the home router's WAN
+  # address, and the browser then tries to reach the media server by going out
+  # to the internet and back in.
+  #
+  # It must be `true` on any real server, and the generated production config
+  # sets it so. This is the one setting whose failure mode is a call that
+  # connects perfectly, shows everybody in the roster, and carries no audio —
+  # with nothing logged anywhere to say why.
+  use_external_ip: false
+
+# Bounds how long a room lingers with nobody in it. Snack ends a huddle in its
+# own database as the last participant leaves, and this is the media server's
+# independent backstop for the case where that request never arrives.
+room:
+  empty_timeout: 60
+  max_participants: 25
+
+logging:
+  level: info
+  json: false

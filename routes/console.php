@@ -67,3 +67,15 @@ Schedule::command('snack:send-digests')
 Schedule::command('snack:sweep-presence')
     ->everyMinute()
     ->withoutOverlapping(5);
+
+/*
+ * Closes huddles whose last participant never said goodbye.
+ *
+ * The same shape of problem as presence, and swept at the same cadence for the
+ * same reason: a call nobody is in stays advertised in its channel header until
+ * something notices, and people click it. Leaving is announced by the client
+ * when it can, so this only ever finds the crashed tabs and the closed laptops.
+ */
+Schedule::command('snack:sweep-huddles')
+    ->everyMinute()
+    ->withoutOverlapping(5);

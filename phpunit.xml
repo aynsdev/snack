@@ -34,6 +34,20 @@
         <env name="REVERB_APP_SECRET" value="snack-testing-secret"/>
         <env name="CACHE_STORE" value="array"/>
         <!--
+            Huddles are switched on for the suite, because "off" is the state
+            that needs a test rather than the state to test everything else
+            under: `snack.huddles.enabled` derives from the secret being present,
+            so leaving these unset would make every huddle test assert a 403 for
+            the wrong reason. The one test that covers an unconfigured
+            deployment overrides the config itself.
+
+            No LiveKit server is contacted. Tokens are signed locally and their
+            claims are asserted on directly, so this secret only has to exist.
+        -->
+        <env name="LIVEKIT_API_KEY" value="snack-testing-key"/>
+        <env name="LIVEKIT_API_SECRET" value="snack-testing-secret"/>
+        <env name="LIVEKIT_URL" value="ws://localhost:7880"/>
+        <!--
             Snack relies on PostgreSQL-specific features (JSONB, citext, tsvector,
             GIN + trigram + partial indexes), so the test suite runs against a real
             PostgreSQL database rather than SQLite.

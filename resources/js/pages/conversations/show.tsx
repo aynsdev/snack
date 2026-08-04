@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AddPeopleDialog } from '@/components/snack/add-people-dialog';
+import { HuddleBar } from '@/components/snack/huddle/huddle-bar';
+import { HuddleButton } from '@/components/snack/huddle/huddle-button';
 import type { MentionSource } from '@/components/snack/mention-picker';
 import { MessageComposer } from '@/components/snack/message-composer';
 import { MessageList } from '@/components/snack/message-list';
@@ -26,7 +28,9 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useContainerHuddle } from '@/hooks/use-container-huddle';
 import { useConversationMessages } from '@/hooks/use-conversation-messages';
+import type { HuddleTarget } from '@/hooks/use-huddle';
 import { useMessageAlert } from '@/hooks/use-message-alert';
 import { usePins } from '@/hooks/use-pins';
 import { useTyping } from '@/hooks/use-typing';
@@ -36,7 +40,13 @@ import { show as showConversation } from '@/routes/conversations';
 import { store as conversationMessageStore } from '@/routes/conversations/messages';
 import { destroy as leaveConversation } from '@/routes/conversations/participants';
 import { update as updatePreferences } from '@/routes/conversations/preferences';
-import type { Conversation, Message, MessagePage, SnackUser } from '@/types';
+import type {
+    Conversation,
+    Huddle as HuddleType,
+    Message,
+    MessagePage,
+    SnackUser,
+} from '@/types';
 
 type Props = {
     conversation: Conversation;
@@ -45,8 +55,12 @@ type Props = {
     canAddPeople: boolean;
     canLeave: boolean;
     canPin: boolean;
+    /** See the note on the same prop in channels/show.tsx. */
+    canHuddle: boolean;
     /** Ships with the page so the bar does not appear a beat late. */
     pinned: Message[];
+    /** The live huddle, if there is one. */
+    huddle: HuddleType | null;
     /** The newest page; older pages are fetched as the reader scrolls. */
     history: MessagePage;
 };
@@ -58,7 +72,9 @@ export default function ConversationShow({
     canAddPeople,
     canLeave,
     canPin,
+    canHuddle,
     pinned,
+    huddle,
     history,
 }: Props) {
     const workspace = useWorkspace();
@@ -82,6 +98,25 @@ export default function ConversationShow({
         [conversation.participants, currentUser?.id],
     );
 
+    // Memoized for the same reason `others` is; the huddle provider's callbacks
+    // close over it.
+    const huddleTarget = useMemo<HuddleTarget>(
+        () => ({
+            kind: 'conversation',
+            workspace: workspace.slug,
+            conversation: conversation.id,
+            id: conversation.id,
+            label: conversation.display_name,
+        }),
+        [workspace.slug, conversation.id, conversation.display_name],
+    );
+
+    const liveHuddle = useContainerHuddle({
+        broadcastChannel: channels.conversation(conversation.id),
+        containerKey: `conversation:${conversation.id}`,
+        initial: huddle,
+    });
+
     return (
         <>
             <Head title={conversation.display_name} />
@@ -93,6 +128,8 @@ export default function ConversationShow({
                     canManage={canManage}
                     canAddPeople={canAddPeople}
                     canLeave={canLeave}
+                    canHuddle={canHuddle}
+                    huddleTarget={huddleTarget}
                     onToggleDetails={() =>
                         setPanel((current) =>
                             current?.kind === 'details'
@@ -100,6 +137,12 @@ export default function ConversationShow({
                                 : { kind: 'details' },
                         )
                     }
+                />
+
+                <HuddleBar
+                    huddle={liveHuddle}
+                    target={huddleTarget}
+                    canJoin={canHuddle && canPost}
                 />
 
                 {/*
@@ -311,6 +354,8 @@ function ConversationHeader({
     canManage,
     canAddPeople,
     canLeave,
+    canHuddle,
+    huddleTarget,
     onToggleDetails,
 }: {
     conversation: Conversation;
@@ -318,6 +363,8 @@ function ConversationHeader({
     canManage: boolean;
     canAddPeople: boolean;
     canLeave: boolean;
+    canHuddle: boolean;
+    huddleTarget: HuddleTarget;
     onToggleDetails: () => void;
 }) {
     const workspace = useWorkspace();
@@ -391,6 +438,12 @@ function ConversationHeader({
             )}
 
             <div className="ml-auto flex shrink-0 items-center gap-1">
+                <HuddleButton
+                    target={huddleTarget}
+                    container={{ kind: 'conversation', id: conversation.id }}
+                    canHuddle={canHuddle}
+                />
+
                 <button
                     type="button"
                     onClick={onToggleDetails}

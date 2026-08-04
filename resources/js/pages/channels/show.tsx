@@ -3,6 +3,8 @@ import { Info, Settings, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ChannelIcon } from '@/components/snack/channel-icon';
 import { ChannelSettingsDialog } from '@/components/snack/channel-settings-dialog';
+import { HuddleBar } from '@/components/snack/huddle/huddle-bar';
+import { HuddleButton } from '@/components/snack/huddle/huddle-button';
 import type { MentionSource } from '@/components/snack/mention-picker';
 import { MessageComposer } from '@/components/snack/message-composer';
 import { MessageList } from '@/components/snack/message-list';
@@ -13,6 +15,8 @@ import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useChannelMessages } from '@/hooks/use-channel-messages';
+import { useContainerHuddle } from '@/hooks/use-container-huddle';
+import type { HuddleTarget } from '@/hooks/use-huddle';
 import { useMessageAlert } from '@/hooks/use-message-alert';
 import { usePins } from '@/hooks/use-pins';
 import { useTyping } from '@/hooks/use-typing';
@@ -22,15 +26,29 @@ import { show as showChannel } from '@/routes/channels';
 import { store as joinChannel } from '@/routes/channels/membership';
 import { index as mentionable } from '@/routes/channels/mentionable';
 import { store as messageStore } from '@/routes/channels/messages';
-import type { Channel, Message, MessagePage, SnackUser } from '@/types';
+import type {
+    Channel,
+    Huddle as HuddleType,
+    Message,
+    MessagePage,
+    SnackUser,
+} from '@/types';
 
 type Props = {
     channel: Channel;
     canPost: boolean;
     canManage: boolean;
     canPin: boolean;
+    /**
+     * Whether the Huddle control renders. Folds "may this person hold a call
+     * here" and "does this deployment have a media server" into one flag — see
+     * App\Policies\HuddlePolicy.
+     */
+    canHuddle: boolean;
     /** Ships with the page so the bar does not appear a beat late. */
     pinned: Message[];
+    /** The live huddle, if there is one. Ships for the same reason pins do. */
+    huddle: HuddleType | null;
     /** The newest page; older pages are fetched as the reader scrolls. */
     history: MessagePage;
     /** Deferred: streams in after the channel paints. */
@@ -42,7 +60,9 @@ export default function ChannelShow({
     canPost,
     canManage,
     canPin,
+    canHuddle,
     pinned,
+    huddle,
     history,
     members,
 }: Props) {
@@ -61,6 +81,33 @@ export default function ChannelShow({
 
     const [editing, setEditing] = useState(false);
 
+    /*
+     * Memoized for the reason `mentionSource` below is: an object rebuilt every
+     * render gives every hook depending on it a fresh identity, and this one is
+     * read by the huddle provider's callbacks.
+     */
+    const huddleTarget = useMemo<HuddleTarget>(
+        () => ({
+            kind: 'channel',
+            workspace: workspace.slug,
+            channel: channel.slug,
+            id: channel.id,
+            label: `#${channel.slug}`,
+        }),
+        [workspace.slug, channel.slug, channel.id],
+    );
+
+    /*
+     * The server's answer, kept current by the container's broadcast. Keyed on
+     * the channel id so navigating between channels re-seeds it — see
+     * useContainerHuddle, and the `useState(prop)` trap it exists to avoid.
+     */
+    const liveHuddle = useContainerHuddle({
+        broadcastChannel: channels.channel(channel.id),
+        containerKey: `channel:${channel.id}`,
+        initial: huddle,
+    });
+
     return (
         <>
             <Head title={`#${channel.slug}`} />
@@ -69,6 +116,8 @@ export default function ChannelShow({
                 <ChannelHeader
                     channel={channel}
                     canManage={canManage}
+                    canHuddle={canHuddle}
+                    huddleTarget={huddleTarget}
                     onToggleDetails={() =>
                         setPanel((current) =>
                             current?.kind === 'details'
@@ -77,6 +126,19 @@ export default function ChannelShow({
                         )
                     }
                     onEdit={() => setEditing(true)}
+                />
+
+                {/*
+                 * Above the timeline rather than inside it: a huddle belongs to
+                 * the room, not to a point in its history, and it must stay put
+                 * while the conversation scrolls underneath.
+                 */}
+                <HuddleBar
+                    huddle={liveHuddle}
+                    target={huddleTarget}
+                    // Joining is a contribution, like posting — so it is offered
+                    // on exactly the terms the composer is.
+                    canJoin={canHuddle && canPost && channel.is_member}
                 />
 
                 {canManage && (
@@ -293,11 +355,15 @@ function ChannelTimeline({
 function ChannelHeader({
     channel,
     canManage,
+    canHuddle,
+    huddleTarget,
     onToggleDetails,
     onEdit,
 }: {
     channel: Channel;
     canManage: boolean;
+    canHuddle: boolean;
+    huddleTarget: HuddleTarget;
     onToggleDetails: () => void;
     onEdit: () => void;
 }) {
@@ -332,6 +398,12 @@ function ChannelHeader({
             )}
 
             <div className="ml-auto flex shrink-0 items-center gap-1">
+                <HuddleButton
+                    target={huddleTarget}
+                    container={{ kind: 'channel', id: channel.id }}
+                    canHuddle={canHuddle}
+                />
+
                 {typeof channel.member_count === 'number' && (
                     <button
                         type="button"

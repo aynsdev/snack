@@ -5,12 +5,14 @@ use App\Http\Controllers\Channels\ChannelController;
 use App\Http\Controllers\Channels\ChannelMembershipController;
 use App\Http\Controllers\Channels\ChannelPreferenceController;
 use App\Http\Controllers\Channels\ChannelReadController;
+use App\Http\Controllers\Channels\HuddleController as ChannelHuddleController;
 use App\Http\Controllers\Channels\MentionableController;
 use App\Http\Controllers\Channels\MessageController as ChannelMessageController;
 use App\Http\Controllers\Conversations\ConversationController;
 use App\Http\Controllers\Conversations\ConversationPreferenceController;
 use App\Http\Controllers\Conversations\ConversationReadController;
 use App\Http\Controllers\Conversations\DirectoryController;
+use App\Http\Controllers\Conversations\HuddleController as ConversationHuddleController;
 use App\Http\Controllers\Conversations\MessageController as ConversationMessageController;
 use App\Http\Controllers\Conversations\ParticipantController;
 use App\Http\Controllers\Files\DownloadController;
@@ -192,6 +194,29 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->middleware('throttle:message-reads')
             ->name('channels.read.store');
 
+        /*
+         * The channel's huddle.
+         *
+         * A singleton on the container rather than a resource with an id, for
+         * the reason the invite link is: there is only ever one live huddle in a
+         * channel, and naming it in the URL would invite a request that hangs up
+         * on a different channel's call.
+         *
+         * Starting and joining are the same POST — see Channels\HuddleController
+         * — and both are throttled as sends rather than as reads: each one can
+         * mint a credential and open a media connection, which is far more
+         * expensive than a row.
+         */
+        Route::post('channels/{channel}/huddle', [ChannelHuddleController::class, 'store'])
+            ->middleware('throttle:huddles')
+            ->name('channels.huddle.store');
+
+        // Leaving is deliberately *not* throttled: it is called on unload and on
+        // tab close as well as by the button, and a rate-limited hang-up leaves
+        // somebody showing as present in a call they walked out of.
+        Route::delete('channels/{channel}/huddle', [ChannelHuddleController::class, 'destroy'])
+            ->name('channels.huddle.destroy');
+
         // Who the composer offers for an @-mention. Scoped to the channel,
         // because only members can actually be mentioned.
         Route::get('channels/{channel}/mentionable', [MentionableController::class, 'index'])
@@ -231,6 +256,15 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::post('dms/{conversation}/read', [ConversationReadController::class, 'store'])
             ->middleware('throttle:message-reads')
             ->name('conversations.read.store');
+
+        // The conversation's huddle — the mirror of the channel pair above, and
+        // what "call me" means in a DM.
+        Route::post('dms/{conversation}/huddle', [ConversationHuddleController::class, 'store'])
+            ->middleware('throttle:huddles')
+            ->name('conversations.huddle.store');
+
+        Route::delete('dms/{conversation}/huddle', [ConversationHuddleController::class, 'destroy'])
+            ->name('conversations.huddle.destroy');
 
         Route::post('dms/{conversation}/participants', [ParticipantController::class, 'store'])
             ->name('conversations.participants.store');

@@ -107,6 +107,70 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Huddles
+    |--------------------------------------------------------------------------
+    |
+    | Live audio and video attached to a channel or a DM. The media itself is
+    | carried by a self-hosted LiveKit server (config/services.php); everything
+    | here is the product's own shape around it.
+    |
+    | A huddle is deliberately not a "meeting": there is nothing to schedule, no
+    | invitation, and no separate URL. It starts where the conversation already
+    | is, anyone who can post in that container can walk into it, and it ends by
+    | itself when the last person leaves.
+    |
+    */
+
+    'huddles' => [
+        /*
+         * Whether the feature exists at all in this deployment.
+         *
+         * Derived rather than configured: a media server is separate
+         * infrastructure, and an installation that has not stood one up should
+         * not render a button whose only possible outcome is a failed dial. The
+         * secret is the one checked because a URL has a working default while a
+         * secret never can.
+         */
+        'enabled' => env('LIVEKIT_API_SECRET') !== null,
+
+        /*
+         * How long a minted join token stays valid.
+         *
+         * This bounds the *connection*, not the conversation: LiveKit checks the
+         * token when a client dials and again when it re-dials after a network
+         * drop, but never mid-session. So this must comfortably outlast a real
+         * huddle — a two-hour call that loses wifi on a token that expired
+         * ninety minutes ago cannot rejoin, and to the person in it that reads
+         * as the product dropping them for no reason. Matches the LiveKit SDKs'
+         * own default for the same reason they chose it.
+         */
+        'token_ttl_minutes' => (int) env('SNACK_HUDDLE_TOKEN_TTL_MINUTES', 360),
+
+        /*
+         * The ceiling on one huddle. Well below what LiveKit will carry — this
+         * is a product limit, not a capacity one. Past a couple of dozen people
+         * nobody is talking to anybody, and the honest answer is a meeting with
+         * an agenda rather than a huddle.
+         */
+        'max_participants' => (int) env('SNACK_HUDDLE_MAX_PARTICIPANTS', 25),
+
+        /*
+         * How long a huddle may sit with nobody in it before the sweep closes
+         * it.
+         *
+         * Leaving is announced by the client, and like every other client
+         * announcement it cannot be relied on — a closed laptop sends nothing.
+         * Without this, one crashed tab leaves a huddle showing "1 person" in a
+         * channel header forever, and the next person to click Join lands in an
+         * empty room wondering where everybody went. Short, because an empty
+         * huddle has no reason to exist; not zero, because somebody refreshing
+         * the page is briefly an empty huddle too.
+         */
+        'empty_grace_seconds' => (int) env('SNACK_HUDDLE_EMPTY_GRACE_SECONDS', 60),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Messages
     |--------------------------------------------------------------------------
     */
