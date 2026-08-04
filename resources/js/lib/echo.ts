@@ -76,4 +76,8 @@ export const events = {
     conversationRead: '.conversation.read',
     conversationUpdated: '.conversation.updated',
     presenceChanged: '.presence.changed',
+    // The huddle bar, on the container's presence channel.
+    huddleChanged: '.huddle.changed',
+    // The sidebar dot, on the member's own private channel.
+    huddleActivity: '.huddle.activity',
 } as const;

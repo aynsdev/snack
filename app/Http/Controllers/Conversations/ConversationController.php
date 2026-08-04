@@ -9,8 +9,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Conversations\StoreConversationRequest;
 use App\Http\Requests\Conversations\UpdateConversationRequest;
 use App\Http\Resources\ConversationResource;
+use App\Http\Resources\LiveHuddle;
 use App\Http\Resources\MessageResource;
 use App\Models\Conversation;
+use App\Models\Huddle;
 use App\Models\Message;
 use App\Models\Workspace;
 use App\Services\MessageHistory;
@@ -88,6 +90,10 @@ class ConversationController extends Controller
             'canAddPeople' => $user->can('addParticipants', $conversation),
             'canLeave' => $user->can('leave', $conversation),
             'canPin' => $user->can('pinMessages', $conversation),
+
+            // The same pair the channel page carries — see there.
+            'canHuddle' => $user->can('create', [Huddle::class, $conversation]),
+            'huddle' => LiveHuddle::for($conversation, $request),
 
             // Ships with the page for the same reason it does in a channel.
             'pinned' => $this->pins->pinnedIn($conversation)

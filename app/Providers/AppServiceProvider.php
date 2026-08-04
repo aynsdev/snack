@@ -137,6 +137,17 @@ class AppServiceProvider extends ServiceProvider
             ->by((string) $request->user()->id));
 
         /*
+         * Joining huddles. Far tighter than messages, because each request
+         * mints a media credential and opens a WebRTC connection rather than
+         * writing a row — and because nobody legitimately joins a call more than
+         * a handful of times a minute. Loose enough to absorb a flaky connection
+         * reconnecting repeatedly, which is exactly when a person can least
+         * afford to be locked out of the call they are trying to rejoin.
+         */
+        RateLimiter::for('huddles', fn (Request $request) => Limit::perMinute(20)
+            ->by((string) $request->user()->id));
+
+        /*
          * Heartbeats. One tab beats once a minute, but people legitimately keep
          * Snack open in several at once and every one of them beats, plus a beat
          * each time a tab is focused. Generous enough that a wall of tabs is

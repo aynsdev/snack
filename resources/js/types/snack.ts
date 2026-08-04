@@ -572,6 +572,67 @@ export type Conversation = {
     created_at: string | null;
 };
 
+// -- Huddles -----------------------------------------------------------------
+
+/**
+ * Where a huddle is happening. Mirrors the `container` key of
+ * App\Http\Resources\HuddleResource, which is the same shape
+ * App\Http\Resources\ContainerSummary uses — one shape for "where does this
+ * live" so the client only ever learns one.
+ */
+export type HuddleContainerRef =
+    | { kind: 'channel'; id: number }
+    /** The conversation's opaque public id, never its primary key. */
+    | { kind: 'conversation'; id: string };
+
+/**
+ * Mirrors App\Http\Resources\HuddleResource.
+ *
+ * Deliberately viewer-independent: the identical shape is the body of the
+ * `huddle.changed` broadcast, where there is no viewer at all. Whether *you*
+ * are in the huddle is something the client knows from its own connection
+ * state, so it is not carried here.
+ */
+export type Huddle = {
+    /** An opaque ULID, and also the LiveKit room name. */
+    id: string;
+    container: HuddleContainerRef;
+    started_at: string | null;
+    ended_at: string | null;
+    is_live: boolean;
+    /**
+     * The roster as the *server* knows it, which is what someone who has not
+     * joined sees in the huddle bar. Once connected, tiles are rendered from
+     * LiveKit's own participant list instead — that one is authoritative for who
+     * can currently be heard and updates without a round trip.
+     */
+    participants: SnackUser[];
+};
+
+/**
+ * Mirrors App\Services\LiveKit\HuddleConnection: everything the browser needs to
+ * dial in.
+ *
+ * `token` is a credential. It arrives only in the response to your own join
+ * request and never appears in a broadcast, which is why it is not part of
+ * {@see Huddle}.
+ */
+export type HuddleConnection = {
+    /** The LiveKit signalling URL. Sent per response so the media server can
+     *  move without a rebuilt bundle. */
+    url: string;
+    token: string;
+    /** The LiveKit identity this token was minted for, used to tell your own
+     *  tile apart from everyone else's. */
+    identity: string;
+};
+
+/** The join endpoints' response body. */
+export type HuddleJoinResponse = {
+    huddle: Huddle;
+    connection: HuddleConnection;
+};
+
 // -- Shared Inertia props ----------------------------------------------------
 
 /**
@@ -768,6 +829,35 @@ export type ConversationReadEvent = {
  */
 export type ConversationUpdatedEvent = {
     conversation: Pick<Conversation, 'id' | 'type' | 'name' | 'participants'>;
+};
+
+/**
+ * Payload of the `huddle.changed` broadcast, on a container's presence channel.
+ *
+ * Carries the whole huddle every time rather than a delta. WebSocket delivery
+ * guarantees neither order nor arrival, and one dropped "left" frame under a
+ * delta scheme leaves somebody shown in a call they walked out of, with nothing
+ * to correct it until a reload. Every frame here is independently sufficient and
+ * the newest one wins.
+ *
+ * `huddle` is null when the container was deleted out from under the call.
+ */
+export type HuddleChangedEvent = {
+    huddle: Huddle | null;
+};
+
+/**
+ * Payload of the `huddle.activity` broadcast, on a member's own private channel.
+ *
+ * The sidebar dot. Fires only when a huddle starts or ends — not on every join —
+ * because the recipients are by definition looking at something else, and a
+ * fourth person walking into a call elsewhere is not news. No roster for the
+ * same reason.
+ */
+export type HuddleActivityEvent = {
+    huddle_id: string;
+    container: HuddleContainerRef;
+    is_live: boolean;
 };
 
 /** Payload of the `workspace.member_joined` broadcast. */

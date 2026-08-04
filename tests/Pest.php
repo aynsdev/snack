@@ -11,6 +11,8 @@ use App\Events\ConversationActivity;
 use App\Events\ConversationRead;
 use App\Events\ConversationStarted;
 use App\Events\ConversationUpdated;
+use App\Events\HuddleActivity;
+use App\Events\HuddleChanged;
 use App\Events\MessageDeleted;
 use App\Events\MessageSent;
 use App\Events\MessageUpdated;
@@ -22,6 +24,7 @@ use App\Events\WorkspaceMemberJoined;
 use App\Models\Channel;
 use App\Models\ChannelMember;
 use App\Models\Conversation;
+use App\Models\Huddle;
 use App\Models\Message;
 use App\Models\User;
 use App\Models\Workspace;
@@ -58,6 +61,8 @@ pest()->extend(TestCase::class)
             ConversationRead::class,
             ConversationStarted::class,
             ConversationUpdated::class,
+            HuddleActivity::class,
+            HuddleChanged::class,
             MessageDeleted::class,
             MessageSent::class,
             MessageUpdated::class,
@@ -230,4 +235,27 @@ function makeConversationMessage(Conversation $conversation, User $sender, ?stri
     $factory = Message::factory()->inConversation($conversation)->from($sender);
 
     return ($body === null ? $factory : $factory->withBody($body))->create();
+}
+
+/**
+ * A live huddle in a channel or conversation, with the given people already in
+ * it.
+ *
+ * Bypasses App\Actions\Huddles\JoinHuddle deliberately, for the tests whose
+ * subject is what happens *around* a huddle — authorization, leaving, the sweep
+ * — rather than the act of starting one. Anything asserting how a huddle comes
+ * into existence must go through the endpoint instead.
+ *
+ * @param  array<int, User>  $participants
+ */
+function makeHuddle(Channel|Conversation $container, array $participants = []): Huddle
+{
+    $factory = $container instanceof Channel
+        ? Huddle::factory()->inChannel($container)
+        : Huddle::factory()->inConversation($container);
+
+    return $factory
+        ->startedBy($participants[0] ?? User::factory()->create())
+        ->withParticipants($participants)
+        ->create();
 }

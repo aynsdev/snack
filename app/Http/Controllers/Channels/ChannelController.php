@@ -9,9 +9,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Channels\StoreChannelRequest;
 use App\Http\Requests\Channels\UpdateChannelRequest;
 use App\Http\Resources\ChannelResource;
+use App\Http\Resources\LiveHuddle;
 use App\Http\Resources\MessageResource;
 use App\Http\Resources\UserResource;
 use App\Models\Channel;
+use App\Models\Huddle;
 use App\Models\Message;
 use App\Models\Workspace;
 use App\Services\MessageHistory;
@@ -117,6 +119,18 @@ class ChannelController extends Controller
             'canPost' => $user->can('post', $channel),
             'canManage' => $user->can('update', $channel),
             'canPin' => $user->can('pinMessages', $channel),
+
+            /*
+             * Whether the Huddle button renders at all. Answers "does this
+             * deployment have a media server, and may this person hold a call
+             * here?" in one flag — see HuddlePolicy, which folds the two
+             * together deliberately so the client never has to.
+             */
+            'canHuddle' => $user->can('create', [Huddle::class, $channel]),
+
+            // The live huddle, if there is one. Ships with the page so the bar
+            // is there on the first paint — see LiveHuddle.
+            'huddle' => LiveHuddle::for($channel, $request),
 
             /*
              * Pinned messages are reference material, so they ship with the page

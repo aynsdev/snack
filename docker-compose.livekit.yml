@@ -1,0 +1,44 @@
+# The self-hosted media server behind huddles.
+#
+#   docker compose -f docker-compose.livekit.yml up -d
+#
+# Deliberately its own compose file rather than a service in a project-wide one:
+# Snack itself is served by Herd, and the rest of its dependencies are native.
+# This is the one piece that is genuinely easier in a container, and keeping it
+# separate means starting and stopping it does not touch anything else.
+#
+# LiveKit is Apache 2.0 and this runs the real thing, not a hosted proxy for it
+# — a deployment that brings this up owns every byte of its own call traffic.
+
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    # Published ports rather than host networking, because Docker Desktop on
+    # macOS and Windows runs the daemon inside a VM where `network_mode: host`
+    # means the VM's host, not yours — the signalling port simply never appears
+    # at localhost:7880, which looks exactly like the server having failed to
+    # start.
+    #
+    # This is why the UDP range in livekit.yaml is twenty ports and not the
+    # default fifty thousand: Docker publishes a range by mapping every port in
+    # it, and a range that size takes minutes to start and a great deal of
+    # memory to hold.
+    #
+    # On Linux, prefer `network_mode: host` — it avoids the port mapping
+    # entirely and lets WebRTC see real client addresses rather than the
+    # bridge's. Swap the two blocks below.
+    ports:
+      - '7880:7880'
+      - '7881:7881'
+      - '50000-50020:50000-50020/udp'
+    # network_mode: host
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    environment:
+      # Sourced from the application's own .env so there is exactly one
+      # definition of the key pair. A mismatch here does not fail loudly: the
+      # token is signed happily and the browser is simply refused at the door
+      # with an error most people read as "huddles are broken".
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-secret}"
