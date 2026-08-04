@@ -105,6 +105,23 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Activity
+    |--------------------------------------------------------------------------
+    |
+    | The tabbed view over notifications, mentions, and followed threads.
+    | "merged_limit" bounds each list's contribution to the All tab: three full
+    | pages interleaved would bury whichever kind was quietest under whichever
+    | was busiest, and the tabs themselves are where you go to read one of them
+    | to the end.
+    |
+    */
+
+    'activity' => [
+        'merged_limit' => 20,
+    ],
+
     'conversations' => [
         'sidebar_limit' => 30,
         'people_limit' => 100,
@@ -173,6 +190,13 @@ return [
          * the page is briefly an empty huddle too.
          */
         'empty_grace_seconds' => (int) env('SNACK_HUDDLE_EMPTY_GRACE_SECONDS', 60),
+
+        /*
+         * How many past huddles the history view lists. A history answers "did
+         * I miss one, and who was on it" — a question about the last day or two,
+         * not about the last year — so it is a page rather than an archive.
+         */
+        'history_limit' => 50,
     ],
 
     /*

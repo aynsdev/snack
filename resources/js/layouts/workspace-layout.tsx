@@ -6,9 +6,11 @@ import { ChannelSync } from '@/components/snack/channel-sync';
 import { ConversationSync } from '@/components/snack/conversation-sync';
 import { HuddleTray } from '@/components/snack/huddle/huddle-tray';
 import { HuddleSync } from '@/components/snack/huddle-sync';
+import { NavRail } from '@/components/snack/nav-rail';
 import { WorkspaceRail } from '@/components/snack/workspace-rail';
 import { WorkspaceSidebar } from '@/components/snack/workspace-sidebar';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { useIsActivityView } from '@/hooks/use-active-channel';
 import { HuddleProvider } from '@/hooks/use-huddle';
 import { LivePresenceProvider } from '@/hooks/use-live-presence';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -37,6 +39,7 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     const current = useCurrentWorkspace();
     const currentUser = useCurrentUser();
     const isMobile = useIsMobile();
+    const isActivityView = useIsActivityView();
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     // Close the drawer whenever navigation lands somewhere new; otherwise it
@@ -95,11 +98,28 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
                         <WorkspaceRail
                             currentWorkspaceSlug={current.workspace.slug}
                         />
+
+                        {/*
+                         * Between the workspaces and their contents, because
+                         * that is what it selects: which part of *this*
+                         * workspace you are in. Every destination in it is
+                         * workspace-scoped, so it belongs on the workspace side
+                         * of the rail that switches them.
+                         */}
+                        <NavRail />
                     </div>
 
-                    <aside className="hidden w-64 shrink-0 border-r border-sidebar-border md:block lg:w-72">
-                        <WorkspaceSidebar />
-                    </aside>
+                    {/*
+                     * Activity gets the full width. It is a reading view over
+                     * things that came from all over the workspace, and a list
+                     * of rooms beside it is a list of places none of those rows
+                     * are in — the rail on the left is enough to leave by.
+                     */}
+                    {!isActivityView && (
+                        <aside className="hidden w-64 shrink-0 border-r border-sidebar-border md:block lg:w-72">
+                            <WorkspaceSidebar />
+                        </aside>
+                    )}
 
                     {isMobile && (
                         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -113,6 +133,9 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
                                         currentWorkspaceSlug={
                                             current.workspace.slug
                                         }
+                                    />
+                                    <NavRail
+                                        onNavigate={() => setSidebarOpen(false)}
                                     />
                                     <div className="min-w-0 flex-1">
                                         <WorkspaceSidebar

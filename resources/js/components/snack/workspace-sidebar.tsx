@@ -1,11 +1,10 @@
 import { Link, router } from '@inertiajs/react';
+import type { LucideIcon } from 'lucide-react';
 import {
-    AtSign,
     Bell,
-    Bookmark,
     ChevronDown,
     Compass,
-    Folder,
+    Headphones,
     MessagesSquare,
     Plus,
     ScrollText,
@@ -13,8 +12,9 @@ import {
     Settings,
     SquarePen,
     UsersRound,
+    X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChannelListItem } from '@/components/snack/channel-list-item';
 import { ConversationListItem } from '@/components/snack/conversation-list-item';
 import { NewMessageDialog } from '@/components/snack/new-message-dialog';
@@ -35,10 +35,8 @@ import {
 import {
     useActiveChannelSlug,
     useActiveConversationId,
-    useIsFilesView,
-    useIsMentionsView,
-    useIsNotificationsView,
-    useIsSavedView,
+    useIsDirectMessagesView,
+    useIsHuddlesView,
     useIsThreadsView,
 } from '@/hooks/use-active-channel';
 import {
@@ -53,12 +51,9 @@ import {
 import { cn } from '@/lib/utils';
 import { index as auditIndex } from '@/routes/audit';
 import { index as browseChannels } from '@/routes/channels';
-import { index as filesIndex } from '@/routes/files';
+import { index as huddlesIndex } from '@/routes/huddles';
 import { index as workspaceMembers } from '@/routes/members';
-import { index as mentionsIndex } from '@/routes/mentions';
 import { edit as notificationPreferences } from '@/routes/notification-preferences';
-import { index as notificationsIndex } from '@/routes/notifications';
-import { index as savedIndex } from '@/routes/saved';
 import { index as searchIndex } from '@/routes/search';
 import { index as threadsIndex } from '@/routes/threads';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
@@ -82,18 +77,63 @@ export function WorkspaceSidebar({
     const current = useCurrentWorkspace();
     const currentUser = useCurrentUser();
     const { channels, muted } = useSidebarChannels();
-    const { groups, mutedGroups } = useSidebarConversations();
-    const people = useSidebarPeople();
+    const { mutedGroups } = useSidebarConversations();
     const unread = useUnreadState();
     const activeChannelSlug = useActiveChannelSlug();
     const activeConversationId = useActiveConversationId();
     const isThreadsView = useIsThreadsView();
-    const isMentionsView = useIsMentionsView();
-    const isNotificationsView = useIsNotificationsView();
-    const isSavedView = useIsSavedView();
-    const isFilesView = useIsFilesView();
+    const isHuddlesView = useIsHuddlesView();
+
+    /*
+     * Inside direct messages the sidebar is the DM list and nothing else.
+     * The rail on the left already said which part of the workspace you are in,
+     * so repeating the channel list beside a conversation makes the reader scan
+     * past everything they did not choose to find the row they did.
+     */
+    const isDirectMessages = useIsDirectMessagesView();
 
     const [composing, setComposing] = useState(false);
+    const [dmFilter, setDmFilter] = useState('');
+
+    /*
+     * Mounted here rather than inside the search button, because the DM shape
+     * below replaces that button with a filter box — and ⌘K has to keep working
+     * wherever you are in the workspace, which is the only reason it exists.
+     */
+    useSearchShortcut(searchIndex.url(workspace.slug));
+
+    if (isDirectMessages) {
+        return (
+            <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+                <SidebarHeader onCompose={() => setComposing(true)} />
+
+                <NewMessageDialog
+                    workspaceSlug={workspace.slug}
+                    open={composing}
+                    onOpenChange={setComposing}
+                />
+
+                <div className="px-3 pb-2">
+                    <DirectMessageFilter
+                        value={dmFilter}
+                        onChange={setDmFilter}
+                    />
+                </div>
+
+                <nav
+                    aria-label="Direct messages"
+                    className="snack-scroll flex-1 space-y-4 overflow-y-auto px-3 pb-4"
+                >
+                    <DirectMessageSection
+                        filter={dmFilter}
+                        onNavigate={onNavigate}
+                    />
+                </nav>
+
+                <NotificationPermissionPrompt />
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
@@ -113,6 +153,13 @@ export function WorkspaceSidebar({
                 aria-label="Workspace"
                 className="snack-scroll flex-1 space-y-4 overflow-y-auto px-3 pb-4"
             >
+                {/*
+                 * Threads alone. Mentions, Notifications, Saved, and Files moved
+                 * to the rail on the left, where the parts of the product live;
+                 * what is left here is the workspace's own contents — the rooms
+                 * and the people — plus this, which is the one list that can be
+                 * waiting on a reply and so is checked as often as a channel.
+                 */}
                 <ul className="space-y-0.5">
                     <SidebarLink
                         icon={MessagesSquare}
@@ -122,39 +169,19 @@ export function WorkspaceSidebar({
                         active={isThreadsView}
                         onNavigate={onNavigate}
                     />
-                    <SidebarLink
-                        icon={AtSign}
-                        label="Mentions"
-                        badge={unread.mentions}
-                        href={mentionsIndex.url(workspace.slug)}
-                        active={isMentionsView}
-                        onNavigate={onNavigate}
-                    />
+
                     {/*
-                     * Above Saved and below Mentions: the three are ordered by
-                     * how much they are asking of you, and this one is the only
-                     * list that can be waiting on a reply.
+                     * Under Threads, and for the same reason it is here rather
+                     * than in the rail: both are records of things that happened
+                     * *in* this workspace's rooms, and a huddle leaves nothing
+                     * behind in the room it happened in — so the only way to
+                     * find out one took place is a list of them.
                      */}
                     <SidebarLink
-                        icon={Bell}
-                        label="Notifications"
-                        badge={unread.notifications}
-                        href={notificationsIndex.url(workspace.slug)}
-                        active={isNotificationsView}
-                        onNavigate={onNavigate}
-                    />
-                    <SidebarLink
-                        icon={Bookmark}
-                        label="Saved"
-                        href={savedIndex.url(workspace.slug)}
-                        active={isSavedView}
-                        onNavigate={onNavigate}
-                    />
-                    <SidebarLink
-                        icon={Folder}
-                        label="Files"
-                        href={filesIndex.url(workspace.slug)}
-                        active={isFilesView}
+                        icon={Headphones}
+                        label="Huddles"
+                        href={huddlesIndex.url(workspace.slug)}
+                        active={isHuddlesView}
                         onNavigate={onNavigate}
                     />
                 </ul>
@@ -209,69 +236,7 @@ export function WorkspaceSidebar({
                     )}
                 </SidebarSection>
 
-                <SidebarSection
-                    title="Direct messages"
-                    action={
-                        workspace.abilities.start_conversations ? (
-                            <button
-                                type="button"
-                                onClick={() => setComposing(true)}
-                                className="rounded-md p-1 hover:bg-sidebar-accent"
-                            >
-                                <Plus aria-hidden="true" className="size-4" />
-                                <span className="sr-only">
-                                    Start a new message
-                                </span>
-                            </button>
-                        ) : null
-                    }
-                >
-                    {groups.length === 0 && people.length === 0 ? (
-                        <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                            {workspace.abilities.start_conversations
-                                ? 'Nobody else is in this workspace yet.'
-                                : 'You have no direct messages.'}
-                        </p>
-                    ) : (
-                        <ul className="space-y-0.5">
-                            {/*
-                             * Groups above people. A group is a room somebody
-                             * deliberately made, so it belongs with the other
-                             * things you navigate to; the roster underneath is
-                             * a directory you scan, and it is the longer list.
-                             */}
-                            {groups.map((conversation) => (
-                                <li key={conversation.id}>
-                                    <ConversationRow
-                                        conversation={conversation}
-                                        workspaceSlug={workspace.slug}
-                                        viewerId={currentUser?.id ?? null}
-                                        isActive={
-                                            conversation.id ===
-                                            activeConversationId
-                                        }
-                                        onNavigate={onNavigate}
-                                    />
-                                </li>
-                            ))}
-
-                            {people.map((person) => (
-                                <li key={person.user.id}>
-                                    <PersonRow
-                                        person={person}
-                                        workspaceSlug={workspace.slug}
-                                        isActive={
-                                            person.conversation !== null &&
-                                            person.conversation.id ===
-                                                activeConversationId
-                                        }
-                                        onNavigate={onNavigate}
-                                    />
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </SidebarSection>
+                <DirectMessageSection onNavigate={onNavigate} />
 
                 {(muted.length > 0 || mutedGroups.length > 0) && (
                     <SidebarSection title="Muted" defaultOpen={false}>
@@ -310,6 +275,153 @@ export function WorkspaceSidebar({
 
             <NotificationPermissionPrompt />
         </div>
+    );
+}
+
+/**
+ * The DM list: groups you are in, then everyone else in the workspace.
+ *
+ * Its own component because the sidebar has two shapes — the workspace's
+ * contents, and direct messages alone — and this list is in both of them. One
+ * definition means the roster cannot render one way beside the channels and
+ * another way on its own.
+ */
+function DirectMessageSection({
+    filter = '',
+    onNavigate,
+}: {
+    /** Narrows the list to matching names. Empty means "show everyone". */
+    filter?: string;
+    onNavigate?: () => void;
+}) {
+    const workspace = useWorkspace();
+    const currentUser = useCurrentUser();
+    const { groups: allGroups } = useSidebarConversations();
+    const allPeople = useSidebarPeople();
+    const activeConversationId = useActiveConversationId();
+
+    const [composing, setComposing] = useState(false);
+
+    /*
+     * Filtered here rather than on the server. The whole roster is already on
+     * the shared prop — it is what the sidebar renders — so a request per
+     * keystroke would fetch a list the client is holding, and the results would
+     * arrive a network round trip after the letter that asked for them.
+     */
+    const term = filter.trim().toLocaleLowerCase();
+
+    const { groups, people } = useMemo(() => {
+        if (term === '') {
+            return { groups: allGroups, people: allPeople };
+        }
+
+        const matches = (text: string | null | undefined) =>
+            (text ?? '').toLocaleLowerCase().includes(term);
+
+        return {
+            groups: allGroups.filter((group) => matches(group.display_name)),
+            people: allPeople.filter(
+                (person) =>
+                    matches(person.user.name) || matches(person.user.username),
+            ),
+        };
+    }, [allGroups, allPeople, term]);
+
+    return (
+        <>
+            <NewMessageDialog
+                workspaceSlug={workspace.slug}
+                open={composing}
+                onOpenChange={setComposing}
+            />
+
+            <SidebarSection
+                title="Direct messages"
+                action={
+                    workspace.abilities.start_conversations ? (
+                        <button
+                            type="button"
+                            onClick={() => setComposing(true)}
+                            className="rounded-md p-1 hover:bg-sidebar-accent"
+                        >
+                            <Plus aria-hidden="true" className="size-4" />
+                            <span className="sr-only">Start a new message</span>
+                        </button>
+                    ) : null
+                }
+            >
+                {groups.length === 0 && people.length === 0 ? (
+                    term === '' ? (
+                        <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                            {workspace.abilities.start_conversations
+                                ? 'Nobody else is in this workspace yet.'
+                                : 'You have no direct messages.'}
+                        </p>
+                    ) : (
+                        /*
+                         * Nobody by that name — which is a different answer from
+                         * "nothing said that", and the reader may well have
+                         * meant the second. The way to it is offered rather than
+                         * silently substituted: this box searches people, and
+                         * that page searches what people wrote.
+                         */
+                        <div className="px-2 py-1.5">
+                            <p className="text-xs text-muted-foreground">
+                                No person or group matches “{filter.trim()}”.
+                            </p>
+
+                            <Link
+                                href={searchIndex.url(workspace.slug, {
+                                    query: { q: filter.trim() },
+                                })}
+                                onClick={onNavigate}
+                                className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline"
+                            >
+                                <Search aria-hidden="true" className="size-3" />
+                                Search messages instead
+                            </Link>
+                        </div>
+                    )
+                ) : (
+                    <ul className="space-y-0.5">
+                        {/*
+                         * Groups above people. A group is a room somebody
+                         * deliberately made, so it belongs with the other
+                         * things you navigate to; the roster underneath is
+                         * a directory you scan, and it is the longer list.
+                         */}
+                        {groups.map((conversation) => (
+                            <li key={conversation.id}>
+                                <ConversationRow
+                                    conversation={conversation}
+                                    workspaceSlug={workspace.slug}
+                                    viewerId={currentUser?.id ?? null}
+                                    isActive={
+                                        conversation.id === activeConversationId
+                                    }
+                                    onNavigate={onNavigate}
+                                />
+                            </li>
+                        ))}
+
+                        {people.map((person) => (
+                            <li key={person.user.id}>
+                                <PersonRow
+                                    person={person}
+                                    workspaceSlug={workspace.slug}
+                                    isActive={
+                                        person.conversation !== null &&
+                                        person.conversation.id ===
+                                            activeConversationId
+                                    }
+                                    onNavigate={onNavigate}
+                                />
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </SidebarSection>
+        </>
     );
 }
 
@@ -505,8 +617,6 @@ function SearchButton({ onNavigate }: { onNavigate?: () => void }) {
     const workspace = useWorkspace();
     const href = searchIndex.url(workspace.slug);
 
-    useSearchShortcut(href);
-
     return (
         <Link
             href={href}
@@ -522,6 +632,71 @@ function SearchButton({ onNavigate }: { onNavigate?: () => void }) {
                 ⌘K
             </kbd>
         </Link>
+    );
+}
+
+/**
+ * Narrowing the DM list by name.
+ *
+ * # Why this is not the search box
+ *
+ * It occupies the same slot as {@see SearchButton}, and does something entirely
+ * different: global search is a navigation that looks through everything anyone
+ * has *written*, while this filters the list already in front of you down to the
+ * person you are looking for. Sending "ada" to the search page from here would
+ * answer a question about messages when the question was about a name — and it
+ * would cost a page load to do it.
+ *
+ * So it filters as you type, with no request and no navigation, and the way to
+ * the other kind of search is offered when nothing here matches.
+ */
+function DirectMessageFilter({
+    value,
+    onChange,
+}: {
+    value: string;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <div
+            className={cn(
+                'flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-background/60 px-2.5 py-2',
+                'transition-colors focus-within:bg-background',
+            )}
+        >
+            <Search
+                aria-hidden="true"
+                className="size-4 shrink-0 text-muted-foreground"
+            />
+
+            <input
+                type="text"
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                // Escape clears rather than blurs: the box is a filter, so the
+                // reader wants their whole list back, not the cursor moved.
+                onKeyDown={(event) => {
+                    if (event.key === 'Escape' && value !== '') {
+                        event.preventDefault();
+                        onChange('');
+                    }
+                }}
+                placeholder="Find a person or group"
+                aria-label="Filter direct messages"
+                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+
+            {value !== '' && (
+                <button
+                    type="button"
+                    onClick={() => onChange('')}
+                    className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                    <X aria-hidden="true" className="size-3.5" />
+                    <span className="sr-only">Clear the filter</span>
+                </button>
+            )}
+        </div>
     );
 }
 
@@ -612,7 +787,7 @@ function SidebarLink({
     active = false,
     onNavigate,
 }: {
-    icon: typeof AtSign;
+    icon: LucideIcon;
     label: string;
     badge?: number;
     /** Omitted while the destination is still to come. */

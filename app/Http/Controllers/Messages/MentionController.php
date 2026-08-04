@@ -3,11 +3,8 @@
 namespace App\Http\Controllers\Messages;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\ContainerSummary;
-use App\Http\Resources\MessageResource;
-use App\Models\Mention;
 use App\Models\Workspace;
-use App\Services\MessageContainers;
+use App\Services\ActivityFeed;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -18,53 +15,18 @@ use Inertia\Response as InertiaResponse;
  * A history rather than a queue: rows are stamped read, never deleted, so this
  * still answers "what was I asked about last week" after the badge has cleared.
  *
- * Scoped by `mentioned_user_id`, which is the only scoping it needs — a mention
- * row exists precisely because {@see App\Actions\Messages\SyncMentions} already
- * established that this person could see the message when it was written.
- * Messages since deleted are excluded rather than rendered as a gap.
+ * The list itself is built by {@see ActivityFeed}, which the Activity page's
+ * Mentions tab reads too — this page is the same feed at its own address, and
+ * the two must not be able to disagree about what counts as a mention.
  */
 class MentionController extends Controller
 {
-    public function __construct(private readonly MessageContainers $containers) {}
+    public function __construct(private readonly ActivityFeed $feed) {}
 
     public function index(Workspace $workspace, Request $request): InertiaResponse
     {
-        $mentions = Mention::query()
-            ->for($request->user(), $workspace)
-            ->whereHas('message')
-            ->with([
-                'message' => fn ($query) => $query->withTimelineRelations()->with([
-                    'channel',
-                    'conversation',
-                ]),
-            ])
-            // Newest first, by the mention's own id: it is monotonic, and two
-            // mentions written in the same instant would otherwise sort at random.
-            ->orderByDesc('id')
-            ->limit((int) config('snack.mentions.list_limit', 50))
-            ->get();
-
-        // These rows come from anywhere in the workspace, so the policy checks
-        // below would otherwise walk each container's workspace and membership
-        // one message at a time.
-        $this->containers->prime($mentions->pluck('message'), $request->user());
-
         return Inertia::render('mentions/index', [
-            /*
-             * No null guard on `message`: `whereHas` runs through the relation,
-             * which carries Message's soft-delete scope, so a mention whose
-             * message was deleted is already excluded from the query.
-             */
-            'mentions' => $mentions
-                ->map(fn (Mention $mention): array => [
-                    'id' => $mention->id,
-                    'type' => $mention->mention_type->value,
-                    'is_read' => $mention->isRead(),
-                    'message' => (new MessageResource($mention->message))->resolve($request),
-                    'container' => ContainerSummary::for($mention->message),
-                ])
-                ->values()
-                ->all(),
+            'mentions' => $this->feed->mentions($workspace, $request->user(), $request),
         ]);
     }
 }

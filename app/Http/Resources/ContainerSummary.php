@@ -2,6 +2,8 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Channel;
+use App\Models\Conversation;
 use App\Models\Message;
 
 /**
@@ -26,25 +28,34 @@ final class ContainerSummary
      */
     public static function for(Message $message): ?array
     {
-        if ($message->isInChannel()) {
-            $channel = $message->channel;
+        return self::forContainer(
+            $message->isInChannel() ? $message->channel : $message->conversation,
+        );
+    }
 
-            return $channel === null ? null : [
+    /**
+     * The same summary for anything else that hangs off a container — a huddle,
+     * whose history has to say where each call happened.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function forContainer(Channel|Conversation|null $container): ?array
+    {
+        if ($container instanceof Channel) {
+            return [
                 'kind' => 'channel',
-                'id' => $channel->id,
-                'name' => $channel->name,
-                'slug' => $channel->slug,
-                'type' => $channel->type->value,
+                'id' => $container->id,
+                'name' => $container->name,
+                'slug' => $container->slug,
+                'type' => $container->type->value,
             ];
         }
 
-        $conversation = $message->conversation;
-
-        return $conversation === null ? null : [
+        return $container === null ? null : [
             'kind' => 'conversation',
             // The opaque public id, never the primary key.
-            'id' => $conversation->public_id,
-            'type' => $conversation->type->value,
+            'id' => $container->public_id,
+            'type' => $container->type->value,
         ];
     }
 }

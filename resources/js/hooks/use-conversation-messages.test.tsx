@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { withQueryClient } from '@/tests/query';
 import type { Conversation, Message, MessagePage, SnackUser } from '@/types';
 
 /**
@@ -93,18 +94,22 @@ function setup(
     overrides: Partial<Conversation> = {},
     initial: Partial<MessagePage> = {},
 ) {
-    return renderHook(() =>
-        useConversationMessages({
-            conversation: { ...conversation, ...overrides },
-            workspaceSlug: 'snack-hq',
-            initial: {
-                messages: [makeMessage(1)],
-                has_more: false,
-                next_cursor: null,
-                ...initial,
-            },
-            currentUser,
-        }),
+    return renderHook(
+        () =>
+            useConversationMessages({
+                conversation: { ...conversation, ...overrides },
+                workspaceSlug: 'snack-hq',
+                initial: {
+                    messages: [makeMessage(1)],
+                    has_more: false,
+                    next_cursor: null,
+                    ...initial,
+                },
+                currentUser,
+            }),
+        // The timeline keeps its messages in the query cache; without a client
+        // above it the hook has nowhere to read or write them.
+        { wrapper: withQueryClient() },
     );
 }
 

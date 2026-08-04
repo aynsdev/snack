@@ -287,6 +287,25 @@ export function MessageList({
 
         opened.current = true;
         virtualizer.scrollToEnd();
+
+        /*
+         * Then the container's own bottom, for the same reason the follow-on-
+         * append below does it by hand: `scrollToEnd` lands on the end of the
+         * virtual *window*, which sits above the list's bottom padding — so a
+         * timeline opened this way stops a little short of its newest message.
+         *
+         * Deferred by a frame because the rows the virtualizer just revealed are
+         * measured after this effect, and an attachment or an image resolves
+         * taller than its estimate; reading `scrollHeight` now would pin the
+         * view to a height the list is about to exceed.
+         */
+        const element = container.current;
+
+        if (element !== null) {
+            requestAnimationFrame(() => {
+                element.scrollTop = element.scrollHeight;
+            });
+        }
     }, [rows.sent.length, virtualizer]);
 
     /*
