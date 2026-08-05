@@ -1,4 +1,5 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { withQueryClient } from '@/tests/query';
 import type { Channel, Message, MessagePage, SnackUser } from '@/types';
@@ -385,6 +386,74 @@ describe('useChannelMessages', () => {
         });
 
         expect(result.current.messages[0].body).toBe('message 1');
+    });
+
+    /*
+     * The read pointer, reported the way the timeline actually reports it.
+     *
+     * MessageList decides the reader is at the bottom and calls `markAsRead`
+     * from its own mount effect — and a child's effects run before its parent's.
+     * While the newest displayed id was recorded in an effect here, that call
+     * arrived first and found nothing to report: opening a channel with unread
+     * messages never moved the pointer, and the sidebar badge stayed lit until
+     * the next message happened to arrive.
+     */
+    it('reports the read pointer when a child marks it read on mount', () => {
+        function Child({ markAsRead }: { markAsRead: () => void }) {
+            useEffect(() => markAsRead(), [markAsRead]);
+
+            return null;
+        }
+
+        function Timeline() {
+            const timeline = useChannelMessages({
+                channel,
+                workspaceSlug: 'snack-hq',
+                initial: {
+                    messages: [makeMessage(1), makeMessage(2)],
+                    has_more: false,
+                    next_cursor: null,
+                },
+                currentUser,
+            });
+
+            return <Child markAsRead={timeline.markAsRead} />;
+        }
+
+        const Wrapper = withQueryClient();
+
+        render(
+            <Wrapper>
+                <Timeline />
+            </Wrapper>,
+        );
+
+        expect(api.post).toHaveBeenCalledWith(
+            '/w/snack-hq/channels/general/read',
+            { last_read_message_id: 2 },
+        );
+    });
+
+    it('reports the read pointer once per position', () => {
+        const { result } = setup();
+
+        act(() => result.current.markAsRead());
+        act(() => result.current.markAsRead());
+
+        // The reader reaches the bottom on every scroll event once they are
+        // there, so a repeat is the normal case rather than the odd one.
+        expect(api.post).toHaveBeenCalledTimes(1);
+
+        act(() => {
+            listeners.get('.message.sent')?.({ message: makeMessage(2) });
+        });
+
+        act(() => result.current.markAsRead());
+
+        expect(api.post).toHaveBeenLastCalledWith(
+            '/w/snack-hq/channels/general/read',
+            { last_read_message_id: 2 },
+        );
     });
 
     it('keeps the history it loaded when the timeline is unmounted', async () => {

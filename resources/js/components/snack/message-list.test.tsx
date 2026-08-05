@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageList } from '@/components/snack/message-list';
 import type { Message, PendingMessage, SnackUser } from '@/types';
@@ -188,5 +188,44 @@ describe('MessageList', () => {
         expect(container.querySelector('.snack-scroll')).toHaveClass(
             '[overflow-anchor:none]',
         );
+    });
+
+    /*
+     * Opening a container is the commonest way a badge gets cleared, so the
+     * list has to report the read on mount and not only when the next message
+     * arrives.
+     */
+    it('reports the read pointer as soon as it opens', () => {
+        const onReachBottom = vi.fn();
+
+        renderList({ onReachBottom });
+
+        expect(onReachBottom).toHaveBeenCalled();
+    });
+
+    /*
+     * And again when the reader scrolls back down. Someone who walked up
+     * through unread history has read it; before this, the pointer only moved
+     * when a *new* message arrived while they happened to be at the bottom, so
+     * the badge stayed lit until somebody else said something.
+     */
+    it('reports the read pointer when the reader scrolls back to the bottom', () => {
+        const onReachBottom = vi.fn();
+
+        const { container } = renderList({ onReachBottom });
+
+        const scroller = container.querySelector('.snack-scroll');
+
+        if (scroller === null) {
+            throw new Error('The timeline rendered no scroll container.');
+        }
+
+        onReachBottom.mockClear();
+
+        // jsdom performs no layout, so the bottom is where a zero scroll height
+        // and the faked viewport put it: `scrollTop` of zero already qualifies.
+        fireEvent.scroll(scroller);
+
+        expect(onReachBottom).toHaveBeenCalled();
     });
 });

@@ -167,6 +167,16 @@ class WorkspaceNavigator
      * Both queries are fixed cost: one for the roster, one for the viewer's
      * direct conversations, joined in memory.
      *
+     * # Why the order is the name and nothing else
+     *
+     * This used to lift recently-active threads to the top, the way a list of
+     * conversations is ordered. A roster is not that list: every message sent or
+     * received yanked a person out of the alphabet and dropped them at the top
+     * while the reader was looking at the sidebar, so rows moved under the
+     * cursor and the same name was in a different place every time. What
+     * recency was there to say — "this one wants you" — is already said by the
+     * unread badge and the bold row, in place, without moving anything.
+     *
      * @return array<int, array<string, mixed>>
      */
     public function sidebarPeople(Workspace $workspace, User $user): array
@@ -177,7 +187,7 @@ class WorkspaceNavigator
 
         $direct = $this->directConversationsByCounterpart($workspace, $user);
 
-        $people = $workspace->activeUsers()
+        return $workspace->activeUsers()
             ->whereKeyNot($user->id)
             ->orderBy('users.name')
             ->limit((int) config('snack.conversations.people_limit', 100))
@@ -193,10 +203,6 @@ class WorkspaceNavigator
                 ];
             })
             ->all();
-
-        $this->sortPeople($people);
-
-        return $people;
     }
 
     /**
@@ -224,39 +230,6 @@ class WorkspaceNavigator
             // would file every such row under the same empty key.
             ->filter(fn (Conversation $conversation): bool => $conversation->counterparts($user)->isNotEmpty())
             ->keyBy(fn (Conversation $conversation): int => $conversation->counterparts($user)->first()->id);
-    }
-
-    /**
-     * Recently active threads first, then everyone else by name.
-     *
-     * The roster is alphabetical underneath, but a DM list that ignored
-     * activity would bury the person you have been talking to all morning
-     * somewhere under the Ms. This preserves the ordering the list had when it
-     * held conversations alone, and appends the rest of the workspace to it.
-     *
-     * Sorting in memory rather than in SQL because the two halves come from
-     * different queries; the roster is bounded by `people_limit`, so this is
-     * over a list that is small by construction.
-     *
-     * @param  array<int, array<string, mixed>>  $people
-     */
-    private function sortPeople(array &$people): void
-    {
-        usort($people, function (array $left, array $right): int {
-            // Both are UTC ISO-8601, so they compare lexically.
-            $leftAt = $left['conversation']['last_message_at'] ?? null;
-            $rightAt = $right['conversation']['last_message_at'] ?? null;
-
-            if ($leftAt !== $rightAt) {
-                return match (true) {
-                    $leftAt === null => 1,
-                    $rightAt === null => -1,
-                    default => strcmp((string) $rightAt, (string) $leftAt),
-                };
-            }
-
-            return strcasecmp((string) $left['user']['name'], (string) $right['user']['name']);
-        });
     }
 
     /**
