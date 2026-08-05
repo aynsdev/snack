@@ -355,6 +355,21 @@ export function MessageList({
      * optional.
      *
      * The container's own scroll height has no such blind spot.
+     *
+     * # Why total size is a dependency
+     *
+     * An arriving row enters the list at `ESTIMATED_ROW_HEIGHT` and is measured
+     * afterwards, so the height this effect reads on the arrival itself is a
+     * guess. `anchorTo: 'end'` corrects for that when the reader is at the end —
+     * it re-applies the difference to `scrollTop` as each row is measured — and
+     * that correction double-counts, because the browser has *already* clamped
+     * `scrollTop` to the shrunken content by the time the measurement callback
+     * runs. A row measuring shorter than its estimate therefore lands the reader
+     * that far above the bottom, and the next arrival snaps them back down: at a
+     * conversational pace, a visible twitch on every message.
+     *
+     * Re-running here on total size settles it. The correction and this effect
+     * both happen before paint, so the reader sees the bottom either way.
      */
     useLayoutEffect(() => {
         const element = container.current;
@@ -364,7 +379,7 @@ export function MessageList({
         }
 
         element.scrollTop = element.scrollHeight;
-    }, [newestId, pending.length]);
+    }, [newestId, pending.length, totalSize]);
 
     /** Load older history as the top of the list comes into view. */
     useEffect(() => {
@@ -422,10 +437,22 @@ export function MessageList({
                 </div>
             )}
 
+            {/*
+             * `overflow-anchor: none` because this list has three things that
+             * want to move the scroll position — the virtualizer's end
+             * anchoring, the prepend correction below, and the follow-on-arrival
+             * above — and the browser's own scroll anchoring is a fourth that
+             * none of them know about. It shifts `scrollTop` whenever content
+             * above its chosen anchor node resizes, which here is constantly:
+             * every row swapped in or out of the window, and every estimate
+             * replaced by a measurement. The corrections written by hand all
+             * read `scrollTop` and `scrollHeight` expecting nobody else to have
+             * touched them, so what the browser adds lands on top as drift.
+             */}
             <div
                 ref={container}
                 onScroll={recordPosition}
-                className="snack-scroll min-h-0 flex-1 overflow-y-auto"
+                className="snack-scroll min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
             >
                 <div ref={masthead}>
                     {hasMore && (
