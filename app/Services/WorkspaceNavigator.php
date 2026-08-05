@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\ConversationType;
 use App\Http\Resources\ChannelResource;
 use App\Http\Resources\ConversationResource;
+use App\Http\Resources\ProjectResource;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\WorkspaceResource;
 use App\Models\Channel;
@@ -87,6 +88,29 @@ class WorkspaceNavigator
             ->get();
 
         return ChannelResource::collection($channels)->resolve();
+    }
+
+    /**
+     * The projects shown in the sidebar: the ones the user is actually on.
+     *
+     * Membership rather than the whole workspace, even though anyone who is not
+     * a guest may *open* any board — see {@see App\Policies\ProjectPolicy}. The
+     * sidebar is a list of places you go, and a company's every board in it
+     * would bury the two you work on. The rest are one click away in the project
+     * list, which is what that page is for.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function sidebarProjects(Workspace $workspace, User $user): array
+    {
+        $projects = $workspace->projects()
+            ->notArchived()
+            ->whereMember($user)
+            ->with(['members' => fn ($query) => $query->where('user_id', $user->id)])
+            ->orderBy('name')
+            ->get();
+
+        return ProjectResource::collection($projects)->resolve(request());
     }
 
     /**
@@ -254,6 +278,12 @@ class WorkspaceNavigator
             // — huddles, container labels, and unread lookups all read it — and
             // the sidebar renders the groups from it alongside these people.
             'people' => $this->sidebarPeople($workspace, $user),
+
+            // The projects sidebar. Shared with every workspace page for the
+            // reason the channel list is: the sidebar is part of the shell, and
+            // a list that only loaded on project pages would appear to pop into
+            // existence when you walked into that section.
+            'projects' => $this->sidebarProjects($workspace, $user),
 
             'unread' => [
                 // Cast so an empty PHP array serializes as `{}` rather than

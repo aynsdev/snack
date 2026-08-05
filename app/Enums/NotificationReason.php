@@ -33,12 +33,22 @@ enum NotificationReason: string
     /** A reply landed in a thread you follow. */
     case ThreadReply = 'thread_reply';
 
+    /**
+     * A task on a project board was put in your name.
+     *
+     * The one reason here that is not about a message, and it belongs for the
+     * same test every other case passes: it is *directed*. Somebody chose you
+     * specifically, so the row count follows decisions rather than traffic.
+     */
+    case TaskAssigned = 'task_assigned';
+
     public function label(): string
     {
         return match ($this) {
             self::Mention => 'Mention',
             self::DirectMessage => 'Direct message',
             self::ThreadReply => 'Thread reply',
+            self::TaskAssigned => 'Task assigned',
         };
     }
 
@@ -51,6 +61,7 @@ enum NotificationReason: string
             self::Mention => "{$actorName} mentioned you",
             self::DirectMessage => "{$actorName} sent you a message",
             self::ThreadReply => "{$actorName} replied in a thread",
+            self::TaskAssigned => "{$actorName} assigned you a task",
         };
     }
 

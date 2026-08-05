@@ -1,9 +1,13 @@
 <?php
 
+use App\Actions\Projects\CreateProject;
 use App\Enums\ChannelRole;
 use App\Enums\ChannelType;
+use App\Enums\ColumnCategory;
 use App\Enums\MemberStatus;
+use App\Enums\ProjectRole;
 use App\Enums\WorkspaceRole;
+use App\Events\BoardChanged;
 use App\Events\ChannelActivity;
 use App\Events\ChannelCreated;
 use App\Events\ChannelMembershipGranted;
@@ -20,13 +24,17 @@ use App\Events\MessageUpdated;
 use App\Events\PinChanged;
 use App\Events\PresenceChanged;
 use App\Events\ReactionChanged;
+use App\Events\TaskChanged;
 use App\Events\ThreadActivity;
 use App\Events\WorkspaceMemberJoined;
+use App\Models\BoardColumn;
 use App\Models\Channel;
 use App\Models\ChannelMember;
 use App\Models\Conversation;
 use App\Models\Huddle;
 use App\Models\Message;
+use App\Models\Project;
+use App\Models\ProjectMember;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
@@ -71,6 +79,8 @@ pest()->extend(TestCase::class)
             PinChanged::class,
             PresenceChanged::class,
             ReactionChanged::class,
+            TaskChanged::class,
+            BoardChanged::class,
             ThreadActivity::class,
             WorkspaceMemberJoined::class,
 
@@ -181,6 +191,52 @@ function makeChannel(
     return Channel::factory()
         ->forWorkspace($workspace)
         ->create([...$attributes, 'type' => $type]);
+}
+
+/**
+ * Create a project, through the action rather than the factory.
+ *
+ * A project made straight from its factory has no columns and no members, and
+ * neither of those is a state the application can produce — a task needs a
+ * column to be in, and a project with no members is a board nobody may work.
+ * Going through {@see CreateProject} means every test starts from a project that
+ * could actually exist.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function makeProject(Workspace $workspace, ?User $creator = null, array $attributes = []): Project
+{
+    $creator ??= joinWorkspace($workspace);
+
+    return app(CreateProject::class)->handle(
+        workspace: $workspace,
+        creator: $creator,
+        attributes: [...['name' => 'Pedicab Web Api'], ...$attributes],
+    );
+}
+
+/**
+ * Put a user on a project.
+ */
+function addToProject(Project $project, User $user, ProjectRole $role = ProjectRole::Member): ProjectMember
+{
+    $membership = ProjectMember::factory()->create([
+        'project_id' => $project->id,
+        'user_id' => $user->id,
+        'role' => $role,
+    ]);
+
+    $project->unsetRelation('members');
+
+    return $membership;
+}
+
+/**
+ * A project's column of a given category — the ones the starting board has.
+ */
+function projectColumn(Project $project, ColumnCategory $category): BoardColumn
+{
+    return $project->columns()->where('category', $category->value)->firstOrFail();
 }
 
 /**

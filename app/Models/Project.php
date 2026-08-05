@@ -1,0 +1,265 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\ProjectRole;
+use Database\Factories\ProjectFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\RouteKey;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
+
+/**
+ * A board, a backlog, and the people who work them.
+ *
+ * Addressed by slug like a channel, and referenced by `key` like a Jira project:
+ * the slug is what the URL carries, the key is what people type into a message.
+ *
+ * @property int $id
+ * @property int $workspace_id
+ * @property int|null $created_by
+ * @property string $name
+ * @property string $slug
+ * @property string $key
+ * @property string|null $description
+ * @property string $color
+ * @property bool $uses_sprints
+ * @property bool $is_archived
+ * @property int $next_task_number
+ * @property array<string, mixed> $card_fields
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read Workspace $workspace
+ */
+#[Fillable([
+    'workspace_id', 'created_by', 'name', 'slug', 'key', 'description',
+    'color', 'uses_sprints', 'is_archived', 'card_fields',
+])]
+#[RouteKey('slug')]
+class Project extends Model
+{
+    /** @use HasFactory<ProjectFactory> */
+    use HasFactory;
+
+    /**
+     * What a card shows, when the project has not said otherwise.
+     *
+     * Read through {@see cardFields()} rather than merged on write, so a toggle
+     * added in a later release appears on every existing project instead of
+     * silently defaulting to false for all of them.
+     *
+     * @var array<string, bool>
+     */
+    public const CARD_FIELD_DEFAULTS = [
+        'type' => true,
+        'key' => true,
+        'priority' => true,
+        'assignee' => true,
+        'labels' => true,
+        'story_points' => false,
+        'due_on' => false,
+        'epic' => true,
+    ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'uses_sprints' => 'boolean',
+            'is_archived' => 'boolean',
+            'next_task_number' => 'integer',
+            'card_fields' => 'array',
+        ];
+    }
+
+    // -- Relationships -------------------------------------------------------
+
+    /**
+     * @return BelongsTo<Workspace, $this>
+     */
+    public function workspace(): BelongsTo
+    {
+        return $this->belongsTo(Workspace::class);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * @return HasMany<ProjectMember, $this>
+     */
+    public function members(): HasMany
+    {
+        return $this->hasMany(ProjectMember::class);
+    }
+
+    /**
+     * @return BelongsToMany<User, $this>
+     */
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'project_members')
+            ->using(ProjectMember::class)
+            ->withPivot(['role', 'joined_at'])
+            ->withTimestamps();
+    }
+
+    /**
+     * @return HasMany<BoardColumn, $this>
+     */
+    public function columns(): HasMany
+    {
+        return $this->hasMany(BoardColumn::class)->orderBy('position');
+    }
+
+    /**
+     * @return HasMany<Sprint, $this>
+     */
+    public function sprints(): HasMany
+    {
+        return $this->hasMany(Sprint::class);
+    }
+
+    /**
+     * @return HasMany<Task, $this>
+     */
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
+    }
+
+    /**
+     * @return HasMany<TaskLabel, $this>
+     */
+    public function labels(): HasMany
+    {
+        return $this->hasMany(TaskLabel::class)->orderBy('name');
+    }
+
+    // -- Membership ----------------------------------------------------------
+
+    public function membershipFor(User $user): ?ProjectMember
+    {
+        if ($this->relationLoaded('members')) {
+            return $this->members->firstWhere('user_id', $user->id);
+        }
+
+        return $this->members()->where('user_id', $user->id)->first();
+    }
+
+    public function hasMember(User $user): bool
+    {
+        return $this->membershipFor($user) !== null;
+    }
+
+    public function roleFor(User $user): ?ProjectRole
+    {
+        return $this->membershipFor($user)?->role;
+    }
+
+    // -- Board ---------------------------------------------------------------
+
+    /**
+     * The sprint the board is currently drawing, or null when there is none.
+     *
+     * Null is an ordinary state, not an error: a kanban project never has one,
+     * and a scrum project between sprints has finished the last and not yet
+     * started the next. Both render the same way — see {@see boardTasks()}.
+     */
+    public function activeSprint(): ?Sprint
+    {
+        if ($this->relationLoaded('sprints')) {
+            return $this->sprints->first(fn (Sprint $sprint): bool => $sprint->isActive());
+        }
+
+        return $this->sprints()->active()->first();
+    }
+
+    /**
+     * What the board shows.
+     *
+     * A scrum project shows the active sprint and nothing else — that is the
+     * commitment the team made, and putting the backlog on the board would undo
+     * it. A kanban project has no sprints at all, so the board is everything
+     * that is not finished and archived away.
+     *
+     * @return Builder<Task>
+     */
+    public function boardTasks(): Builder
+    {
+        $query = $this->tasks()->getQuery();
+
+        if (! $this->uses_sprints) {
+            return $query;
+        }
+
+        $sprint = $this->activeSprint();
+
+        // No active sprint means an empty board rather than the backlog: the
+        // board answers "what are we working on now", and the honest answer
+        // during planning is "nothing yet".
+        return $query->where('sprint_id', $sprint?->id ?? 0);
+    }
+
+    /**
+     * Which fields the cards on this board draw, defaults filled in.
+     *
+     * @return array<string, bool>
+     */
+    public function cardFields(): array
+    {
+        $stored = array_filter(
+            $this->card_fields,
+            static fn (mixed $value, string $key): bool => is_bool($value)
+                && array_key_exists($key, self::CARD_FIELD_DEFAULTS),
+            ARRAY_FILTER_USE_BOTH,
+        );
+
+        return [...self::CARD_FIELD_DEFAULTS, ...$stored];
+    }
+
+    /**
+     * The reference a task in this project is quoted by — "PWA-1499".
+     */
+    public function reference(int $number): string
+    {
+        return "{$this->key}-{$number}";
+    }
+
+    // -- Scopes --------------------------------------------------------------
+
+    /**
+     * @param  Builder<$this>  $query
+     */
+    public function scopeNotArchived(Builder $query): void
+    {
+        $query->where('is_archived', false);
+    }
+
+    /**
+     * The projects a person can see: the ones they are on.
+     *
+     * Deliberately membership rather than the whole workspace. A project is a
+     * working surface, not a directory — see {@see App\Policies\ProjectPolicy},
+     * which is the authoritative version of this rule and lets workspace admins
+     * through as well so an unowned project is never stranded.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeWhereMember(Builder $query, User $user): void
+    {
+        $query->whereHas('members', fn (Builder $members) => $members->where('user_id', $user->id));
+    }
+}

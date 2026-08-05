@@ -136,6 +136,20 @@ class User extends Authenticatable implements PasskeyUser
     }
 
     /**
+     * The projects this person is on — which is also the set they can be
+     * assigned work in.
+     *
+     * @return BelongsToMany<Project, $this, ProjectMember>
+     */
+    public function projects(): BelongsToMany
+    {
+        return $this->belongsToMany(Project::class, 'project_members')
+            ->using(ProjectMember::class)
+            ->withPivot(['role', 'joined_at'])
+            ->withTimestamps();
+    }
+
+    /**
      * @return BelongsToMany<Conversation, $this, ConversationParticipant>
      */
     public function conversations(): BelongsToMany

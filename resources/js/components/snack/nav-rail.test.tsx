@@ -62,6 +62,7 @@ function mockWorkspace(unread: Partial<UnreadState> = {}) {
                             administer: false,
                             manage_members: false,
                             create_channels: true,
+                            create_projects: true,
                             start_conversations: true,
                             mention_everyone: false,
                             view_audit_logs: false,
@@ -71,6 +72,7 @@ function mockWorkspace(unread: Partial<UnreadState> = {}) {
                     channels: [],
                     conversations: [],
                     people: [],
+                    projects: [],
                     unread: {
                         channels: {},
                         conversations: {},
@@ -132,6 +134,10 @@ describe('NavRail', () => {
             'href',
             '/w/snack-hq/files',
         );
+        expect(screen.getByRole('link', { name: /Projects/ })).toHaveAttribute(
+            'href',
+            '/w/snack-hq/projects',
+        );
     });
 
     it('announces what is coming without offering a link to it', () => {
@@ -139,15 +145,30 @@ describe('NavRail', () => {
 
         renderRail();
 
-        for (const label of ['Assets', 'Tasks']) {
-            // A labelled gap answers "where do we keep the logo?" honestly. A
-            // link would answer it with a broken page.
-            expect(screen.queryByRole('link', { name: label })).toBeNull();
-            expect(screen.getByRole('button', { name: label })).toHaveAttribute(
-                'aria-disabled',
-                'true',
-            );
-        }
+        // A labelled gap answers "where do we keep the logo?" honestly. A link
+        // would answer it with a broken page.
+        expect(screen.queryByRole('link', { name: 'Assets' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Assets' })).toHaveAttribute(
+            'aria-disabled',
+            'true',
+        );
+    });
+
+    it('marks a board as Projects', () => {
+        currentUrl.value = '/w/snack-hq/projects/pwa-board';
+        mockWorkspace();
+
+        renderRail();
+
+        // The rail names a section, and every project view — board, backlog,
+        // settings — is inside it.
+        expect(screen.getByRole('link', { name: /Projects/ })).toHaveAttribute(
+            'aria-current',
+            'page',
+        );
+        expect(screen.getByRole('link', { name: /Home/ })).not.toHaveAttribute(
+            'aria-current',
+        );
     });
 
     it('marks a channel page as Home', () => {

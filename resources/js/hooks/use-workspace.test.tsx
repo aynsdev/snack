@@ -100,6 +100,7 @@ function makeCurrent(
                 administer: false,
                 manage_members: false,
                 create_channels: true,
+                create_projects: true,
                 start_conversations: true,
                 mention_everyone: false,
                 view_audit_logs: false,
@@ -109,6 +110,7 @@ function makeCurrent(
         channels,
         conversations,
         people,
+        projects: [],
         unread: {
             channels: { 1: { messages: 3, mentions: 1 } },
             conversations: { conv_01HZX: { messages: 2, mentions: 2 } },

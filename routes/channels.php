@@ -3,6 +3,7 @@
 use App\Models\Channel;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\Project;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Broadcast;
@@ -94,6 +95,31 @@ Broadcast::channel('conversation.{conversationId}', function (User $user, string
     $conversation = Conversation::with('workspace')->where('public_id', $conversationId)->first();
 
     if ($conversation === null || Gate::forUser($user)->denies('view', $conversation)) {
+        return false;
+    }
+
+    return [
+        'id' => $user->id,
+        'name' => $user->name,
+        'username' => $user->username,
+        'avatar_url' => $user->avatarUrl(),
+    ];
+}, ['guards' => ['web']]);
+
+/**
+ * One project's board: cards filed, edited, moved and deleted, plus the rarer
+ * changes to the board's own shape.
+ *
+ * Presence rather than private, so a board can show who else is looking at it —
+ * which on a surface several people drag on at once is the difference between
+ * "the card moved" and "Ana moved the card". Authorization delegates to
+ * ProjectPolicy::view, the same rule that decides whether the page renders at
+ * all; a guest who was never added to the project cannot subscribe.
+ */
+Broadcast::channel('project.{projectId}', function (User $user, string $projectId): array|bool {
+    $project = Project::with('workspace')->find((int) $projectId);
+
+    if ($project === null || Gate::forUser($user)->denies('view', $project)) {
         return false;
     }
 
