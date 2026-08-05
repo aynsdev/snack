@@ -132,7 +132,7 @@ it('does not hang a group conversation off a person', function () {
     expect($people['Cy']['conversation'])->toBeNull();
 });
 
-it('orders recently active threads above the rest of the roster', function () {
+it('keeps the roster in one order however busy a thread gets', function () {
     $workspace = makeWorkspace();
     $owner = joinWorkspace($workspace, $workspace->owner, WorkspaceRole::Owner);
     $owner->update(['name' => 'Zed']);
@@ -150,11 +150,14 @@ it('orders recently active threads above the rest of the roster', function () {
     $this->actingAs($ada);
 
     /*
-     * The people you are actually talking to keep the ordering the DM list had
-     * when it held conversations alone; everyone else is appended by name
-     * rather than interleaved into it, so the roster stays scannable.
+     * By name, and only by name.
+     *
+     * Lifting recent threads to the top moved a row every time a message was
+     * sent or received — the sidebar re-sorted under the reader's cursor, and
+     * the same person was somewhere new each time they looked. The unread badge
+     * says who wants them without anybody having to move.
      */
-    expect(sidebarPersonNames($workspace))->toBe(['Di', 'Cy', 'Bo', 'Zed']);
+    expect(sidebarPersonNames($workspace))->toBe(['Bo', 'Cy', 'Di', 'Zed']);
 });
 
 it('serves the DM home from the props the page already has', function () {

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\ConversationType;
 use App\Http\Resources\ChannelResource;
 use App\Http\Resources\ConversationResource;
+use App\Http\Resources\ProjectResource;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\WorkspaceResource;
 use App\Models\Channel;
@@ -90,6 +91,29 @@ class WorkspaceNavigator
     }
 
     /**
+     * The projects shown in the sidebar: the ones the user is actually on.
+     *
+     * Membership rather than the whole workspace, even though anyone who is not
+     * a guest may *open* any board — see {@see App\Policies\ProjectPolicy}. The
+     * sidebar is a list of places you go, and a company's every board in it
+     * would bury the two you work on. The rest are one click away in the project
+     * list, which is what that page is for.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function sidebarProjects(Workspace $workspace, User $user): array
+    {
+        $projects = $workspace->projects()
+            ->notArchived()
+            ->whereMember($user)
+            ->with(['members' => fn ($query) => $query->where('user_id', $user->id)])
+            ->orderBy('name')
+            ->get();
+
+        return ProjectResource::collection($projects)->resolve(request());
+    }
+
+    /**
      * The user's conversations, most recently active first.
      *
      * Both relations are eager-loaded and each serves one purpose:
@@ -143,6 +167,16 @@ class WorkspaceNavigator
      * Both queries are fixed cost: one for the roster, one for the viewer's
      * direct conversations, joined in memory.
      *
+     * # Why the order is the name and nothing else
+     *
+     * This used to lift recently-active threads to the top, the way a list of
+     * conversations is ordered. A roster is not that list: every message sent or
+     * received yanked a person out of the alphabet and dropped them at the top
+     * while the reader was looking at the sidebar, so rows moved under the
+     * cursor and the same name was in a different place every time. What
+     * recency was there to say — "this one wants you" — is already said by the
+     * unread badge and the bold row, in place, without moving anything.
+     *
      * @return array<int, array<string, mixed>>
      */
     public function sidebarPeople(Workspace $workspace, User $user): array
@@ -153,7 +187,7 @@ class WorkspaceNavigator
 
         $direct = $this->directConversationsByCounterpart($workspace, $user);
 
-        $people = $workspace->activeUsers()
+        return $workspace->activeUsers()
             ->whereKeyNot($user->id)
             ->orderBy('users.name')
             ->limit((int) config('snack.conversations.people_limit', 100))
@@ -169,10 +203,6 @@ class WorkspaceNavigator
                 ];
             })
             ->all();
-
-        $this->sortPeople($people);
-
-        return $people;
     }
 
     /**
@@ -203,39 +233,6 @@ class WorkspaceNavigator
     }
 
     /**
-     * Recently active threads first, then everyone else by name.
-     *
-     * The roster is alphabetical underneath, but a DM list that ignored
-     * activity would bury the person you have been talking to all morning
-     * somewhere under the Ms. This preserves the ordering the list had when it
-     * held conversations alone, and appends the rest of the workspace to it.
-     *
-     * Sorting in memory rather than in SQL because the two halves come from
-     * different queries; the roster is bounded by `people_limit`, so this is
-     * over a list that is small by construction.
-     *
-     * @param  array<int, array<string, mixed>>  $people
-     */
-    private function sortPeople(array &$people): void
-    {
-        usort($people, function (array $left, array $right): int {
-            // Both are UTC ISO-8601, so they compare lexically.
-            $leftAt = $left['conversation']['last_message_at'] ?? null;
-            $rightAt = $right['conversation']['last_message_at'] ?? null;
-
-            if ($leftAt !== $rightAt) {
-                return match (true) {
-                    $leftAt === null => 1,
-                    $rightAt === null => -1,
-                    default => strcmp((string) $rightAt, (string) $leftAt),
-                };
-            }
-
-            return strcasecmp((string) $left['user']['name'], (string) $right['user']['name']);
-        });
-    }
-
-    /**
      * The full navigation payload for a workspace page.
      *
      * @return array<string, mixed>
@@ -254,6 +251,12 @@ class WorkspaceNavigator
             // — huddles, container labels, and unread lookups all read it — and
             // the sidebar renders the groups from it alongside these people.
             'people' => $this->sidebarPeople($workspace, $user),
+
+            // The projects sidebar. Shared with every workspace page for the
+            // reason the channel list is: the sidebar is part of the shell, and
+            // a list that only loaded on project pages would appear to pop into
+            // existence when you walked into that section.
+            'projects' => $this->sidebarProjects($workspace, $user),
 
             'unread' => [
                 // Cast so an empty PHP array serializes as `{}` rather than

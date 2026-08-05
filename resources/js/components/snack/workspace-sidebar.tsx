@@ -20,6 +20,7 @@ import { ConversationListItem } from '@/components/snack/conversation-list-item'
 import { NewMessageDialog } from '@/components/snack/new-message-dialog';
 import { NotificationPermissionPrompt } from '@/components/snack/notification-permission-prompt';
 import { PersonListItem } from '@/components/snack/person-list-item';
+import { ProjectAvatar } from '@/components/snack/projects/project-avatar';
 import {
     Collapsible,
     CollapsibleContent,
@@ -35,6 +36,7 @@ import {
 import {
     useActiveChannelSlug,
     useActiveConversationId,
+    useActiveProjectSlug,
     useIsHuddlesView,
     useIsThreadsView,
 } from '@/hooks/use-active-channel';
@@ -45,6 +47,7 @@ import {
     useSidebarChannels,
     useSidebarConversations,
     useSidebarPeople,
+    useSidebarProjects,
     useUnreadState,
     useWorkspace,
 } from '@/hooks/use-workspace';
@@ -54,6 +57,10 @@ import { index as browseChannels } from '@/routes/channels';
 import { index as huddlesIndex } from '@/routes/huddles';
 import { index as workspaceMembers } from '@/routes/members';
 import { edit as notificationPreferences } from '@/routes/notification-preferences';
+import {
+    board as projectBoard,
+    index as projectsIndex,
+} from '@/routes/projects';
 import { index as searchIndex } from '@/routes/search';
 import { index as threadsIndex } from '@/routes/threads';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
@@ -101,7 +108,9 @@ export function WorkspaceSidebar({
      * the bottom of *this* sidebar must leave this sidebar standing. See
      * {@see useSidebarSection}.
      */
-    const isDirectMessages = useSidebarSection() === 'direct-messages';
+    const section = useSidebarSection();
+    const isDirectMessages = section === 'direct-messages';
+    const isProjects = section === 'projects';
 
     const [composing, setComposing] = useState(false);
     const [dmFilter, setDmFilter] = useState('');
@@ -112,6 +121,38 @@ export function WorkspaceSidebar({
      * wherever you are in the workspace, which is the only reason it exists.
      */
     useSearchShortcut(searchIndex.url(workspace.slug));
+
+    if (isProjects) {
+        /*
+         * Inside Projects the sidebar is the project list, for the reason it is
+         * the DM list inside direct messages: the rail has already said which
+         * part of the workspace you are in, and a channel list beside a board is
+         * a list of rooms none of this work is happening in.
+         */
+        return (
+            <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+                <SidebarHeader
+                    onCompose={() => setComposing(true)}
+                    inDrawer={inDrawer}
+                />
+
+                <NewMessageDialog
+                    workspaceSlug={workspace.slug}
+                    open={composing}
+                    onOpenChange={setComposing}
+                />
+
+                <nav
+                    aria-label="Projects"
+                    className="snack-scroll flex-1 space-y-4 overflow-y-auto px-3 pt-1 pb-4"
+                >
+                    <ProjectSection onNavigate={onNavigate} />
+                </nav>
+
+                <NotificationPermissionPrompt />
+            </div>
+        );
+    }
 
     if (isDirectMessages) {
         return (
@@ -292,6 +333,82 @@ export function WorkspaceSidebar({
 
             <NotificationPermissionPrompt />
         </div>
+    );
+}
+
+/**
+ * The project list: the boards you are on, and the way to the rest.
+ *
+ * Membership rather than every project in the workspace — see
+ * App\Services\WorkspaceNavigator::sidebarProjects(). "Browse projects" at the
+ * bottom is what makes the others reachable, exactly as it is for channels.
+ */
+function ProjectSection({ onNavigate }: { onNavigate?: () => void }) {
+    const workspace = useWorkspace();
+    const projects = useSidebarProjects();
+    const activeProjectSlug = useActiveProjectSlug();
+
+    return (
+        <SidebarSection
+            title="Projects"
+            action={
+                workspace.abilities.create_projects ? (
+                    <Link
+                        href={projectsIndex(workspace.slug)}
+                        onClick={onNavigate}
+                        className="rounded-md p-1 hover:bg-sidebar-accent"
+                    >
+                        <Plus aria-hidden="true" className="size-4" />
+                        <span className="sr-only">
+                            Create or browse projects
+                        </span>
+                    </Link>
+                ) : null
+            }
+        >
+            {projects.length === 0 ? (
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                    You are not on any projects yet.
+                </p>
+            ) : (
+                <ul className="space-y-0.5">
+                    {projects.map((project) => (
+                        <li key={project.id}>
+                            <Link
+                                href={projectBoard([
+                                    workspace.slug,
+                                    project.slug,
+                                ])}
+                                onClick={onNavigate}
+                                aria-current={
+                                    project.slug === activeProjectSlug
+                                        ? 'page'
+                                        : undefined
+                                }
+                                className={cn(
+                                    'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
+                                    project.slug === activeProjectSlug
+                                        ? 'bg-sidebar-accent font-semibold text-foreground'
+                                        : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+                                )}
+                            >
+                                <ProjectAvatar project={project} size="sm" />
+                                <span className="truncate">{project.name}</span>
+                            </Link>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <Link
+                href={projectsIndex(workspace.slug)}
+                onClick={onNavigate}
+                className="mt-0.5 flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent"
+            >
+                <Compass aria-hidden="true" className="size-4" />
+                Browse projects
+            </Link>
+        </SidebarSection>
     );
 }
 

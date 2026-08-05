@@ -163,3 +163,32 @@ it('only lets a user subscribe to their own notification channel', function () {
     subscribeAs($user, "private-App.Models.User.{$user->id}")->assertOk();
     subscribeAs($user, "private-App.Models.User.{$other->id}")->assertForbidden();
 });
+
+it('lets anyone who can read a board subscribe to it', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+    $colleague = joinWorkspace($workspace);
+
+    // Reading a board is open to the workspace, so the live feed of it is too —
+    // the subscription and the page answer to the same rule.
+    subscribeAs($colleague, "presence-project.{$project->id}")->assertOk();
+});
+
+it('refuses a board subscription from a guest who was not added to it', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+    $guest = joinWorkspace($workspace, role: WorkspaceRole::Guest);
+
+    subscribeAs($guest, "presence-project.{$project->id}")->assertForbidden();
+
+    addToProject($project, $guest);
+
+    subscribeAs($guest, "presence-project.{$project->id}")->assertOk();
+});
+
+it('refuses a board subscription from outside the workspace', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+
+    subscribeAs(User::factory()->create(), "presence-project.{$project->id}")->assertForbidden();
+});

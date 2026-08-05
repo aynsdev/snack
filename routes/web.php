@@ -33,6 +33,16 @@ use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\Notifications\NotificationPreferenceController;
 use App\Http\Controllers\Notifications\NotificationReadController;
 use App\Http\Controllers\Presence\PresenceController;
+use App\Http\Controllers\Projects\BacklogController;
+use App\Http\Controllers\Projects\BoardColumnController;
+use App\Http\Controllers\Projects\BoardController;
+use App\Http\Controllers\Projects\ProjectController;
+use App\Http\Controllers\Projects\ProjectMemberController;
+use App\Http\Controllers\Projects\ProjectMembershipController;
+use App\Http\Controllers\Projects\SprintController;
+use App\Http\Controllers\Projects\TaskController;
+use App\Http\Controllers\Projects\TaskLabelController;
+use App\Http\Controllers\Projects\TaskMoveController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\UploadController;
@@ -433,6 +443,120 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::delete('messages/{message}/reactions', [ReactionController::class, 'destroy'])
             ->middleware('throttle:messages')
             ->name('reactions.destroy');
+
+        /*
+         *--------------------------------------------------------------------
+         * Projects
+         *--------------------------------------------------------------------
+         *
+         * A project is addressed by slug like a channel, and scopeBindings()
+         * ties {project} to this workspace's own — slugs are only unique per
+         * workspace, so without it a member of one workspace could address
+         * another's board.
+         *
+         * Nested {task}, {sprint}, {column} and {label} are likewise scoped to
+         * the project in the path, which is what stops a request naming this
+         * team's project and another team's card.
+         *
+         * Two response shapes live side by side here, deliberately:
+         *
+         *  - The pages (board, backlog, settings) and everything that changes
+         *    the *shape* of a board — columns, labels, sprints, membership —
+         *    are ordinary Inertia visits, because each one changes the page as
+         *    a whole.
+         *  - The card endpoints answer with JSON. The board is a live list the
+         *    client already holds, and re-rendering it to add one card would
+         *    throw away the reader's scroll position and any panel they had
+         *    open. See Projects\TaskController.
+         */
+        Route::get('projects', [ProjectController::class, 'index'])->name('projects.index');
+        Route::post('projects', [ProjectController::class, 'store'])->name('projects.store');
+
+        Route::get('projects/{project}', [BoardController::class, 'show'])->name('projects.board');
+        Route::get('projects/{project}/backlog', [BacklogController::class, 'index'])->name('projects.backlog');
+
+        Route::get('projects/{project}/settings', [ProjectController::class, 'edit'])
+            ->name('projects.settings.edit');
+        Route::patch('projects/{project}', [ProjectController::class, 'update'])
+            ->name('projects.update');
+
+        Route::post('projects/{project}/archive', [ProjectController::class, 'archive'])
+            ->name('projects.archive.store');
+        Route::delete('projects/{project}/archive', [ProjectController::class, 'unarchive'])
+            ->name('projects.archive.destroy');
+
+        // Joining and leaving under your own steam, which is a different right
+        // from adding somebody else — see Projects\ProjectMembershipController.
+        Route::post('projects/{project}/membership', [ProjectMembershipController::class, 'store'])
+            ->name('projects.membership.store');
+        Route::delete('projects/{project}/membership', [ProjectMembershipController::class, 'destroy'])
+            ->name('projects.membership.destroy');
+
+        Route::post('projects/{project}/members', [ProjectMemberController::class, 'store'])
+            ->name('projects.members.store');
+        Route::patch('projects/{project}/members/{member}', [ProjectMemberController::class, 'update'])
+            ->name('projects.members.update');
+        Route::delete('projects/{project}/members/{member}', [ProjectMemberController::class, 'destroy'])
+            ->name('projects.members.destroy');
+
+        // The board's own shape.
+        Route::post('projects/{project}/columns', [BoardColumnController::class, 'store'])
+            ->name('projects.columns.store');
+        Route::patch('projects/{project}/columns/{column}', [BoardColumnController::class, 'update'])
+            ->name('projects.columns.update');
+        Route::delete('projects/{project}/columns/{column}', [BoardColumnController::class, 'destroy'])
+            ->name('projects.columns.destroy');
+
+        Route::post('projects/{project}/labels', [TaskLabelController::class, 'store'])
+            ->name('projects.labels.store');
+        Route::patch('projects/{project}/labels/{label}', [TaskLabelController::class, 'update'])
+            ->name('projects.labels.update');
+        Route::delete('projects/{project}/labels/{label}', [TaskLabelController::class, 'destroy'])
+            ->name('projects.labels.destroy');
+
+        /*
+         * Sprints. Starting and completing are their own endpoints rather than
+         * fields on the update, for the reason archiving a channel is: neither
+         * is an edit — one replaces the board and the other empties it — and a
+         * double-submitted "Complete" must not reopen the sprint it just closed.
+         */
+        Route::post('projects/{project}/sprints', [SprintController::class, 'store'])
+            ->name('projects.sprints.store');
+        Route::patch('projects/{project}/sprints/{sprint}', [SprintController::class, 'update'])
+            ->name('projects.sprints.update');
+        Route::delete('projects/{project}/sprints/{sprint}', [SprintController::class, 'destroy'])
+            ->name('projects.sprints.destroy');
+
+        Route::post('projects/{project}/sprints/{sprint}/start', [SprintController::class, 'start'])
+            ->name('projects.sprints.start');
+        Route::post('projects/{project}/sprints/{sprint}/complete', [SprintController::class, 'complete'])
+            ->name('projects.sprints.complete');
+
+        // Cards.
+        Route::post('projects/{project}/tasks', [TaskController::class, 'store'])
+            ->middleware('throttle:messages')
+            ->name('projects.tasks.store');
+
+        /*
+         * Edits, moves and deletes address the task directly: a task id already
+         * names its project, and a route carrying both invites a request that
+         * names one project and a card from another.
+         *
+         * The move is throttled as traffic rather than as a form — it fires on
+         * every drop, several times a minute — while the edit is not: it is a
+         * person typing into a panel.
+         */
+        Route::get('tasks/{task}', [TaskController::class, 'show'])
+            ->middleware('throttle:message-reads')
+            ->name('tasks.show');
+        Route::patch('tasks/{task}', [TaskController::class, 'update'])
+            ->name('tasks.update');
+        Route::delete('tasks/{task}', [TaskController::class, 'destroy'])
+            ->name('tasks.destroy');
+
+        Route::patch('tasks/{task}/position', [TaskMoveController::class, 'update'])
+            ->middleware('throttle:messages')
+            ->name('tasks.move');
 
         /*
          * Workspace administration.

@@ -51,6 +51,7 @@ export const channels = {
     // routes/channels.php — the primary key is never sent to the client.
     conversation: (conversationId: string) => `conversation.${conversationId}`,
     thread: (messageId: number) => `thread.${messageId}`,
+    project: (projectId: number) => `project.${projectId}`,
     user: (userId: number) => `user.${userId}`,
     notifications: (userId: number) => `App.Models.User.${userId}`,
 } as const;
@@ -79,6 +80,11 @@ export const events = {
     conversationRead: '.conversation.read',
     conversationUpdated: '.conversation.updated',
     presenceChanged: '.presence.changed',
+    // One card on a project board, carrying the whole card — see
+    // App\Events\TaskChanged for why it is never a diff.
+    taskChanged: '.task.changed',
+    // The board's own shape changed. A nudge with no payload: the page reloads.
+    boardChanged: '.board.changed',
     // The huddle bar, on the container's presence channel.
     huddleChanged: '.huddle.changed',
     // The sidebar dot, on the member's own private channel.

@@ -40,6 +40,7 @@ class WorkspaceResource extends JsonResource
                 'administer' => $role?->canAdministerWorkspace() ?? false,
                 'manage_members' => $role?->canManageMembers() ?? false,
                 'create_channels' => $role?->canCreateChannels() ?? false,
+                'create_projects' => $role?->canCreateProjects() ?? false,
                 'start_conversations' => $role?->canStartConversations() ?? false,
                 'mention_everyone' => $role?->canMentionEveryone() ?? false,
                 'view_audit_logs' => $role?->canViewAuditLogs() ?? false,

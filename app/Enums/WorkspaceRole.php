@@ -77,6 +77,18 @@ enum WorkspaceRole: string
     }
 
     /**
+     * May create projects — a board, a backlog, and the people on them.
+     *
+     * The same rank as creating a channel, and for the same reason: both make a
+     * shared space the whole workspace can be brought into, and a guest is by
+     * definition somebody brought into one.
+     */
+    public function canCreateProjects(): bool
+    {
+        return $this->isAtLeast(self::Member);
+    }
+
+    /**
      * May post an @everyone / @here mention that notifies an entire channel.
      */
     public function canMentionEveryone(): bool

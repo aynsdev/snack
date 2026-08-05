@@ -198,19 +198,28 @@ export function useMessageTimeline({
         return [...byId.values()].sort((left, right) => left.id - right.id);
     }, [data]);
 
-    /*
-     * The newest id the client has actually displayed, tracked in a ref so the
-     * read-marking callback does not need to be rebuilt on every message.
+    /**
+     * The newest id the client is displaying.
+     *
+     * Read during render rather than recorded by an effect, and that is the
+     * whole fix for a badge that would not clear. Effects run child-first, and
+     * the component that decides the reader is at the bottom — {@see MessageList}
+     * — is a child of whoever owns this hook. On mount it called `markAsRead`
+     * before any effect here could run, so the callback found nothing to report
+     * and returned: opening a channel or a DM never advanced the read pointer,
+     * and the sidebar went on counting messages the reader was looking at until
+     * the next arrival happened to re-fire the effect.
      */
-    const newestSeen = useRef<number | null>(null);
+    const newestLoadedId = messages.at(-1)?.id ?? null;
 
-    useEffect(() => {
-        const newest = messages.at(-1)?.id ?? null;
-
-        if (newest !== null && newest > (newestSeen.current ?? 0)) {
-            newestSeen.current = newest;
-        }
-    }, [messages]);
+    /**
+     * The pointer this timeline has already reported.
+     *
+     * Read syncs are cheap but not free, and the reader reaches the bottom on
+     * every scroll event once they are there; this keeps the request to the
+     * moments the pointer actually moves.
+     */
+    const lastSyncedId = useRef<number | null>(null);
 
     /** Rewrite the cached pages. A no-op when the timeline is not cached. */
     const writePages = useCallback(
@@ -255,10 +264,6 @@ export function useMessageTimeline({
      */
     const upsert = useCallback(
         (incoming: Message) => {
-            if (incoming.id > (newestSeen.current ?? 0)) {
-                newestSeen.current = incoming.id;
-            }
-
             writePages((pages) => {
                 const known = pages.some((page) =>
                     page.messages.some((message) => message.id === incoming.id),
@@ -560,22 +565,32 @@ export function useMessageTimeline({
      *
      * Fire-and-forget: a failed read sync corrects itself on the next call, and
      * surfacing an error for it would be noise the reader can do nothing about.
+     * The pointer is released again on failure so that "the next call" is not
+     * blocked by the attempt that failed.
      */
     const markAsRead = useCallback(() => {
         const url = endpoints.markRead;
 
-        if (newestSeen.current === null || url === null) {
+        if (newestLoadedId === null || url === null) {
             return;
         }
 
+        if (newestLoadedId <= (lastSyncedId.current ?? 0)) {
+            return;
+        }
+
+        lastSyncedId.current = newestLoadedId;
+
         void api
-            .post(url(), { last_read_message_id: newestSeen.current })
+            .post(url(), { last_read_message_id: newestLoadedId })
             .catch((error: unknown) => {
+                lastSyncedId.current = null;
+
                 if (!(error instanceof ApiError)) {
                     throw error;
                 }
             });
-    }, [endpoints]);
+    }, [endpoints, newestLoadedId]);
 
     return {
         messages,

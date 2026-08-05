@@ -74,6 +74,9 @@ function makeNotification(
             slug: 'design',
             type: 'public',
         },
+        // Only ever set on a task assignment, which is the one reason with no
+        // container to link through.
+        task: null,
         ...overrides,
     };
 }

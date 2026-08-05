@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 
@@ -122,6 +123,31 @@ class Workspace extends Model
     public function conversations(): HasMany
     {
         return $this->hasMany(Conversation::class);
+    }
+
+    /**
+     * @return HasMany<Project, $this>
+     */
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    /**
+     * Every task in every project of this workspace.
+     *
+     * Exists for the route binding rather than for reading: `tasks/{task}` sits
+     * inside the workspace's `scopeBindings()` group, and this is the relation
+     * that scoping resolves through — so a task id from another tenant 404s at
+     * the router instead of reaching a policy that would have to catch it.
+     *
+     * The same job Workspace::messages() does for `messages/{message}`.
+     *
+     * @return HasManyThrough<Task, Project, $this>
+     */
+    public function tasks(): HasManyThrough
+    {
+        return $this->hasManyThrough(Task::class, Project::class);
     }
 
     /**

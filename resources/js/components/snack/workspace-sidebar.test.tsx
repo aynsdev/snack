@@ -87,6 +87,7 @@ function mockWorkspace() {
                             administer: false,
                             manage_members: false,
                             create_channels: true,
+                            create_projects: true,
                             start_conversations: true,
                             mention_everyone: false,
                             view_audit_logs: false,
@@ -99,6 +100,7 @@ function mockWorkspace() {
                         makePerson(2, 'Ada Lovelace'),
                         makePerson(3, 'Bo Diddley'),
                     ],
+                    projects: [],
                     unread: {
                         channels: {},
                         conversations: {},

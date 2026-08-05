@@ -31,6 +31,15 @@ enum AuditAction: string
     case ChannelMemberAdded = 'channel.member_added';
     case ChannelMemberRemoved = 'channel.member_removed';
 
+    case ProjectCreated = 'project.created';
+    case ProjectUpdated = 'project.updated';
+    case ProjectArchived = 'project.archived';
+    case ProjectUnarchived = 'project.unarchived';
+    case ProjectMemberAdded = 'project.member_added';
+    case ProjectMemberRemoved = 'project.member_removed';
+    case SprintStarted = 'project.sprint_started';
+    case SprintCompleted = 'project.sprint_completed';
+
     case MessageDeletedByAdmin = 'message.deleted_by_admin';
 
     public function label(): string
@@ -54,6 +63,14 @@ enum AuditAction: string
             self::ChannelUnarchived => 'Channel unarchived',
             self::ChannelMemberAdded => 'Added to channel',
             self::ChannelMemberRemoved => 'Removed from channel',
+            self::ProjectCreated => 'Project created',
+            self::ProjectUpdated => 'Project updated',
+            self::ProjectArchived => 'Project archived',
+            self::ProjectUnarchived => 'Project unarchived',
+            self::ProjectMemberAdded => 'Added to project',
+            self::ProjectMemberRemoved => 'Removed from project',
+            self::SprintStarted => 'Sprint started',
+            self::SprintCompleted => 'Sprint completed',
             self::MessageDeletedByAdmin => 'Message removed by admin',
         };
     }

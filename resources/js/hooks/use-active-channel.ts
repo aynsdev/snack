@@ -141,6 +141,34 @@ export function useIsSearchView(): boolean {
 }
 
 /**
+ * The project slug in the current URL, or null when the page is not a project.
+ *
+ * Matches the board, the backlog, and the settings screen, which are three
+ * addresses for one project — the sidebar has to keep its row lit across all of
+ * them. Derived from the URL for the same reason the channel slug is: the
+ * sidebar sits above the page in the tree, so threading it down would mean every
+ * project page declaring which project it is, and one that forgot would
+ * highlight the wrong row.
+ */
+export function useActiveProjectSlug(): string | null {
+    const { currentUrl } = useCurrentUrl();
+
+    // /w/{workspace}/projects/{project}[/backlog|/settings]
+    const match = currentUrl.match(/^\/w\/[^/]+\/projects\/([^/?#]+)/);
+
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * Whether the current page is anywhere in Projects — the list, or a board.
+ */
+export function useIsProjectsView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/projects(?:[/?#]|$)/.test(currentUrl);
+}
+
+/**
  * Whether the current page is the workspace's huddle history.
  */
 export function useIsHuddlesView(): boolean {

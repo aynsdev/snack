@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Channel;
+use App\Models\Project;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Str;
@@ -62,6 +63,71 @@ class SlugGenerator
                     ->exists();
             },
         );
+    }
+
+    /**
+     * A project slug, unique within its workspace.
+     */
+    public function forProject(Workspace $workspace, string $name, ?int $ignoreId = null): string
+    {
+        return $this->unique(
+            base: $this->normalize($name, fallback: 'project'),
+            isTaken: fn (string $slug): bool => Project::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('slug', $slug)
+                ->when($ignoreId !== null, fn ($query) => $query->whereKeyNot($ignoreId))
+                ->exists(),
+        );
+    }
+
+    /**
+     * A project key — the "PWA" in PWA-1499.
+     *
+     * Built from the initials of a multi-word name and from the first letters of
+     * a single-word one, which is what a person would have typed: "Pedicab Web
+     * Api" becomes PWA, "Payments" becomes PAY.
+     *
+     * Uniqueness is per workspace and the key is citext, so this suffixes with a
+     * digit rather than a hyphenated word — the key ends up inside every task
+     * reference the team says out loud, and PWA2 survives that better than
+     * PWA-2, which reads as task 2.
+     */
+    public function forProjectKey(Workspace $workspace, string $name, ?int $ignoreId = null): string
+    {
+        $words = Str::of($name)->ascii()->squish()->explode(' ')
+            ->map(fn (string $word): string => Str::of($word)->replaceMatches('/[^A-Za-z0-9]/', '')->toString())
+            ->filter()
+            ->values();
+
+        $base = $words->count() > 1
+            ? $words->take(4)->map(fn (string $word): string => Str::substr($word, 0, 1))->implode('')
+            : Str::substr($words->first() ?? '', 0, 3);
+
+        $base = Str::upper($base);
+
+        if ($base === '') {
+            $base = 'PRJ';
+        }
+
+        $isTaken = fn (string $key): bool => Project::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('key', $key)
+            ->when($ignoreId !== null, fn ($query) => $query->whereKeyNot($ignoreId))
+            ->exists();
+
+        if (! $isTaken($base)) {
+            return $base;
+        }
+
+        for ($suffix = 2; $suffix <= self::MAX_ATTEMPTS; $suffix++) {
+            $candidate = $base.$suffix;
+
+            if (! $isTaken($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return Str::upper(Str::random(6));
     }
 
     /**

@@ -144,16 +144,32 @@ export function MessageList({
             return;
         }
 
+        const atBottom =
+            element.scrollHeight - element.scrollTop - element.clientHeight <
+            BOTTOM_TOLERANCE;
+
         anchor.current = {
             top: element.scrollTop,
             height: element.scrollHeight,
-            atBottom:
-                element.scrollHeight -
-                    element.scrollTop -
-                    element.clientHeight <
-                BOTTOM_TOLERANCE,
+            atBottom,
         };
-    }, []);
+
+        /*
+         * Reaching the bottom is itself the reader seeing the newest message,
+         * and until this was here it did not count: the read pointer only moved
+         * when the *newest id changed* while they happened to be at the bottom.
+         * Someone who scrolled up through unread history and then came back down
+         * had demonstrably read all of it, and their badge stayed lit until
+         * somebody else said something.
+         *
+         * Called on every scroll event that ends at the bottom rather than only
+         * on the transition; the timeline drops a sync it has already made, so
+         * the repeats cost nothing and there is no edge to get wrong.
+         */
+        if (atBottom) {
+            onReachBottom();
+        }
+    }, [onReachBottom]);
 
     /*
      * Grouping and day dividers are decided in one pass before rendering rather

@@ -2,10 +2,14 @@ import { useEffect } from 'react';
 import {
     useActiveConversationId,
     useIsDirectMessagesView,
+    useIsProjectsView,
 } from '@/hooks/use-active-channel';
 
-/** Which shape the sidebar takes: the workspace's contents, or the DM list. */
-export type SidebarSection = 'workspace' | 'direct-messages';
+/**
+ * Which shape the sidebar takes: the workspace's contents, the DM list, or the
+ * project list.
+ */
+export type SidebarSection = 'workspace' | 'direct-messages' | 'projects';
 
 const STORAGE_KEY = 'snack:sidebar-section';
 
@@ -35,22 +39,37 @@ const STORAGE_KEY = 'snack:sidebar-section';
 export function useSidebarSection(): SidebarSection {
     const conversationId = useActiveConversationId();
     const isDirectMessagesView = useIsDirectMessagesView();
+    const isProjectsView = useIsProjectsView();
 
     /*
      * A conversation inherits; everywhere else states. With no conversation in
      * the URL, `isDirectMessagesView` is true only on the DM home itself, which
      * is the rail's own destination and so the one page that means "I am in
      * direct messages".
+     *
+     * Projects need none of that machinery: `/projects/pwa-board` is that
+     * project and nothing else, so the URL alone settles it. The ambiguity this
+     * hook exists for is specific to conversations, which are reachable from two
+     * sections and look identical from both.
      */
     const section: SidebarSection =
         conversationId !== null
             ? recall()
-            : isDirectMessagesView
-              ? 'direct-messages'
-              : 'workspace';
+            : isProjectsView
+              ? 'projects'
+              : isDirectMessagesView
+                ? 'direct-messages'
+                : 'workspace';
 
     useEffect(() => {
-        if (conversationId === null) {
+        /*
+         * Only the two sections a conversation can be opened from are worth
+         * remembering. Storing 'projects' would mean a DM opened later, from a
+         * link, inheriting a section whose sidebar has no conversations in it at
+         * all — and the reader would land beside a list they cannot get back to
+         * the conversation from.
+         */
+        if (conversationId === null && section !== 'projects') {
             remember(section);
         }
     }, [conversationId, section]);

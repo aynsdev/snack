@@ -1,11 +1,13 @@
 import { Link } from '@inertiajs/react';
-import { AtSign, Bell, MessageSquare, Reply } from 'lucide-react';
+import { AtSign, Bell, KanbanSquare, MessageSquare, Reply } from 'lucide-react';
 import {
     ContainerLabel,
     useContainerHref,
 } from '@/components/snack/container-label';
+import { useWorkspace } from '@/hooks/use-workspace';
 import { dayLabel } from '@/lib/message-grouping';
 import { cn } from '@/lib/utils';
+import { board as boardRoute } from '@/routes/projects';
 import type { NotificationEntry, NotificationReason } from '@/types';
 
 /**
@@ -23,8 +25,25 @@ export function NotificationRow({
     notification: NotificationEntry;
     onOpen: (notification: NotificationEntry) => void;
 }) {
-    const href = useContainerHref(notification.container);
+    const workspace = useWorkspace();
+    const containerHref = useContainerHref(notification.container);
     const actor = notification.actor;
+
+    /*
+     * An assignment has no container to link through — it is not about a message
+     * — so it builds its own destination: the board, with the card named in the
+     * query so it opens on arrival. See Projects\BoardController::openTask().
+     */
+    const href =
+        notification.task === null
+            ? containerHref
+            : boardRoute.url(
+                  {
+                      workspace: workspace.slug,
+                      project: notification.task.project_slug,
+                  },
+                  { query: { task: notification.task.reference } },
+              );
 
     /*
      * Falls back rather than indexing straight in. This payload arrives over a
@@ -59,7 +78,28 @@ export function NotificationRow({
 
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                        <ContainerLabel container={notification.container} />
+                        {/*
+                         * Where it came from. An assignment came from a board
+                         * rather than a room, and ContainerLabel has nothing to
+                         * name for it — it would read "Unknown", which is the
+                         * one thing this line must never say about a row the
+                         * server knows exactly where to send.
+                         */}
+                        {notification.task === null ? (
+                            <ContainerLabel
+                                container={notification.container}
+                            />
+                        ) : (
+                            <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+                                <KanbanSquare
+                                    aria-hidden="true"
+                                    className="size-3.5 shrink-0 text-muted-foreground"
+                                />
+                                <span className="truncate">
+                                    {notification.task.project_name}
+                                </span>
+                            </span>
+                        )}
 
                         {!notification.is_read && (
                             <span
@@ -101,6 +141,7 @@ const REASON_ICONS: Record<NotificationReason, typeof AtSign> = {
     mention: AtSign,
     direct_message: MessageSquare,
     thread_reply: Reply,
+    task_assigned: KanbanSquare,
 };
 
 /**
@@ -124,6 +165,8 @@ function headline(
                 : `${actorName} sent you a message`;
         case 'thread_reply':
             return `${actorName} replied in a thread`;
+        case 'task_assigned':
+            return `${actorName} assigned you a task`;
         default:
             // Same reasoning as the icon fallback: a reason this build does not
             // know about should read plainly, not crash the list.

@@ -1,11 +1,11 @@
 import { Link } from '@inertiajs/react';
 import {
     Bookmark,
-    CheckSquare,
     Folder,
     House,
     Images,
     Inbox,
+    KanbanSquare,
     MessageSquare,
 } from 'lucide-react';
 import {
@@ -18,6 +18,7 @@ import {
     useIsActivityView,
     useIsFilesView,
     useIsHomeView,
+    useIsProjectsView,
     useIsSavedView,
 } from '@/hooks/use-active-channel';
 import { enterSection, useSidebarSection } from '@/hooks/use-sidebar-section';
@@ -26,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { index as activityIndex } from '@/routes/activity';
 import { index as dmsIndex } from '@/routes/conversations';
 import { index as filesIndex } from '@/routes/files';
+import { index as projectsIndex } from '@/routes/projects';
 import { index as savedIndex } from '@/routes/saved';
 import { show as showWorkspace } from '@/routes/workspaces';
 
@@ -71,6 +73,7 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
     const isActivity = useIsActivityView();
     const isSaved = useIsSavedView();
     const isFiles = useIsFilesView();
+    const isProjects = useIsProjectsView();
 
     const directMessages = Object.values(unread.conversations).reduce(
         (total, counts) => total + counts.messages,
@@ -149,13 +152,29 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
                 />
 
                 {/*
-                 * Announced rather than hidden. Both are places people will look
+                 * Projects: boards, backlogs, and the work on them.
+                 *
+                 * Where "Tasks — coming soon" used to sit, and named for the
+                 * container rather than its contents. A task never stands on its
+                 * own here — it is filed on a board, in a column, by somebody on
+                 * that project — so a rail item called Tasks would promise a
+                 * workspace-wide list of work that does not exist.
+                 */}
+                <NavRailItem
+                    icon={KanbanSquare}
+                    label="Projects"
+                    href={projectsIndex(workspace.slug)}
+                    isActive={isProjects}
+                    onNavigate={onNavigate}
+                />
+
+                {/*
+                 * Announced rather than hidden: it is a place people will look
                  * for — "where do we keep the logo?" is asked in every workspace
                  * — and a labelled gap answers that question honestly, where an
                  * empty rail sends them off to ask it in #general.
                  */}
                 <NavRailItem icon={Images} label="Assets" comingSoon />
-                <NavRailItem icon={CheckSquare} label="Tasks" comingSoon />
             </ul>
         </nav>
     );

@@ -43,6 +43,14 @@ class NotificationResource extends JsonResource
             'preview' => data_get($this->data, 'preview', ''),
             'actor' => data_get($this->data, 'actor'),
             'container' => data_get($this->data, 'container'),
+
+            /*
+             * Present only on a task assignment, which is the one reason that is
+             * not about a message and so has no container to link through. The
+             * row builds its own link from this — see
+             * {@see App\Notifications\TaskAssignedNotification}.
+             */
+            'task' => data_get($this->data, 'task'),
         ];
     }
 }

@@ -42,7 +42,13 @@ export type NotificationLevel = 'all' | 'mentions' | 'nothing';
  * alerts the reader and can email them, but writes no inbox row. See the PHP
  * enum for why one row per member per message is the shape Snack does not store.
  */
-export type NotificationReason = 'mention' | 'direct_message' | 'thread_reply';
+export type NotificationReason =
+    | 'mention'
+    | 'direct_message'
+    | 'thread_reply'
+    // The one reason that is not about a message: somebody put a task on a
+    // project board in your name.
+    | 'task_assigned';
 
 /**
  * Mirrors App\Enums\ActivityTab: which slice of the Activity page is open.
@@ -51,6 +57,31 @@ export type NotificationReason = 'mention' | 'direct_message' | 'thread_reply';
  * own, which is why the page can render every tab from the same rows.
  */
 export type ActivityTab = 'all' | 'notifications' | 'mentions' | 'threads';
+
+/** Mirrors App\Enums\ProjectRole. */
+export type ProjectRole = 'lead' | 'member';
+
+/** Mirrors App\Enums\TaskType. */
+export type TaskType = 'story' | 'task' | 'bug' | 'epic';
+
+/** Mirrors App\Enums\TaskPriority. */
+export type TaskPriority = 'highest' | 'high' | 'medium' | 'low' | 'lowest';
+
+/**
+ * Mirrors App\Enums\ColumnCategory: what a column *means*, as opposed to what a
+ * team called it.
+ *
+ * A project names its own columns, so nothing may infer status from a name.
+ * This is what says which column new work lands in and which ones count as
+ * finished when a sprint closes.
+ */
+export type ColumnCategory = 'unstarted' | 'started' | 'done';
+
+/**
+ * Mirrors App\Enums\SprintState, which is derived from the sprint's timestamps
+ * rather than stored — see App\Models\Sprint::state().
+ */
+export type SprintState = 'planned' | 'active' | 'completed';
 
 /** Mirrors App\Enums\PresenceStatus. */
 export type PresenceStatus = 'online' | 'away' | 'offline' | 'do_not_disturb';
@@ -92,6 +123,7 @@ export type WorkspaceAbilities = {
     administer: boolean;
     manage_members: boolean;
     create_channels: boolean;
+    create_projects: boolean;
     start_conversations: boolean;
     mention_everyone: boolean;
     view_audit_logs: boolean;
@@ -341,6 +373,22 @@ export type NotificationEntry = {
     preview: string;
     actor: NotificationActor | null;
     container: ThreadContainer | null;
+    /**
+     * Set only on a task assignment, which is the one reason that is not about a
+     * message and so has no container to link through — the row builds its own
+     * link to the board from this.
+     */
+    task: NotificationTask | null;
+};
+
+/** Where an assignment notification points. */
+export type NotificationTask = {
+    id: number;
+    reference: string;
+    title: string;
+    project_id: number;
+    project_name: string;
+    project_slug: string;
 };
 
 /** Just enough of the person who caused a notification to render its row. */
@@ -717,6 +765,150 @@ export type WorkspacePerson = {
     conversation: Conversation | null;
 };
 
+// -- Projects ----------------------------------------------------------------
+
+/**
+ * Which parts of a task the board draws on its cards.
+ *
+ * Mirrors App\Models\Project::CARD_FIELD_DEFAULTS, and always arrives resolved —
+ * the server fills in defaults for anything the project has not decided, so the
+ * client never has to treat a missing key as a third state.
+ */
+export type CardFields = {
+    type: boolean;
+    key: boolean;
+    priority: boolean;
+    assignee: boolean;
+    labels: boolean;
+    story_points: boolean;
+    due_on: boolean;
+    epic: boolean;
+};
+
+/**
+ * Mirrors App\Http\Resources\ProjectResource.
+ *
+ * `abilities` is the split App\Policies\ProjectPolicy makes: anyone who is not a
+ * guest can read a board, and only the people on the project can work it. The
+ * flags decide what to render; the server re-authorizes every write regardless.
+ */
+export type Project = {
+    id: number;
+    name: string;
+    slug: string;
+    /** The prefix of every reference in this project — the "PWA" in PWA-1499. */
+    key: string;
+    description: string | null;
+    color: string;
+    uses_sprints: boolean;
+    is_archived: boolean;
+    card_fields: CardFields;
+    member_count?: number;
+    task_count?: number;
+    is_member: boolean;
+    abilities: {
+        contribute: boolean;
+        manage: boolean;
+    };
+    created_at: string | null;
+};
+
+/** Mirrors App\Http\Resources\BoardColumnResource. */
+export type BoardColumn = {
+    id: number;
+    name: string;
+    category: ColumnCategory;
+    position: number;
+    /** Advisory: the board warns when a column is over it, never refuses a drop. */
+    wip_limit: number | null;
+};
+
+/** A label one project has defined, as it arrives inside a task or a board. */
+export type TaskLabel = {
+    id: number;
+    name: string;
+    color: string;
+};
+
+/**
+ * Mirrors App\Http\Resources\SprintResource.
+ *
+ * The two pairs of dates are different claims: `starts_at`/`ends_at` are what
+ * the team planned, `started_at`/`completed_at` are what happened. `state` is
+ * derived from the second pair server-side and is the only place to read it.
+ */
+export type Sprint = {
+    id: number;
+    name: string;
+    goal: string | null;
+    state: SprintState;
+    is_overdue: boolean;
+    starts_at: string | null;
+    ends_at: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+    position: number;
+    task_count?: number;
+};
+
+/**
+ * Mirrors App\Http\Resources\TaskResource.
+ *
+ * The same shape whether it arrives as a page prop or over the socket, so a
+ * live update is stored exactly as it is received — see App\Events\TaskChanged
+ * for why the whole card travels every time rather than a diff.
+ *
+ * `board_column_id` is where the card sits on the board and is never null;
+ * `sprint_id` is when it is being done, and null means the backlog.
+ */
+export type Task = {
+    id: number;
+    number: number;
+    /** "PWA-1499" — what people quote, and what a board link resolves. */
+    reference: string;
+    title: string;
+    description: string | null;
+    type: TaskType;
+    priority: TaskPriority;
+    project_id: number;
+    board_column_id: number;
+    sprint_id: number | null;
+    position: number;
+    story_points: number | null;
+    due_on: string | null;
+    completed_at: string | null;
+    is_complete: boolean;
+    assignee?: SnackUser | null;
+    labels?: TaskLabel[];
+    epic?: { id: number; title: string; reference: string } | null;
+    created_at: string | null;
+    updated_at: string | null;
+};
+
+/** One person on a project, keyed by the membership row the routes address. */
+export type ProjectMembership = {
+    id: number;
+    user: SnackUser;
+    role: ProjectRole;
+    joined_at: string | null;
+};
+
+/** An epic as the picker on a card offers it. */
+export type EpicOption = {
+    id: number;
+    title: string;
+    reference: string;
+};
+
+/** What arrives over `project.{id}` when one card changes. */
+export type TaskChangedEvent = {
+    action: 'created' | 'updated' | 'moved' | 'deleted';
+    task_id: number;
+    reference: string;
+    /** Null for a delete, which has no state left to send. */
+    task: Task | null;
+};
+
 /** The navigation payload for the workspace the user is currently inside. */
 export type CurrentWorkspace = {
     workspace: Workspace;
@@ -730,6 +922,12 @@ export type CurrentWorkspace = {
     conversations: Conversation[];
     /** Everyone else in the workspace, which is what the DM list is built from. */
     people: WorkspacePerson[];
+    /**
+     * The projects the viewer is on — not every project in the workspace. See
+     * App\Services\WorkspaceNavigator::sidebarProjects() for why the sidebar
+     * lists membership and the project page lists everything.
+     */
+    projects: Project[];
     unread: UnreadState;
 };
 

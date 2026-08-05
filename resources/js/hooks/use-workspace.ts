@@ -4,6 +4,7 @@ import type {
     Channel,
     Conversation,
     CurrentWorkspace,
+    Project,
     SnackUser,
     UnreadState,
     Workspace,
@@ -155,4 +156,15 @@ export function useSidebarConversations(): {
  */
 export function useSidebarPeople(): WorkspacePerson[] {
     return useCurrentWorkspace()?.people ?? [];
+}
+
+/**
+ * The projects the viewer is on.
+ *
+ * Not every project in the workspace: the sidebar lists the boards you work, and
+ * the project index lists the ones you could. See
+ * App\Services\WorkspaceNavigator::sidebarProjects().
+ */
+export function useSidebarProjects(): Project[] {
+    return useCurrentWorkspace()?.projects ?? [];
 }
