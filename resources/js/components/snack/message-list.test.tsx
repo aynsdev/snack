@@ -172,4 +172,21 @@ describe('MessageList', () => {
         expect(container.querySelector('.snack-scroll')).not.toBeNull();
         expect(screen.queryByText('Hello.')).not.toBeInTheDocument();
     });
+
+    /*
+     * The timeline corrects its own scroll position in three places — following
+     * an arrival, settling a prepend, and the virtualizer's end anchoring — and
+     * every one of them reads `scrollTop` and `scrollHeight` assuming nothing
+     * else has moved them. Browser scroll anchoring moves them, on every row
+     * that enters or leaves the window. jsdom performs no layout and so cannot
+     * show the resulting drift; what it can hold is the declaration that turns
+     * the browser's correction off.
+     */
+    it('leaves scroll corrections to the timeline, not the browser', () => {
+        const { container } = renderList();
+
+        expect(container.querySelector('.snack-scroll')).toHaveClass(
+            '[overflow-anchor:none]',
+        );
+    });
 });
