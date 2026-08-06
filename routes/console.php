@@ -79,3 +79,22 @@ Schedule::command('snack:sweep-presence')
 Schedule::command('snack:sweep-huddles')
     ->everyMinute()
     ->withoutOverlapping(5);
+
+/*
+ * Standups: asks the ones that are due, chases the people who have not
+ * answered, and posts the write-up when the window closes.
+ *
+ * Every minute rather than hourly like the digest, because 09:30 means 09:30 —
+ * a standup asked at 10:00 is as useless as one asked at 09:00. When nothing is
+ * due that costs two indexed queries over sets that are normally empty.
+ *
+ * `withoutOverlapping` with a short expiry, for the reason presence has one: a
+ * second process walking the same open runs would post two summaries into the
+ * channel, and a killed run must not wedge every standup in the installation
+ * until somebody notices. It is not what makes asking safe, though — that is
+ * the unique index on `standup_runs`, which holds across machines as well as
+ * across processes. See App\Actions\Standups\AskStandup.
+ */
+Schedule::command('snack:run-standups')
+    ->everyMinute()
+    ->withoutOverlapping(5);

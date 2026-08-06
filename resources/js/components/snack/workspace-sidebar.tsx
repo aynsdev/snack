@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
     Bell,
     ChevronDown,
+    ClipboardList,
     Compass,
     Headphones,
     MessagesSquare,
@@ -62,6 +63,7 @@ import {
     index as projectsIndex,
 } from '@/routes/projects';
 import { index as searchIndex } from '@/routes/search';
+import { index as standupsIndex } from '@/routes/standups';
 import { index as threadsIndex } from '@/routes/threads';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
 import { edit as workspaceSettings } from '@/routes/workspace-settings';
@@ -745,6 +747,24 @@ function SidebarHeader({
                             <Link href={workspaceSettings(workspace.slug)}>
                                 <Settings className="mr-2 size-4" />
                                 Workspace settings
+                            </Link>
+                        </DropdownMenuItem>
+                    )}
+
+                    {/*
+                     * Beside the settings rather than in the channel's own menu.
+                     * A standup is configured per channel but it is not a
+                     * channel setting: it messages people directly, on a
+                     * schedule, and the question an admin arrives with is
+                     * "what is this workspace sending my team" — which is a
+                     * list, not a property of whichever channel they happen to
+                     * be looking at.
+                     */}
+                    {workspace.abilities.administer && (
+                        <DropdownMenuItem asChild>
+                            <Link href={standupsIndex(workspace.slug)}>
+                                <ClipboardList className="mr-2 size-4" />
+                                Standups
                             </Link>
                         </DropdownMenuItem>
                     )}

@@ -144,6 +144,16 @@ class Workspace extends Model
     }
 
     /**
+     * The recurring standups the bot runs in this workspace.
+     *
+     * @return HasMany<Standup, $this>
+     */
+    public function standups(): HasMany
+    {
+        return $this->hasMany(Standup::class);
+    }
+
+    /**
      * Every task in every project of this workspace.
      *
      * Exists for the route binding rather than for reading: `tasks/{task}` sits
@@ -247,7 +257,22 @@ class Workspace extends Model
 
     public function hasReachedMemberLimit(): bool
     {
-        return $this->members()->count() >= $this->member_limit;
+        return $this->humanMemberCount() >= $this->member_limit;
+    }
+
+    /**
+     * The people who count against the seat limit.
+     *
+     * Bots do not. The standup app holds a membership row because it has to —
+     * it sends direct messages, and a sender that is not in the workspace is
+     * one no policy will let through — but it is not a colleague, and a
+     * workspace that installs it should not lose a seat for the privilege.
+     */
+    public function humanMemberCount(): int
+    {
+        return $this->members()
+            ->whereHas('user', fn ($query) => $query->where('is_bot', false))
+            ->count();
     }
 
     // -- Settings ------------------------------------------------------------
