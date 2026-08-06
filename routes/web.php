@@ -37,6 +37,7 @@ use App\Http\Controllers\Projects\BacklogController;
 use App\Http\Controllers\Projects\BoardColumnController;
 use App\Http\Controllers\Projects\BoardController;
 use App\Http\Controllers\Projects\ProjectController;
+use App\Http\Controllers\Projects\ProjectGroupController;
 use App\Http\Controllers\Projects\ProjectMemberController;
 use App\Http\Controllers\Projects\ProjectMembershipController;
 use App\Http\Controllers\Projects\SprintController;
@@ -472,6 +473,26 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::get('projects', [ProjectController::class, 'index'])->name('projects.index');
         Route::post('projects', [ProjectController::class, 'store'])->name('projects.store');
 
+        /*
+         * The headings the project list is arranged under.
+         *
+         * Their own path rather than `projects/groups`, which {project} would
+         * otherwise swallow — "groups" is a legal project slug. Addressed by id
+         * because a group has no page of its own for a slug to carry.
+         *
+         * Which project sits under which heading is set on the project itself,
+         * through projects.update: arranging the shelves and moving somebody
+         * else's project between them are different rights.
+         */
+        Route::post('project-groups', [ProjectGroupController::class, 'store'])
+            ->name('project-groups.store');
+        Route::patch('project-groups/{projectGroup}', [ProjectGroupController::class, 'update'])
+            ->name('project-groups.update');
+        Route::post('project-groups/{projectGroup}/move', [ProjectGroupController::class, 'move'])
+            ->name('project-groups.move');
+        Route::delete('project-groups/{projectGroup}', [ProjectGroupController::class, 'destroy'])
+            ->name('project-groups.destroy');
+
         Route::get('projects/{project}', [BoardController::class, 'show'])->name('projects.board');
         Route::get('projects/{project}/backlog', [BacklogController::class, 'index'])->name('projects.backlog');
 
@@ -479,6 +500,12 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->name('projects.settings.edit');
         Route::patch('projects/{project}', [ProjectController::class, 'update'])
             ->name('projects.update');
+
+        // Which heading the project sits under. Separate from the update above
+        // because it is done from the list, which is not where that one leaves
+        // you — see Projects\ProjectController::assignGroup().
+        Route::patch('projects/{project}/group', [ProjectController::class, 'assignGroup'])
+            ->name('projects.group.update');
 
         Route::post('projects/{project}/archive', [ProjectController::class, 'archive'])
             ->name('projects.archive.store');

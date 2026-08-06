@@ -802,6 +802,8 @@ export type Project = {
     color: string;
     uses_sprints: boolean;
     is_archived: boolean;
+    /** The heading this project sits under; null when it sits under none. */
+    project_group_id: number | null;
     card_fields: CardFields;
     member_count?: number;
     task_count?: number;
@@ -811,6 +813,18 @@ export type Project = {
         manage: boolean;
     };
     created_at: string | null;
+};
+
+/**
+ * A heading the project list is arranged under.
+ *
+ * Mirrors App\Http\Resources\ProjectGroupResource. Carries no projects of its
+ * own: the list sends every project once, each naming its group by id.
+ */
+export type ProjectGroup = {
+    id: number;
+    name: string;
+    position: number;
 };
 
 /** Mirrors App\Http\Resources\BoardColumnResource. */
@@ -924,10 +938,16 @@ export type CurrentWorkspace = {
     people: WorkspacePerson[];
     /**
      * The projects the viewer is on — not every project in the workspace. See
-     * App\Services\WorkspaceNavigator::sidebarProjects() for why the sidebar
+     * App\Services\WorkspaceNavigator::memberProjects() for why the sidebar
      * lists membership and the project page lists everything.
      */
     projects: Project[];
+    /**
+     * The headings `projects` is drawn under — only the groups with one of the
+     * viewer's projects in them, so the sidebar never shows an empty heading.
+     * The project page, where groups are curated, does show empty ones.
+     */
+    project_groups: ProjectGroup[];
     unread: UnreadState;
 };
 

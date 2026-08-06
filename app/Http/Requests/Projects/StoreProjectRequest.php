@@ -41,6 +41,19 @@ class StoreProjectRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:500'],
             'color' => ['nullable', 'string', 'max:20'],
             'uses_sprints' => ['boolean'],
+
+            /*
+             * The heading this project will sit under, if any. Scoped to this
+             * workspace in the rule itself rather than trusted from the client:
+             * the id arrives from a select the client rendered, and a request
+             * naming another workspace's group must fail validation, not file
+             * this project onto a shelf its team cannot see.
+             */
+            'project_group_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('project_groups', 'id')->where('workspace_id', $context->workspace()->id),
+            ],
         ];
     }
 
@@ -52,6 +65,7 @@ class StoreProjectRequest extends FormRequest
         return [
             'key.regex' => 'A project key starts with a letter and contains only letters and numbers.',
             'key.unique' => 'Another project in this workspace already uses that key.',
+            'project_group_id.exists' => 'That group is not part of this workspace.',
         ];
     }
 }

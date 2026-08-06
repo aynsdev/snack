@@ -37,11 +37,14 @@ class UpdateProject
      *     color?: string,
      *     uses_sprints?: bool,
      *     card_fields?: array<string, bool>,
+     *     project_group_id?: int|null,
      * }  $attributes
      */
     public function handle(Project $project, User $actor, array $attributes): Project
     {
-        $before = $project->only(['name', 'key', 'description', 'color', 'uses_sprints', 'card_fields']);
+        $before = $project->only([
+            'name', 'key', 'description', 'color', 'uses_sprints', 'card_fields', 'project_group_id',
+        ]);
 
         if (array_key_exists('name', $attributes) && $attributes['name'] !== $project->name) {
             $attributes['slug'] = $this->slugs->forProject(

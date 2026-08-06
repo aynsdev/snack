@@ -56,6 +56,7 @@ class CreateProject
      *     description?: string|null,
      *     color?: string|null,
      *     uses_sprints?: bool,
+     *     project_group_id?: int|null,
      * }  $attributes
      */
     public function handle(Workspace $workspace, User $creator, array $attributes): Project
@@ -64,6 +65,9 @@ class CreateProject
             $project = Project::create([
                 'workspace_id' => $workspace->id,
                 'created_by' => $creator->id,
+                // Null is the ordinary case: most projects are made before
+                // anybody has decided the list needs headings.
+                'project_group_id' => $attributes['project_group_id'] ?? null,
                 'name' => $attributes['name'],
                 'slug' => $this->slugs->forProject($workspace, $attributes['name']),
                 // A key the creator typed is honoured; otherwise one is derived

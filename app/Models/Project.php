@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $workspace_id
  * @property int|null $created_by
+ * @property int|null $project_group_id
  * @property string $name
  * @property string $slug
  * @property string $key
@@ -37,8 +38,8 @@ use Illuminate\Support\Carbon;
  * @property-read Workspace $workspace
  */
 #[Fillable([
-    'workspace_id', 'created_by', 'name', 'slug', 'key', 'description',
-    'color', 'uses_sprints', 'is_archived', 'card_fields',
+    'workspace_id', 'created_by', 'project_group_id', 'name', 'slug', 'key',
+    'description', 'color', 'uses_sprints', 'is_archived', 'card_fields',
 ])]
 #[RouteKey('slug')]
 class Project extends Model
@@ -95,6 +96,19 @@ class Project extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * The shelf this project sits on, or null when it sits on none.
+     *
+     * Null is the ordinary case rather than an unset one: grouping is something
+     * a workspace opts into once it has enough projects to need it.
+     *
+     * @return BelongsTo<ProjectGroup, $this>
+     */
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(ProjectGroup::class, 'project_group_id');
     }
 
     /**

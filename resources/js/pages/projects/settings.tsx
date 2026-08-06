@@ -32,6 +32,7 @@ import {
     store as storeColumn,
     update as updateColumn,
 } from '@/routes/projects/columns';
+import { update as assignGroup } from '@/routes/projects/group';
 import {
     destroy as destroyLabel,
     store as storeLabel,
@@ -46,13 +47,24 @@ import type {
     CardFields,
     ColumnCategory,
     Project,
+    ProjectGroup,
     ProjectMembership,
     SnackUser,
     TaskLabel,
 } from '@/types';
 
+/**
+ * The value the group picker uses for "no group".
+ *
+ * A named token rather than an empty string, which the select primitive treats
+ * as no selection at all and refuses as an item value.
+ */
+const UNGROUPED = 'none';
+
 type Props = {
     project: Project;
+    /** Every group in the workspace, so the picker can name this one's. */
+    groups: ProjectGroup[];
     columns: BoardColumn[];
     members: ProjectMembership[];
     labels: TaskLabel[];
@@ -73,6 +85,7 @@ type Props = {
  */
 export default function ProjectSettingsPage({
     project,
+    groups,
     columns,
     members,
     labels,
@@ -96,6 +109,7 @@ export default function ProjectSettingsPage({
                 <div className="mx-auto max-w-3xl space-y-8 px-4 py-6">
                     <DetailsSection
                         project={project}
+                        groups={groups}
                         workspaceSlug={workspace.slug}
                         canManage={canManage}
                     />
@@ -135,10 +149,12 @@ export default function ProjectSettingsPage({
 
 function DetailsSection({
     project,
+    groups,
     workspaceSlug,
     canManage,
 }: {
     project: Project;
+    groups: ProjectGroup[];
     workspaceSlug: string;
     canManage: boolean;
 }) {
@@ -289,6 +305,67 @@ function DetailsSection({
                     </div>
                 )}
             </form>
+
+            {groups.length > 0 && (
+                /*
+                 * Outside the form above, and saved the moment it changes.
+                 *
+                 * Which heading a project sits under is not part of what the
+                 * project *is* — it is where it is filed, it has its own
+                 * endpoint, and it changes nothing on this page. Putting it
+                 * behind the same Save button would mean a rename and a move
+                 * travelling as one request to two different places.
+                 */
+                <div className="mt-6 max-w-xs space-y-1.5 border-t border-border pt-6">
+                    <Label htmlFor="project-group">Group</Label>
+
+                    <Select
+                        value={
+                            project.project_group_id === null
+                                ? UNGROUPED
+                                : String(project.project_group_id)
+                        }
+                        disabled={!canManage}
+                        onValueChange={(value) =>
+                            router.patch(
+                                assignGroup.url({
+                                    workspace: workspaceSlug,
+                                    project: project.slug,
+                                }),
+                                {
+                                    project_group_id:
+                                        value === UNGROUPED
+                                            ? null
+                                            : Number(value),
+                                },
+                                { preserveScroll: true },
+                            )
+                        }
+                    >
+                        <SelectTrigger id="project-group">
+                            <SelectValue />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                            {groups.map((group) => (
+                                <SelectItem
+                                    key={group.id}
+                                    value={String(group.id)}
+                                >
+                                    {group.name}
+                                </SelectItem>
+                            ))}
+
+                            <SelectItem value={UNGROUPED}>Ungrouped</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <p className="text-xs text-muted-foreground">
+                        Where this project sits on the project list. Saved as
+                        soon as you pick.
+                    </p>
+                </div>
+            )}
         </Section>
     );
 }

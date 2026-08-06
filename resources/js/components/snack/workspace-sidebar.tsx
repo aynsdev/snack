@@ -340,13 +340,25 @@ export function WorkspaceSidebar({
  * The project list: the boards you are on, and the way to the rest.
  *
  * Membership rather than every project in the workspace — see
- * App\Services\WorkspaceNavigator::sidebarProjects(). "Browse projects" at the
+ * App\Services\WorkspaceNavigator::memberProjects(). "Browse projects" at the
  * bottom is what makes the others reachable, exactly as it is for channels.
+ *
+ * Arranged under the same headings the project page uses, but only the ones
+ * holding something of yours: the sidebar shows a handful of boards, and a
+ * heading over nothing costs a row that a board could have had. Where they are
+ * curated is the project page — there is nothing to manage here.
  */
 function ProjectSection({ onNavigate }: { onNavigate?: () => void }) {
     const workspace = useWorkspace();
-    const projects = useSidebarProjects();
+    const { projects, sections } = useSidebarProjects();
     const activeProjectSlug = useActiveProjectSlug();
+
+    /*
+     * A single unheaded section is the flat list this has always been — one
+     * "Ungrouped" heading over the whole list would name a distinction the
+     * reader cannot see.
+     */
+    const showHeadings = sections.length > 1;
 
     return (
         <SidebarSection
@@ -371,33 +383,51 @@ function ProjectSection({ onNavigate }: { onNavigate?: () => void }) {
                     You are not on any projects yet.
                 </p>
             ) : (
-                <ul className="space-y-0.5">
-                    {projects.map((project) => (
-                        <li key={project.id}>
-                            <Link
-                                href={projectBoard([
-                                    workspace.slug,
-                                    project.slug,
-                                ])}
-                                onClick={onNavigate}
-                                aria-current={
-                                    project.slug === activeProjectSlug
-                                        ? 'page'
-                                        : undefined
-                                }
-                                className={cn(
-                                    'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
-                                    project.slug === activeProjectSlug
-                                        ? 'bg-sidebar-accent font-semibold text-foreground'
-                                        : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
-                                )}
-                            >
-                                <ProjectAvatar project={project} size="sm" />
-                                <span className="truncate">{project.name}</span>
-                            </Link>
-                        </li>
-                    ))}
-                </ul>
+                sections.map((section) => (
+                    <div
+                        key={section.group?.id ?? 'ungrouped'}
+                        className="mt-1.5 first:mt-0"
+                    >
+                        {showHeadings && (
+                            <p className="px-2 pt-1 pb-0.5 text-[0.6875rem] font-medium tracking-wide text-muted-foreground/70 uppercase">
+                                {section.group?.name ?? 'Ungrouped'}
+                            </p>
+                        )}
+
+                        <ul className="space-y-0.5">
+                            {section.projects.map((project) => (
+                                <li key={project.id}>
+                                    <Link
+                                        href={projectBoard([
+                                            workspace.slug,
+                                            project.slug,
+                                        ])}
+                                        onClick={onNavigate}
+                                        aria-current={
+                                            project.slug === activeProjectSlug
+                                                ? 'page'
+                                                : undefined
+                                        }
+                                        className={cn(
+                                            'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
+                                            project.slug === activeProjectSlug
+                                                ? 'bg-sidebar-accent font-semibold text-foreground'
+                                                : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+                                        )}
+                                    >
+                                        <ProjectAvatar
+                                            project={project}
+                                            size="sm"
+                                        />
+                                        <span className="truncate">
+                                            {project.name}
+                                        </span>
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                ))
             )}
 
             <Link

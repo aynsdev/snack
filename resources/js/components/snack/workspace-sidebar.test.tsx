@@ -67,7 +67,26 @@ const group: Conversation = {
     created_at: null,
 };
 
-function mockWorkspace() {
+function makeProject(id: number, name: string, groupId: number | null) {
+    return {
+        id,
+        name,
+        slug: name.toLowerCase().replace(/\s+/g, '-'),
+        key: name.slice(0, 3).toUpperCase(),
+        description: null,
+        color: 'violet',
+        uses_sprints: true,
+        is_archived: false,
+        project_group_id: groupId,
+        card_fields: {},
+        is_member: true,
+        abilities: { contribute: true, manage: false },
+        created_at: null,
+    };
+}
+
+/** Anything here is merged over the default navigation payload. */
+function mockWorkspace(overrides: Record<string, unknown> = {}) {
     usePage.mockReturnValue({
         props: {
             snack: {
@@ -101,6 +120,7 @@ function mockWorkspace() {
                         makePerson(3, 'Bo Diddley'),
                     ],
                     projects: [],
+                    project_groups: [],
                     unread: {
                         channels: {},
                         conversations: {},
@@ -108,6 +128,7 @@ function mockWorkspace() {
                         threads: 0,
                         notifications: 0,
                     },
+                    ...overrides,
                 },
             },
             auth: { user: null, profile: makeUser(1, 'Viewer') },
@@ -247,6 +268,41 @@ describe('WorkspaceSidebar outside direct messages', () => {
         expect(
             screen.queryByRole('textbox', { name: 'Filter direct messages' }),
         ).toBeNull();
+    });
+
+    it('arranges the project list under the groups holding your projects', () => {
+        currentUrl.value = '/w/snack-hq/projects';
+
+        mockWorkspace({
+            projects: [
+                makeProject(1, 'Pedicab Web', 7),
+                makeProject(2, 'Loose Ends', null),
+            ],
+            // Only the groups something of yours is in — the server sends no
+            // others, so an empty heading never reaches the sidebar.
+            project_groups: [{ id: 7, name: 'Platform', position: 65536 }],
+        });
+
+        render(<WorkspaceSidebar />);
+
+        expect(screen.getByText('Platform')).toBeInTheDocument();
+        expect(screen.getByText('Ungrouped')).toBeInTheDocument();
+        expect(
+            screen.getByRole('link', { name: /Pedicab Web/ }),
+        ).toHaveAttribute('href', '/w/snack-hq/projects/pedicab-web');
+    });
+
+    it('draws a flat list when none of your projects is in a group', () => {
+        currentUrl.value = '/w/snack-hq/projects';
+
+        mockWorkspace({ projects: [makeProject(1, 'Pedicab Web', null)] });
+
+        render(<WorkspaceSidebar />);
+
+        // One "Ungrouped" heading over the whole list names a distinction the
+        // reader cannot see, and costs a row a board could have had.
+        expect(screen.queryByText('Ungrouped')).toBeNull();
+        expect(screen.getByText('Pedicab Web')).toBeInTheDocument();
     });
 
     it('gives way to the DM list for a conversation opened from it', () => {

@@ -1,12 +1,16 @@
 <?php
 
 use App\Enums\NotificationReason;
+use App\Models\BoardColumn;
 use App\Models\ConversationParticipant;
 use App\Models\Mention;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\Notification;
+use App\Models\ProjectGroup;
+use App\Models\ProjectMember;
 use App\Models\SavedMessage;
+use App\Models\Task;
 use App\Models\User;
 use App\Services\MessageHistory;
 use Illuminate\Support\Facades\DB;
@@ -258,5 +262,38 @@ it('serves the DM roster in a constant number of queries', function () {
             'workspace' => $workspace->slug,
             'channel' => $channel->slug,
         ]);
+    });
+});
+
+/**
+ * The sidebar's project list, and the headings it is drawn under.
+ *
+ * Each project names a group, so the list reads a relation per row — exactly
+ * the shape that becomes an N+1 when an eager load goes missing. It rides on
+ * the shared props, so any workspace page measures it; the project index is
+ * used here because it also serves the page's own copy of the list.
+ */
+it('serves the project list and its groups in a constant number of queries', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+
+    expectConstantQueries($owner, function (int $rows) use ($workspace, $owner): string {
+        Task::query()->whereIn('project_id', $workspace->projects()->select('id'))->delete();
+        ProjectMember::query()->whereIn('project_id', $workspace->projects()->select('id'))->delete();
+        BoardColumn::query()->whereIn('project_id', $workspace->projects()->select('id'))->delete();
+        $workspace->projects()->delete();
+        $workspace->projectGroups()->delete();
+
+        // A group per project, which is the worst case for the headings: every
+        // row carries a different one.
+        foreach (range(1, $rows) as $index) {
+            $group = ProjectGroup::factory()->create([
+                'workspace_id' => $workspace->id,
+                'position' => $index * 1000,
+            ]);
+
+            makeProject($workspace, $owner)->update(['project_group_id' => $group->id]);
+        }
+
+        return route('projects.index', $workspace);
     });
 });
