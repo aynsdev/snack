@@ -209,6 +209,16 @@ export type Message = {
     edited_at: string | null;
     created_at: string | null;
     /**
+     * Present only on the standup bot's prompts and reminders, which is a
+     * handful of messages in one conversation — null on everything else.
+     *
+     * Carried by the message rather than fetched, so a DM with a month of
+     * standups in it draws every card without a request per message, and the
+     * card survives a reload. Rewritten in place when the response is
+     * submitted, which is what retires the form.
+     */
+    standup?: StandupCard | null;
+    /**
      * Absent on messages that arrived over the WebSocket: one broadcast reaches
      * every subscriber, so it cannot carry per-viewer permissions. The timeline
      * fills in a local hint for those; the server re-authorizes regardless.
@@ -1153,4 +1163,85 @@ export type WorkspaceMemberJoinedEvent = {
             'id' | 'name' | 'username' | 'avatar_url' | 'title'
         >;
     };
+};
+
+/*
+|--------------------------------------------------------------------------
+| Standups
+|--------------------------------------------------------------------------
+*/
+
+/** Waiting on them, answered, or "nothing from me today". */
+export type StandupResponseState = 'pending' | 'submitted' | 'skipped';
+
+/** Taking answers, or written up and posted. */
+export type StandupRunState = 'collecting' | 'completed';
+
+/**
+ * The block a standup direct message carries — mirrors App\Support\StandupCard.
+ *
+ * `questions` is the snapshot of what was actually asked, not the standup's
+ * current wording: an admin rewording a question must not silently refile
+ * yesterday's answers under today's questions. The form posts its answers back
+ * positionally against this list.
+ */
+export type StandupCard = {
+    standup_id: number;
+    run_id: number;
+    response_id: number;
+    name: string;
+    channel: { name: string; slug: string };
+    /** The local date the run belongs to, as the team would name the day. */
+    date: string;
+    date_label: string;
+    questions: string[];
+    closes_at: string;
+    state: StandupResponseState;
+    submitted_at: string | null;
+    /** Present once answered — what the card shows in place of the form. */
+    answers?: StandupAnswer[];
+};
+
+export type StandupAnswer = {
+    question: string;
+    answer: string;
+};
+
+/**
+ * A standup as the admin screen sees it — mirrors
+ * App\Http\Resources\StandupResource.
+ *
+ * `schedule_summary` arrives rendered rather than assembled here: the client
+ * would need the same weekday names and the same "Weekdays"/"Every day"
+ * collapsing to say the same sentence, and two implementations of one sentence
+ * is how the list and the dialog end up describing a standup differently.
+ */
+export type Standup = {
+    id: number;
+    name: string;
+    channel: { id: number; name: string; slug: string };
+    questions: string[];
+    /** ISO weekday numbers, 1 = Monday. */
+    days_of_week: number[];
+    /** "09:30", in `timezone`. */
+    ask_at: string;
+    timezone: string;
+    reminder_after_minutes: number | null;
+    closes_after_minutes: number;
+    is_active: boolean;
+    schedule_summary: string;
+    /** The channel's live human members — who this actually messages. */
+    participant_count?: number;
+    last_run: StandupLastRun | null;
+    created_at: string | null;
+};
+
+export type StandupLastRun = {
+    date: string;
+    date_label: string;
+    state: StandupRunState;
+    asked_at: string | null;
+    closed_at: string | null;
+    answered: number;
+    asked: number;
 };

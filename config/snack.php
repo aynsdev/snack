@@ -538,4 +538,49 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Standups
+    |--------------------------------------------------------------------------
+    |
+    | The bot that asks a channel's members a set of questions on a schedule and
+    | posts their answers back to the channel.
+    |
+    */
+
+    'standups' => [
+        /*
+         * How far past its scheduled time a standup may still be asked.
+         *
+         * The scheduler wakes every minute, but minutes get missed — a worker
+         * restart, a deploy, a machine that was asleep — and a standup that
+         * only happens if the clock is looked at during the exact minute it was
+         * due is one that silently does not happen.
+         *
+         * The bound is what stops the catch-up being worse than the miss:
+         * without it, a deployment that was down overnight would come back up
+         * and DM everybody about a standup whose day is over, and switching a
+         * standup on in the afternoon would immediately fire that morning's.
+         */
+        'catch_up_minutes' => (int) env('SNACK_STANDUP_CATCH_UP_MINUTES', 60),
+
+        // The default answering window for a new standup. Long enough for a
+        // team spread over a few hours; short enough that the write-up still
+        // lands on the morning it describes.
+        'closes_after_minutes' => (int) env('SNACK_STANDUP_CLOSES_AFTER_MINUTES', 240),
+
+        // The default nudge, measured from when the questions went out.
+        'reminder_after_minutes' => (int) env('SNACK_STANDUP_REMINDER_AFTER_MINUTES', 90),
+
+        /*
+         * Caps on the form, enforced by the request rules.
+         *
+         * A standup is a thing people answer standing up. Fifteen questions is
+         * a form, and a form is what everybody stops filling in by Thursday.
+         */
+        'max_questions' => 10,
+        'max_question_length' => 200,
+        'max_answer_length' => 2000,
+    ],
+
 ];

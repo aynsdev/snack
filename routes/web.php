@@ -46,6 +46,8 @@ use App\Http\Controllers\Projects\TaskLabelController;
 use App\Http\Controllers\Projects\TaskMoveController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SetupController;
+use App\Http\Controllers\Standups\StandupController;
+use App\Http\Controllers\Standups\StandupResponseController;
 use App\Http\Controllers\UploadController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\Workspaces\AuditLogController;
@@ -605,6 +607,54 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->name('workspace-logo.destroy');
 
         Route::get('audit', [AuditLogController::class, 'index'])->name('audit.index');
+
+        /*
+         *--------------------------------------------------------------------
+         * Standups
+         *--------------------------------------------------------------------
+         *
+         * The schedules themselves are workspace administration — they arrange
+         * recurring direct messages to everybody in a channel, which is the one
+         * thing an ordinary member could otherwise set up that lands in other
+         * people's inboxes without their asking. See App\Policies\StandupPolicy.
+         *
+         * Addressed by id rather than by a slug: a standup has no page of its
+         * own for a slug to carry, and scopeBindings() ties {standup} to this
+         * workspace's own — so an id from another tenant 404s at the router
+         * rather than at a policy that would have to catch it.
+         */
+        Route::get('standups', [StandupController::class, 'index'])
+            ->name('standups.index');
+        Route::post('standups', [StandupController::class, 'store'])
+            ->name('standups.store');
+        Route::patch('standups/{standup}', [StandupController::class, 'update'])
+            ->name('standups.update');
+        Route::delete('standups/{standup}', [StandupController::class, 'destroy'])
+            ->name('standups.destroy');
+
+        /*
+         * Answering one, which is a different right held by different people:
+         * not an admin's, but the person who was asked. Deliberately outside the
+         * path above — a response row already names its standup, and a route
+         * carrying both invites a request that names one standup and somebody
+         * else's answer to another.
+         *
+         * Throttled as a send rather than a read: it posts to a channel the
+         * moment the last person answers.
+         *
+         * `withoutScopedBindings()` because there is no relation for the scoping
+         * to travel: a response hangs off a run, which hangs off a standup,
+         * which hangs off the workspace — three hops, which `hasManyThrough`
+         * does not reach across, so unlike {message} and {task} this cannot be
+         * resolved through a tenant relation. Nothing is lost by it. Tenancy is
+         * not what protects this row: ownership is, and
+         * StandupPolicy::respond() refuses anybody but the person who was asked
+         * — with denyAsNotFound, so a probed id does not even confirm it exists.
+         */
+        Route::post('standup-responses/{response}', [StandupResponseController::class, 'store'])
+            ->middleware('throttle:messages')
+            ->withoutScopedBindings()
+            ->name('standup-responses.store');
 
         // Members
         Route::get('members', [MemberController::class, 'index'])->name('members.index');

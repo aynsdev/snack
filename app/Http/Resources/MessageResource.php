@@ -98,6 +98,25 @@ class MessageResource extends JsonResource
             'is_edited' => $message->isEdited(),
             'edited_at' => $message->edited_at?->toIso8601String(),
             'created_at' => $message->created_at?->toIso8601String(),
+
+            /*
+             * The standup card, when this message is one.
+             *
+             * Read straight off the row's own `metadata` rather than resolved
+             * through the standup tables, which is the whole point of storing it
+             * there: a conversation with a month of standups in it draws every
+             * card without a query, and the timeline's eager-load set does not
+             * grow for a feature most workspaces do not use. See
+             * {@see App\Support\StandupCard}.
+             *
+             * Null for every other message, which is nearly all of them — and
+             * `metadata` itself is deliberately not exposed. It is an internal
+             * bag, and publishing it wholesale would make every future key
+             * written into it a public API by accident.
+             */
+            'standup' => is_array($message->metadata['standup'] ?? null)
+                ? $message->metadata['standup']
+                : null,
         ];
     }
 

@@ -49,6 +49,19 @@ enum AuditAction: string
     case ProjectGroupUpdated = 'project.group_updated';
     case ProjectGroupDeleted = 'project.group_deleted';
 
+    /*
+     * Its own subject rather than folded under `channel`.
+     *
+     * A standup is not a property of the channel it reports to: it DMs people on
+     * a schedule, and "who set the app to message the team every morning, and
+     * when did the questions change" is a question an administrator arrives with
+     * whole. Filing it under the channel would answer it only for somebody who
+     * already knew which channel to look in.
+     */
+    case StandupCreated = 'standup.created';
+    case StandupUpdated = 'standup.updated';
+    case StandupDeleted = 'standup.deleted';
+
     case MessageDeletedByAdmin = 'message.deleted_by_admin';
 
     public function label(): string
@@ -83,6 +96,9 @@ enum AuditAction: string
             self::ProjectGroupCreated => 'Project group created',
             self::ProjectGroupUpdated => 'Project group updated',
             self::ProjectGroupDeleted => 'Project group deleted',
+            self::StandupCreated => 'Standup created',
+            self::StandupUpdated => 'Standup updated',
+            self::StandupDeleted => 'Standup deleted',
             self::MessageDeletedByAdmin => 'Message removed by admin',
         };
     }

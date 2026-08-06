@@ -138,6 +138,17 @@ class Channel extends Model
         return $this->hasMany(PinnedMessage::class);
     }
 
+    /**
+     * The standups whose roster is this channel's membership and whose summary
+     * is posted here.
+     *
+     * @return HasMany<Standup, $this>
+     */
+    public function standups(): HasMany
+    {
+        return $this->hasMany(Standup::class);
+    }
+
     // -- Scopes --------------------------------------------------------------
 
     /**

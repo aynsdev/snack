@@ -8,6 +8,7 @@ use App\Enums\WorkspaceRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -28,6 +29,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property string|null $avatar_path
+ * @property bool $is_bot
  * @property string|null $title
  * @property string|null $department
  * @property string $timezone
@@ -78,7 +80,31 @@ class User extends Authenticatable implements PasskeyUser
             'status_expires_at' => 'datetime',
             'last_seen_at' => 'datetime',
             'presence_status' => PresenceStatus::class,
+            'is_bot' => 'boolean',
         ];
+    }
+
+    /**
+     * Whether this account is software.
+     *
+     * Deliberately absent from the fillable list above: nothing a person submits
+     * should be able to turn an account into a bot, and the only writer is
+     * {@see App\Services\StandupBot}, which sets it explicitly.
+     */
+    public function isBot(): bool
+    {
+        return $this->is_bot;
+    }
+
+    /**
+     * Real people. The default for anything that counts, bills, emails, or
+     * administers members — see the `is_bot` migration for the full list.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeHumans(Builder $query): void
+    {
+        $query->where('users.is_bot', false);
     }
 
     // -- Workspaces ----------------------------------------------------------

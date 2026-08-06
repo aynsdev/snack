@@ -13,6 +13,7 @@ import {
 import { useState } from 'react';
 import { AttachmentList } from '@/components/snack/attachment-list';
 import { MessageText } from '@/components/snack/message-text';
+import { StandupCard } from '@/components/snack/standup-card';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -188,6 +189,23 @@ export function MessageItem({
                             <span className="ml-1 text-[0.6875rem] text-muted-foreground">
                                 (edited)
                             </span>
+                        )}
+
+                        {/*
+                         * The standup form, on the bot's prompts and reminders
+                         * only — `standup` is null on every other message.
+                         *
+                         * Below the body rather than instead of it: the body
+                         * carries the questions too, which is what search
+                         * indexes, what the sidebar previews, and what somebody
+                         * reading on a client that has never heard of standup
+                         * cards still sees.
+                         */}
+                        {message.standup != null && (
+                            <StandupCard
+                                key={message.standup.response_id}
+                                card={message.standup}
+                            />
                         )}
 
                         <AttachmentList attachments={message.attachments} />
