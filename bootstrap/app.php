@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\PreventSharedCaching;
 use App\Http\Middleware\ResolveWorkspace;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -20,6 +21,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [
+            /*
+             * First in the list, which makes it *last* on the way out: a
+             * response unwinds the stack in reverse, and Inertia's middleware
+             * replaces the Vary header wholesale. Registered after it, this one
+             * had its Vary silently overwritten — see PreventSharedCaching, and
+             * the test that pins the order.
+             */
+            PreventSharedCaching::class,
+
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,

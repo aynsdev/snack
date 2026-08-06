@@ -134,6 +134,16 @@ class Workspace extends Model
     }
 
     /**
+     * The shelves this workspace sorts its projects onto.
+     *
+     * @return HasMany<ProjectGroup, $this>
+     */
+    public function projectGroups(): HasMany
+    {
+        return $this->hasMany(ProjectGroup::class);
+    }
+
+    /**
      * Every task in every project of this workspace.
      *
      * Exists for the route binding rather than for reading: `tasks/{task}` sits

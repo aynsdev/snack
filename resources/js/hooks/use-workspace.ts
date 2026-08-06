@@ -5,6 +5,7 @@ import type {
     Conversation,
     CurrentWorkspace,
     Project,
+    ProjectGroup,
     SnackUser,
     UnreadState,
     Workspace,
@@ -158,13 +159,58 @@ export function useSidebarPeople(): WorkspacePerson[] {
     return useCurrentWorkspace()?.people ?? [];
 }
 
+/** One heading in the sidebar's project list; a null group is the leftovers. */
+export type ProjectSection = {
+    group: ProjectGroup | null;
+    projects: Project[];
+};
+
 /**
- * The projects the viewer is on.
+ * The projects the viewer is on, bucketed under the groups they are filed in.
  *
  * Not every project in the workspace: the sidebar lists the boards you work, and
  * the project index lists the ones you could. See
- * App\Services\WorkspaceNavigator::sidebarProjects().
+ * App\Services\WorkspaceNavigator::memberProjects().
+ *
+ * `sections` is what the list renders. A workspace with no groups — or one where
+ * none of *your* projects is filed — yields a single section with no heading,
+ * which is the flat list the sidebar has always been.
  */
-export function useSidebarProjects(): Project[] {
-    return useCurrentWorkspace()?.projects ?? [];
+export function useSidebarProjects(): {
+    projects: Project[];
+    sections: ProjectSection[];
+} {
+    const current = useCurrentWorkspace();
+
+    return useMemo(() => {
+        const projects = current?.projects ?? [];
+        const groups = current?.project_groups ?? [];
+
+        const sections: ProjectSection[] = groups.map((group) => ({
+            group,
+            projects: projects.filter(
+                (project) => project.project_group_id === group.id,
+            ),
+        }));
+
+        const filed = new Set(groups.map((group) => group.id));
+
+        const ungrouped = projects.filter(
+            (project) =>
+                project.project_group_id === null ||
+                !filed.has(project.project_group_id),
+        );
+
+        /*
+         * The leftovers go last and only when there are any — and they keep the
+         * "Ungrouped" heading only when something above them has one. A sidebar
+         * whose every project is ungrouped is not a list with one section, it is
+         * a list.
+         */
+        if (ungrouped.length > 0) {
+            sections.push({ group: null, projects: ungrouped });
+        }
+
+        return { projects, sections };
+    }, [current?.projects, current?.project_groups]);
 }

@@ -111,6 +111,7 @@ function makeCurrent(
         conversations,
         people,
         projects: [],
+        project_groups: [],
         unread: {
             channels: { 1: { messages: 3, mentions: 1 } },
             conversations: { conv_01HZX: { messages: 2, mentions: 2 } },

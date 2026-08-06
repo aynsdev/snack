@@ -37,6 +37,11 @@ class ProjectResource extends JsonResource
             'uses_sprints' => $this->uses_sprints,
             'is_archived' => $this->is_archived,
 
+            // The heading this project sits under, by id. The group's name is
+            // sent once alongside the list rather than repeated on every
+            // project — see ProjectGroupResource.
+            'project_group_id' => $this->project_group_id,
+
             // Resolved rather than raw, so a card renders the same whether the
             // project has ever opened its settings — see Project::cardFields().
             'card_fields' => $this->cardFields(),

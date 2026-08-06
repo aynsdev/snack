@@ -5,11 +5,14 @@ namespace App\Services;
 use App\Enums\ConversationType;
 use App\Http\Resources\ChannelResource;
 use App\Http\Resources\ConversationResource;
+use App\Http\Resources\ProjectGroupResource;
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\WorkspaceResource;
 use App\Models\Channel;
 use App\Models\Conversation;
+use App\Models\Project;
+use App\Models\ProjectGroup;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Collection;
@@ -99,18 +102,76 @@ class WorkspaceNavigator
      * would bury the two you work on. The rest are one click away in the project
      * list, which is what that page is for.
      *
+     * Takes the collection rather than loading it, because the payload sends
+     * the groups alongside and both are read off the same rows — see
+     * {@see sidebarProjectGroups()}.
+     *
+     * @param  Collection<int, Project>  $projects  from {@see memberProjects()}
      * @return array<int, array<string, mixed>>
      */
-    public function sidebarProjects(Workspace $workspace, User $user): array
+    public function sidebarProjects(Collection $projects): array
     {
-        $projects = $workspace->projects()
+        return ProjectResource::collection($projects)->resolve(request());
+    }
+
+    /**
+     * The headings the sidebar's project list is arranged under.
+     *
+     * Only the groups that have one of *this* person's projects in them, which
+     * is what makes this different from the project page's list. That page is
+     * where groups are curated, so an empty one has to stay visible there for
+     * something to be dropped into; here an empty heading would be a label over
+     * nothing, in the one part of the shell with the least room to spare.
+     *
+     * Read off the projects already loaded rather than queried again — the
+     * relation is eager-loaded, so the groups cost one query no matter how many
+     * projects the person is on.
+     *
+     * @param  Collection<int, Project>  $projects  the same collection sent as `projects`
+     * @return array<int, array<string, mixed>>
+     */
+    public function sidebarProjectGroups(Collection $projects): array
+    {
+        $groups = $projects
+            ->map(fn (Project $project): ?ProjectGroup => $project->group)
+            ->filter()
+            ->unique('id')
+            ->sortBy([['position', 'asc'], ['id', 'asc']])
+            ->values();
+
+        return ProjectGroupResource::collection($groups)->resolve(request());
+    }
+
+    /**
+     * The projects this person is on, with everything the sidebar reads.
+     *
+     * @return Collection<int, Project>
+     */
+    public function memberProjects(Workspace $workspace, User $user): Collection
+    {
+        return $workspace->projects()
             ->notArchived()
             ->whereMember($user)
-            ->with(['members' => fn ($query) => $query->where('user_id', $user->id)])
-            ->orderBy('name')
-            ->get();
+            ->with([
+                'members' => fn ($query) => $query->where('user_id', $user->id),
 
-        return ProjectResource::collection($projects)->resolve(request());
+                // Eager-loaded because the sidebar draws a heading per group:
+                // reading it per project would be an N+1 across the whole list,
+                // on every page in the workspace.
+                'group',
+            ])
+            ->orderBy('name')
+            ->get()
+            /*
+             * Hand every project the workspace instance we already have.
+             *
+             * ProjectResource asks the policy what this viewer may do with each
+             * project, and ProjectPolicy answers by reading the project's
+             * workspace — which, left alone, is a lazy load per project on every
+             * page in the workspace. The same fix, for the same reason, as
+             * {@see MessageHistory::shareContainer()}.
+             */
+            ->each(fn (Project $project) => $project->setRelation('workspace', $workspace));
     }
 
     /**
@@ -242,6 +303,11 @@ class WorkspaceNavigator
         $channelUnread = $this->unread->forChannels($workspace, $user);
         $conversationUnread = $this->unread->forConversations($workspace, $user);
 
+        // Loaded once and read twice: the list, and the headings it is drawn
+        // under. Asking for the groups separately would be a second query for
+        // rows this one already has.
+        $projects = $this->memberProjects($workspace, $user);
+
         return [
             'workspace' => (new WorkspaceResource($workspace))->resolve(request()),
             'channels' => $this->sidebarChannels($workspace, $user),
@@ -256,7 +322,11 @@ class WorkspaceNavigator
             // reason the channel list is: the sidebar is part of the shell, and
             // a list that only loaded on project pages would appear to pop into
             // existence when you walked into that section.
-            'projects' => $this->sidebarProjects($workspace, $user),
+            'projects' => $this->sidebarProjects($projects),
+
+            // The headings those projects are drawn under — only the ones with
+            // something of this person's in them. See sidebarProjectGroups().
+            'project_groups' => $this->sidebarProjectGroups($projects),
 
             'unread' => [
                 // Cast so an empty PHP array serializes as `{}` rather than

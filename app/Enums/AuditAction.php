@@ -40,6 +40,15 @@ enum AuditAction: string
     case SprintStarted = 'project.sprint_started';
     case SprintCompleted = 'project.sprint_completed';
 
+    /*
+     * Grouped under the `project` subject rather than a subject of their own:
+     * somebody auditing how the project list changed is asking one question, and
+     * splitting it across two filters would hide half the answer.
+     */
+    case ProjectGroupCreated = 'project.group_created';
+    case ProjectGroupUpdated = 'project.group_updated';
+    case ProjectGroupDeleted = 'project.group_deleted';
+
     case MessageDeletedByAdmin = 'message.deleted_by_admin';
 
     public function label(): string
@@ -71,6 +80,9 @@ enum AuditAction: string
             self::ProjectMemberRemoved => 'Removed from project',
             self::SprintStarted => 'Sprint started',
             self::SprintCompleted => 'Sprint completed',
+            self::ProjectGroupCreated => 'Project group created',
+            self::ProjectGroupUpdated => 'Project group updated',
+            self::ProjectGroupDeleted => 'Project group deleted',
             self::MessageDeletedByAdmin => 'Message removed by admin',
         };
     }
