@@ -2,8 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Models\MessageAttachment;
 use App\Models\Task;
 use App\Models\TaskLabel;
+use App\Support\BranchName;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -37,6 +39,12 @@ class TaskResource extends JsonResource
             'description' => $this->description,
             'type' => $this->type->value,
             'priority' => $this->priority->value,
+
+            /*
+             * Composed here rather than in the panel that copies it, so every
+             * surface offering a branch offers the same one. See BranchName.
+             */
+            'branch_name' => BranchName::for($this->resource),
 
             'project_id' => $this->project_id,
             'board_column_id' => $this->board_column_id,
@@ -96,6 +104,23 @@ class TaskResource extends JsonResource
                         'id' => $this->release->id,
                         'name' => $this->release->name,
                     ],
+            ),
+
+            /*
+             * Both are `whenLoaded` and neither is ever loaded by the board:
+             * a card carries its discussion and its files only when somebody
+             * opened it. A list of eighty cards must not pay for either.
+             */
+            'comments' => $this->whenLoaded(
+                'comments',
+                fn (): array => TaskCommentResource::collection($this->comments)->resolve($request),
+            ),
+
+            'attachments' => $this->whenLoaded(
+                'attachments',
+                fn (): array => $this->attachments
+                    ->map(fn (MessageAttachment $attachment): array => AttachmentResource::payload($attachment))
+                    ->all(),
             ),
 
             'created_at' => $this->created_at?->toIso8601String(),

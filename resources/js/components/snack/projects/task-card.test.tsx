@@ -23,6 +23,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
         description: null,
         type: 'bug',
         priority: 'high',
+        branch_name: 'bugfix/PWA-1499-xendit-tokenization-api',
         project_id: 1,
         board_column_id: 1,
         sprint_id: null,

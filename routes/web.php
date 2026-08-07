@@ -44,6 +44,8 @@ use App\Http\Controllers\Projects\ProjectStarController;
 use App\Http\Controllers\Projects\ProjectSummaryController;
 use App\Http\Controllers\Projects\ReleaseController;
 use App\Http\Controllers\Projects\SprintController;
+use App\Http\Controllers\Projects\TaskAttachmentController;
+use App\Http\Controllers\Projects\TaskCommentController;
 use App\Http\Controllers\Projects\TaskController;
 use App\Http\Controllers\Projects\TaskLabelController;
 use App\Http\Controllers\Projects\TaskMoveController;
@@ -632,6 +634,32 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::patch('tasks/{task}/position', [TaskMoveController::class, 'update'])
             ->middleware('throttle:messages')
             ->name('tasks.move');
+
+        /*
+         * The discussion on a card, and its files.
+         *
+         * Both stay nested under the card even for edits, which the task routes
+         * above deliberately do not: `scopeBindings()` then resolves the comment
+         * through `Task::comments()` and the task through the workspace, so a
+         * request naming one card and a comment from another 404s at the router
+         * rather than in a controller that has to remember to check.
+         *
+         * Files are uploaded straight onto the card — unlike the composer's tray
+         * there is nothing to claim afterwards, because the card already exists.
+         */
+        Route::post('tasks/{task}/comments', [TaskCommentController::class, 'store'])
+            ->middleware('throttle:messages')
+            ->name('tasks.comments.store');
+        Route::patch('tasks/{task}/comments/{comment}', [TaskCommentController::class, 'update'])
+            ->name('tasks.comments.update');
+        Route::delete('tasks/{task}/comments/{comment}', [TaskCommentController::class, 'destroy'])
+            ->name('tasks.comments.destroy');
+
+        Route::post('tasks/{task}/attachments', [TaskAttachmentController::class, 'store'])
+            ->middleware('throttle:uploads')
+            ->name('tasks.attachments.store');
+        Route::delete('tasks/{task}/attachments/{attachment}', [TaskAttachmentController::class, 'destroy'])
+            ->name('tasks.attachments.destroy');
 
         /*
          * Workspace administration.

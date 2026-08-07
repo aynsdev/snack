@@ -912,6 +912,11 @@ export type Task = {
     description: string | null;
     type: TaskType;
     priority: TaskPriority;
+    /**
+     * "feature/PWA-1499-cancel-a-ride" — composed by the server so every
+     * surface that offers to copy one offers the same one.
+     */
+    branch_name: string;
     project_id: number;
     board_column_id: number;
     sprint_id: number | null;
@@ -924,8 +929,33 @@ export type Task = {
     labels?: TaskLabel[];
     epic?: { id: number; title: string; reference: string } | null;
     release?: { id: number; name: string } | null;
+    /**
+     * The discussion and the files, which arrive only from `tasks.show` — a
+     * board of eighty cards never carries either.
+     */
+    comments?: TaskComment[];
+    attachments?: Attachment[];
     created_at: string | null;
     updated_at: string | null;
+};
+
+/**
+ * One remark on a card. Mirrors App\Http\Resources\TaskCommentResource.
+ *
+ * `author` is null when the person who wrote it has been deleted — the remark
+ * outlives them, because the reasoning recorded on a card is what the next
+ * person needs.
+ */
+export type TaskComment = {
+    id: number;
+    body: string;
+    /** Set only by a rewrite, which is what the "edited" mark means. */
+    edited_at: string | null;
+    created_at: string | null;
+    author: SnackUser | null;
+    /** The policy's answer, not the client's guess — editing and deleting
+     *  have different rules. */
+    can: { update: boolean; delete: boolean };
 };
 
 /** One person on a project, keyed by the membership row the routes address. */

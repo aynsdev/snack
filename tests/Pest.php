@@ -35,6 +35,7 @@ use App\Models\Huddle;
 use App\Models\Message;
 use App\Models\Project;
 use App\Models\ProjectMember;
+use App\Models\Task;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
@@ -229,6 +230,25 @@ function addToProject(Project $project, User $user, ProjectRole $role = ProjectR
     $project->unsetRelation('members');
 
     return $membership;
+}
+
+/**
+ * A card on a project's board, in the column new work lands in.
+ *
+ * For tests that need *a card to hang something off* — a comment, a file — where
+ * how it was filed is not what is under test. Anything testing the filing itself
+ * goes through the endpoint instead.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function makeTask(Project $project, ?User $reporter = null, array $attributes = []): Task
+{
+    return Task::factory()->create([
+        'project_id' => $project->id,
+        'board_column_id' => projectColumn($project, ColumnCategory::Unstarted)->id,
+        'reporter_id' => $reporter?->id,
+        ...$attributes,
+    ]);
 }
 
 /**

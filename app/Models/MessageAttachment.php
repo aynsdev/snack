@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $workspace_id
  * @property int|null $message_id
+ * @property int|null $task_id
  * @property int $uploaded_by
  * @property string $disk
  * @property string $path
@@ -32,9 +33,10 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Message|null $message
+ * @property-read Task|null $task
  */
 #[Fillable([
-    'workspace_id', 'message_id', 'uploaded_by', 'disk', 'path', 'thumbnail_path',
+    'workspace_id', 'message_id', 'task_id', 'uploaded_by', 'disk', 'path', 'thumbnail_path',
     'original_name', 'mime_type', 'size', 'metadata',
 ])]
 #[Hidden(['disk', 'path', 'thumbnail_path'])]
@@ -73,6 +75,17 @@ class MessageAttachment extends Model
     }
 
     /**
+     * The card this file is attached to, for the files that hang off a task
+     * rather than a message. Never both — see the migration's check constraint.
+     *
+     * @return BelongsTo<Task, $this>
+     */
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(Task::class);
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function uploader(): BelongsTo
@@ -83,13 +96,17 @@ class MessageAttachment extends Model
     // -- Scopes --------------------------------------------------------------
 
     /**
-     * Uploads that were never attached to a sent message, eligible for pruning.
+     * Uploads nothing ever claimed, eligible for pruning.
+     *
+     * Both owners have to be null. A file attached to a card has no message and
+     * would otherwise look abandoned to `snack:prune-uploads`, which would then
+     * delete it within the day.
      *
      * @param  Builder<$this>  $query
      */
     public function scopeOrphaned(Builder $query): void
     {
-        $query->whereNull('message_id');
+        $query->whereNull('message_id')->whereNull('task_id');
     }
 
     /**

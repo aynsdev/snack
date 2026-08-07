@@ -207,6 +207,7 @@ export default function ProjectBacklogPage({
                 labels={labels}
                 epics={epics}
                 releases={releases}
+                workspaceSlug={workspace.slug}
                 canContribute={canContribute}
                 canDelete={canContribute}
                 onClose={() => setOpenTaskId(null)}

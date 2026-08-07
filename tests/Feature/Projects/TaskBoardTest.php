@@ -82,6 +82,22 @@ it('lands a new task in the first unstarted column and broadcasts it', function 
         && $event->taskId === $task['id']);
 });
 
+it('hands every card a branch name, and re-files it when the card is retyped', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+
+    $task = fileTask($this, $workspace, $project, $owner, 'Cancel a ride');
+
+    expect($task['branch_name'])->toBe("feature/{$task['reference']}-cancel-a-ride");
+
+    // The prefix is derived from the type rather than stored, so retyping the
+    // card re-files the branch and there is no second thing to keep in step.
+    $this->actingAs($owner)
+        ->patchJson(route('tasks.update', [$workspace->slug, $task['id']]), ['type' => 'bug'])
+        ->assertOk()
+        ->assertJsonPath('task.branch_name', "bugfix/{$task['reference']}-cancel-a-ride");
+});
+
 it('drops an assignee who is not on the project', function () {
     [$workspace, $owner] = makeWorkspaceWithOwner();
     $project = makeProject($workspace, $owner);

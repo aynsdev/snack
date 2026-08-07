@@ -1,8 +1,9 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { CalendarClock, Play, SquareCheckBig, X } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AddColumnTile } from '@/components/snack/projects/add-column-tile';
 import { BoardColumnView } from '@/components/snack/projects/board-column-view';
+import { BoardFiltersBar } from '@/components/snack/projects/board-filters';
 import { ProjectHeader } from '@/components/snack/projects/project-header';
 import { TaskPanel } from '@/components/snack/projects/task-panel';
 import { Button } from '@/components/ui/button';
@@ -20,8 +21,16 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { dropNeighbours, tasksInColumn, useBoard } from '@/hooks/use-board';
-import { useWorkspace } from '@/hooks/use-workspace';
+import {
+    
+    dropNeighbours,
+    filterTasks,
+    NO_BOARD_FILTERS,
+    tasksInColumn,
+    useBoard
+} from '@/hooks/use-board';
+import type {BoardFilters} from '@/hooks/use-board';
+import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
 import { backlog as backlogRoute } from '@/routes/projects';
 import { edit as settingsRoute } from '@/routes/projects/settings';
 import {
@@ -93,6 +102,25 @@ export default function ProjectBoardPage({
     });
 
     const [dragging, setDragging] = useState<Task | null>(null);
+
+    /*
+     * The filter bar's state, and the cards that survive it.
+     *
+     * Held here rather than in the URL: a filtered board is a way of looking at
+     * one, not a place — and a query string would put every keystroke of the
+     * search box into the browser's history.
+     *
+     * `tasks` stays the whole board underneath, so a drag still computes its
+     * neighbours against every card rather than only the visible ones. Dropping
+     * a card between two that a filter has hidden must not reorder the board.
+     */
+    const [filters, setFilters] = useState<BoardFilters>(NO_BOARD_FILTERS);
+    const viewer = useCurrentUser();
+
+    const visible = useMemo(
+        () => filterTasks(tasks, filters, viewer?.id ?? null),
+        [tasks, filters, viewer?.id],
+    );
 
     /*
      * Which card is open, held as an id rather than as the task itself.
@@ -189,6 +217,15 @@ export default function ProjectBoardPage({
                 </p>
             )}
 
+            {!sprintless && (
+                <BoardFiltersBar
+                    filters={filters}
+                    members={members}
+                    releases={releases}
+                    onChange={setFilters}
+                />
+            )}
+
             {sprintless ? (
                 <WaitingForSprint
                     project={project}
@@ -215,7 +252,7 @@ export default function ProjectBoardPage({
                         <BoardColumnView
                             key={column.id}
                             column={column}
-                            tasks={tasksInColumn(tasks, column.id)}
+                            tasks={tasksInColumn(visible, column.id)}
                             fields={project.card_fields}
                             canContribute={canContribute}
                             canManage={canManage}
@@ -262,6 +299,7 @@ export default function ProjectBoardPage({
                 labels={labels}
                 epics={epics}
                 releases={releases}
+                workspaceSlug={workspace.slug}
                 canContribute={canContribute}
                 canDelete={canContribute}
                 onClose={() => setOpenTaskId(null)}
