@@ -57,6 +57,34 @@ class IncomingWebhookPolicy
         return $this->administers($user, $webhook->workspace);
     }
 
+    /**
+     * Turning one back on.
+     *
+     * The same right as creating a hook, and that is the point rather than a
+     * convenience: restoring puts a live URL back into the world, so it has to
+     * cost what issuing one costs. Anything looser would make revoke reversible
+     * by somebody who could not have granted it in the first place.
+     */
+    public function restore(User $user, IncomingWebhook $webhook): Response
+    {
+        return $this->administers($user, $webhook->workspace);
+    }
+
+    /**
+     * Requiring signed deliveries, stopping requiring them, or replacing the
+     * secret.
+     *
+     * Its own method rather than folded into `update()` because one of the three
+     * *removes* a security control: turning signing off makes a hook that
+     * demanded proof accept a bare URL again. Sharing a check with renaming
+     * would mean the next person to loosen the edit permission — a reasonable
+     * thing to want — would loosen that at the same time without noticing.
+     */
+    public function updateSigning(User $user, IncomingWebhook $webhook): Response
+    {
+        return $this->administers($user, $webhook->workspace);
+    }
+
     public function delete(User $user, IncomingWebhook $webhook): Response
     {
         return $this->administers($user, $webhook->workspace);

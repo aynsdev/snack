@@ -1324,6 +1324,18 @@ export type IncomingWebhook = {
     /** What its messages are actually attributed to. */
     display_name: string;
     url: string | null;
+    /**
+     * Whether deliveries must carry a valid signature. Off by default — the URL
+     * alone is the credential until somebody turns this on.
+     */
+    signing_required: boolean;
+    /**
+     * The signing secret in plaintext, on the same terms as `url`: there is
+     * nowhere else it could come from, and the policy gating this screen is what
+     * makes showing it acceptable. Null when signing is off, and null once the
+     * hook is revoked.
+     */
+    signing_secret: string | null;
     is_revoked: boolean;
     revoked_at: string | null;
     delivery_count: number;

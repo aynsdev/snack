@@ -260,6 +260,18 @@ return [
          * another team's.
          */
         'rate_limit_per_minute' => (int) env('SNACK_WEBHOOK_RATE_LIMIT', 60),
+
+        /*
+         * How far a signed delivery's timestamp may be from the server's clock,
+         * for hooks that have a signing secret. The timestamp is inside the
+         * signed string, so this is what bounds how long a captured request
+         * stays replayable — see App\Services\WebhookSignature.
+         *
+         * Generous enough to survive a build server whose NTP has drifted,
+         * short enough that a request lifted from a CI log is useless by the
+         * time anybody reads it.
+         */
+        'signature_tolerance_seconds' => (int) env('SNACK_WEBHOOK_SIGNATURE_TOLERANCE', 300),
     ],
 
     /*

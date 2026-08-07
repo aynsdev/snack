@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Workspaces;
 
 use App\Actions\Webhooks\CreateIncomingWebhook;
 use App\Actions\Webhooks\DeleteIncomingWebhook;
+use App\Actions\Webhooks\RestoreIncomingWebhook;
 use App\Actions\Webhooks\RevokeIncomingWebhook;
 use App\Actions\Webhooks\UpdateIncomingWebhook;
+use App\Actions\Webhooks\UpdateWebhookSigning;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Webhooks\StoreIncomingWebhookRequest;
 use App\Http\Requests\Webhooks\UpdateIncomingWebhookRequest;
+use App\Http\Requests\Webhooks\UpdateWebhookSigningRequest;
 use App\Http\Resources\IncomingWebhookResource;
 use App\Models\Channel;
 use App\Models\IncomingWebhook;
@@ -144,6 +147,63 @@ class IncomingWebhookController extends Controller
 
         return to_route('webhooks.index', ['workspace' => $workspace->slug])
             ->with('success', "{$webhook->name} has been turned off. Its URL no longer works.");
+    }
+
+    /**
+     * Turn one back on, with the URL it had before.
+     *
+     * The undo for the button above — see {@see RestoreIncomingWebhook} for why
+     * the original token comes back rather than a new one, and why the "it
+     * leaked" case is steered towards Delete instead.
+     */
+    public function restore(
+        Workspace $workspace,
+        IncomingWebhook $webhook,
+        Request $request,
+        RestoreIncomingWebhook $restoreWebhook,
+    ): RedirectResponse {
+        $this->authorize('restore', $webhook);
+
+        $restoreWebhook->handle($webhook, $request->user());
+
+        return to_route('webhooks.index', ['workspace' => $workspace->slug])
+            ->with('success', "{$webhook->name} is on again. Its original URL works as before.");
+    }
+
+    /**
+     * Require signed deliveries, stop requiring them, or replace the secret.
+     *
+     * All three on one endpoint because they are one decision an admin makes
+     * about one hook, and splitting them would put three buttons where the
+     * screen shows a checkbox and a Regenerate. Which one ran is recorded
+     * distinctly in the audit log — see {@see UpdateWebhookSigning}.
+     */
+    public function updateSigning(
+        Workspace $workspace,
+        IncomingWebhook $webhook,
+        UpdateWebhookSigningRequest $request,
+        UpdateWebhookSigning $updateSigning,
+    ): RedirectResponse {
+        // Authorized by the request, on its own policy method rather than
+        // `update` — disabling removes a check, and that must not ride along
+        // with permission to rename.
+        $message = match ($request->mode()) {
+            UpdateWebhookSigningRequest::ENABLE => tap(
+                'Signed requests are now required. Copy the secret below — deliveries without it will be refused.',
+                fn () => $updateSigning->enable($webhook, $request->user()),
+            ),
+            UpdateWebhookSigningRequest::DISABLE => tap(
+                'Signing is off. The URL on its own is enough again.',
+                fn () => $updateSigning->disable($webhook, $request->user()),
+            ),
+            default => tap(
+                'New secret generated. Anything still signing with the old one will be refused.',
+                fn () => $updateSigning->rotate($webhook, $request->user()),
+            ),
+        };
+
+        return to_route('webhooks.index', ['workspace' => $workspace->slug])
+            ->with('success', $message);
     }
 
     public function destroy(

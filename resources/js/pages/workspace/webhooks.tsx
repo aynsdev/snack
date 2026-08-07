@@ -1,5 +1,15 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { Check, Copy, Plug, Plus, PowerOff, Trash2 } from 'lucide-react';
+import {
+    Check,
+    Copy,
+    Plug,
+    Plus,
+    Power,
+    PowerOff,
+    RefreshCw,
+    ShieldCheck,
+    Trash2,
+} from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -24,7 +34,9 @@ import { useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import {
     destroy as destroyWebhook,
+    restore as restoreWebhook,
     revoke as revokeWebhook,
+    signing as signingWebhook,
     store as storeWebhook,
     update as updateWebhook,
 } from '@/routes/webhooks';
@@ -115,7 +127,30 @@ export default function WebhooksPage({ webhooks, channels, limits }: Props) {
                     ) : (
                         <ul className="space-y-3">
                             {webhooks.map((webhook) => (
-                                <li key={webhook.id}>
+                                /*
+                                 * Keyed on the states the row's buttons act on,
+                                 * not just the id, so flipping one remounts the
+                                 * row and discards the half-finished
+                                 * confirmations inside it.
+                                 *
+                                 * Without this the flags outlive the action
+                                 * that consumed them: turning a hook off armed
+                                 * "Turn it off?", the row switched to its
+                                 * revoked shape, and turning it back on
+                                 * restored a button that was *already* asking
+                                 * to be clicked a second time — handing an
+                                 * admin who had just undone an accident a
+                                 * hair-trigger for repeating it. The signing
+                                 * controls have exactly the same shape and
+                                 * would have grown exactly the same bug.
+                                 */
+                                <li
+                                    key={[
+                                        webhook.id,
+                                        webhook.is_revoked,
+                                        webhook.signing_required,
+                                    ].join('-')}
+                                >
                                     <WebhookRow
                                         webhook={webhook}
                                         workspaceSlug={workspace.slug}
@@ -188,6 +223,18 @@ function WebhookRow({
     onEdit: () => void;
 }) {
     const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [confirmingRevoke, setConfirmingRevoke] = useState(false);
+
+    /*
+     * Restoring gets a dialog where turning off and deleting get a second click.
+     *
+     * Not because it is more destructive — it is the least destructive of the
+     * three — but because it is the only one whose consequence is not obvious
+     * from the button. "Turn on" reads as harmless, and for the one case that
+     * matters, a hook switched off because its URL leaked, it is the opposite.
+     * That needs a sentence, and a sentence needs somewhere to live.
+     */
+    const [confirmingRestore, setConfirmingRestore] = useState(false);
 
     return (
         <div
@@ -206,6 +253,22 @@ function WebhookRow({
                         <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                             #{webhook.channel.slug}
                         </span>
+
+                        {webhook.signing_required && (
+                            /*
+                             * Worth a badge because it changes what the URL
+                             * below is worth. An admin scanning this list for
+                             * "which of these would matter if it leaked" is
+                             * asking exactly this question.
+                             */
+                            <span className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                                <ShieldCheck
+                                    aria-hidden="true"
+                                    className="size-3"
+                                />
+                                Signed
+                            </span>
+                        )}
 
                         {webhook.is_revoked && (
                             <span className="flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
@@ -234,7 +297,18 @@ function WebhookRow({
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
-                    {!webhook.is_revoked && (
+                    {webhook.is_revoked ? (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            title="Turn this webhook back on with the URL it had before"
+                            onClick={() => setConfirmingRestore(true)}
+                        >
+                            <Power aria-hidden="true" />
+                            Turn on
+                        </Button>
+                    ) : (
                         <>
                             <Button
                                 type="button"
@@ -249,8 +323,18 @@ function WebhookRow({
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                title="Turn this webhook off — its URL stops working immediately"
-                                onClick={() =>
+                                title={
+                                    confirmingRevoke
+                                        ? 'Every system holding this URL stops working'
+                                        : 'Turn this webhook off'
+                                }
+                                onClick={() => {
+                                    if (!confirmingRevoke) {
+                                        setConfirmingRevoke(true);
+
+                                        return;
+                                    }
+
                                     router.patch(
                                         revokeWebhook.url({
                                             workspace: workspaceSlug,
@@ -258,10 +342,17 @@ function WebhookRow({
                                         }),
                                         {},
                                         { preserveScroll: true },
-                                    )
-                                }
+                                    );
+                                }}
                             >
                                 <PowerOff aria-hidden="true" />
+                                {/*
+                                 * Two clicks, matching Delete beside it. This
+                                 * was one click on a bare icon, which is how a
+                                 * URL somebody else depends on gets switched
+                                 * off by a misaimed cursor.
+                                 */}
+                                {confirmingRevoke ? 'Turn it off?' : ''}
                                 <span className="sr-only">
                                     Turn off {webhook.name}
                                 </span>
@@ -310,8 +401,72 @@ function WebhookRow({
             </div>
 
             {webhook.url !== null && (
-                <UrlField url={webhook.url} name={webhook.name} />
+                <>
+                    <UrlField url={webhook.url} name={webhook.name} />
+                    <SigningPanel
+                        webhook={webhook}
+                        workspaceSlug={workspaceSlug}
+                    />
+                </>
             )}
+
+            <Dialog
+                open={confirmingRestore}
+                onOpenChange={setConfirmingRestore}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Turn {webhook.name} back on?</DialogTitle>
+                        <DialogDescription>
+                            It gets the URL it had before, so anything still
+                            configured with it starts posting to #
+                            {webhook.channel.slug} again without being changed.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {/*
+                     * The one thing this dialog exists to say. Nothing on the
+                     * row records *why* somebody turned a hook off, so the
+                     * server cannot tell a misaimed click from a leaked URL —
+                     * only the person reading this can.
+                     */}
+                    <p className="text-sm text-pretty text-muted-foreground">
+                        If you turned it off because the URL leaked, delete it
+                        instead and create a new one — restoring brings the
+                        leaked URL back to life.
+                    </p>
+
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setConfirmingRestore(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={() => {
+                                router.patch(
+                                    restoreWebhook.url({
+                                        workspace: workspaceSlug,
+                                        webhook: webhook.id,
+                                    }),
+                                    {},
+                                    {
+                                        preserveScroll: true,
+                                        onFinish: () =>
+                                            setConfirmingRestore(false),
+                                    },
+                                );
+                            }}
+                        >
+                            <Power aria-hidden="true" />
+                            Turn it back on
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -326,33 +481,60 @@ function WebhookRow({
  * matters is the policy on the page, not a toggle on the field.
  */
 function UrlField({ url, name }: { url: string; name: string }) {
+    return (
+        <div className="mt-2.5 border-t border-border pt-2.5">
+            <CopyableSecret
+                value={url}
+                label={`Copy the URL for ${name}`}
+                promptTitle="Copy this URL"
+            />
+        </div>
+    );
+}
+
+/**
+ * A credential with a copy button.
+ *
+ * Shared by the URL and the signing secret, which behave identically: both are
+ * read off this screen every time somebody wires up an integration, and both are
+ * useless to whoever cannot open it.
+ */
+function CopyableSecret({
+    value,
+    label,
+    promptTitle,
+}: {
+    value: string;
+    label: string;
+    promptTitle: string;
+}) {
     const [copied, setCopied] = useState(false);
 
     return (
-        <div className="mt-2.5 flex items-center gap-2 border-t border-border pt-2.5">
+        <div className="flex items-center gap-2">
             <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs">
-                {url}
+                {value}
             </code>
 
             <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                aria-label={`Copy the URL for ${name}`}
+                aria-label={label}
                 onClick={async () => {
                     /*
                      * `navigator.clipboard` is undefined on plain HTTP, which is
                      * how Snack is served locally — see the note in
-                     * lib/nonce.ts about insecure-context APIs. Selecting the
-                     * text is the honest fallback: the reader can still copy it,
-                     * and nothing silently does nothing.
+                     * lib/nonce.ts about insecure-context APIs. Prompting with
+                     * the value is the honest fallback: the reader can still
+                     * copy it, and nothing silently does nothing.
                      */
                     try {
-                        await navigator.clipboard.writeText(url);
+                        await navigator.clipboard.writeText(value);
                         setCopied(true);
                         window.setTimeout(() => setCopied(false), 1500);
                     } catch {
-                        window.prompt('Copy this URL', url);
+                        window.prompt(promptTitle, value);
                     }
                 }}
             >
@@ -363,6 +545,142 @@ function UrlField({ url, name }: { url: string; name: string }) {
                 )}
                 {copied ? 'Copied' : 'Copy'}
             </Button>
+        </div>
+    );
+}
+
+/**
+ * The optional signing secret: whether this hook demands one, and the code to
+ * satisfy it.
+ *
+ * # Why the example lives here and not in the panel below
+ *
+ * Because signing is the one part of this API that is easy to get subtly wrong,
+ * and the mistake is always the same: signing a payload and then letting the
+ * HTTP client re-encode it, so the bytes that arrive are not the bytes that were
+ * signed. The snippet that avoids it belongs beside the secret it uses, where
+ * somebody copying one will read the other.
+ */
+function SigningPanel({
+    webhook,
+    workspaceSlug,
+}: {
+    webhook: IncomingWebhook;
+    workspaceSlug: string;
+}) {
+    const [confirmingOff, setConfirmingOff] = useState(false);
+    const [confirmingRotate, setConfirmingRotate] = useState(false);
+
+    const submit = (mode: 'enable' | 'disable' | 'rotate') =>
+        router.patch(
+            signingWebhook.url({
+                workspace: workspaceSlug,
+                webhook: webhook.id,
+            }),
+            { mode },
+            { preserveScroll: true },
+        );
+
+    if (!webhook.signing_required) {
+        return (
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
+                <p className="text-xs text-pretty text-muted-foreground">
+                    Anyone with this URL can post to #{webhook.channel.slug}.
+                    Require a signature and the URL alone stops being enough.
+                </p>
+
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => submit('enable')}
+                >
+                    <ShieldCheck aria-hidden="true" />
+                    Require signing
+                </Button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium">Signing secret</p>
+
+                <div className="flex items-center gap-2">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        title={
+                            confirmingRotate
+                                ? 'Anything still signing with the current secret will be refused'
+                                : 'Replace the secret — use this if it leaked'
+                        }
+                        onClick={() => {
+                            if (!confirmingRotate) {
+                                setConfirmingRotate(true);
+
+                                return;
+                            }
+
+                            submit('rotate');
+                        }}
+                    >
+                        <RefreshCw aria-hidden="true" />
+                        {confirmingRotate ? 'Replace it?' : 'Regenerate'}
+                    </Button>
+
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        title={
+                            confirmingOff
+                                ? 'The URL on its own becomes enough again'
+                                : 'Stop requiring signatures'
+                        }
+                        onClick={() => {
+                            if (!confirmingOff) {
+                                setConfirmingOff(true);
+
+                                return;
+                            }
+
+                            submit('disable');
+                        }}
+                    >
+                        {confirmingOff ? 'Turn signing off?' : 'Turn off'}
+                    </Button>
+                </div>
+            </div>
+
+            {webhook.signing_secret !== null && (
+                <CopyableSecret
+                    value={webhook.signing_secret}
+                    label={`Copy the signing secret for ${webhook.name}`}
+                    promptTitle="Copy this signing secret"
+                />
+            )}
+
+            <pre className="snack-scroll overflow-x-auto rounded bg-muted px-3 py-2 font-mono text-xs">
+                {`$body = json_encode(['text' => 'Deploy #482 shipped']);
+$ts = time();
+
+Http::withHeaders([
+    'X-Snack-Timestamp' => $ts,
+    'X-Snack-Signature' => 'v1='.hash_hmac('sha256', "v1:{$ts}:{$body}", $secret),
+])->withBody($body, 'application/json')->post($url);`}
+            </pre>
+
+            <p className="text-xs text-pretty text-muted-foreground">
+                Sign the exact bytes you send —{' '}
+                <code className="text-[0.6875rem]">withBody</code>, not{' '}
+                <code className="text-[0.6875rem]">post($url, $array)</code>,
+                which re-encodes after you have signed. Timestamps more than
+                five minutes from the server&rsquo;s clock are refused, so a
+                captured request cannot be replayed later.
+            </p>
         </div>
     );
 }

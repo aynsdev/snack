@@ -6,6 +6,7 @@ use App\Models\Channel;
 use App\Models\IncomingWebhook;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\WebhookSignature;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -72,5 +73,19 @@ class IncomingWebhookFactory extends Factory
     public function revoked(): static
     {
         return $this->state(fn (): array => ['revoked_at' => now()]);
+    }
+
+    /**
+     * A hook that refuses unsigned deliveries.
+     *
+     * Read the secret back off the model — `signing_secret` is encrypted, so it
+     * decrypts to the string a caller signs with. See the note in
+     * {@see definition()} on why nothing is stashed on the factory.
+     */
+    public function signed(?string $secret = null): static
+    {
+        return $this->state(fn (): array => [
+            'signing_secret' => $secret ?? WebhookSignature::generateSecret(),
+        ]);
     }
 }
