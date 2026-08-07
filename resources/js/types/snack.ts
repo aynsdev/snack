@@ -838,6 +838,10 @@ export type Project = {
     abilities: {
         contribute: boolean;
         manage: boolean;
+        /** Can put themselves on it — false when already on, or a guest. */
+        join: boolean;
+        /** Can take themselves off it. */
+        leave: boolean;
     };
     created_at: string | null;
 };

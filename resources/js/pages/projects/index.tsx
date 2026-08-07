@@ -8,6 +8,8 @@ import {
     MoreHorizontal,
     Plus,
     Trash2,
+    UserMinus,
+    UserPlus,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { EmptyState } from '@/components/snack/empty-state';
@@ -48,6 +50,10 @@ import {
 } from '@/routes/project-groups';
 import { board as boardRoute, store as storeProject } from '@/routes/projects';
 import { update as assignGroup } from '@/routes/projects/group';
+import {
+    destroy as leaveProject,
+    store as joinProject,
+} from '@/routes/projects/membership';
 import type { Project, ProjectGroup } from '@/types';
 
 type Props = {
@@ -458,6 +464,14 @@ function ProjectCard({
     const canMove =
         groups.length > 0 && project.abilities.manage && !project.is_archived;
 
+    /*
+     * Joining is what puts a project in your sidebar, and this list is where
+     * somebody notices it is missing from theirs — the group heading here counts
+     * every project in the workspace, while the sidebar counts the ones you are
+     * on. Without this the difference had no explanation and no remedy.
+     */
+    const hasMenu = canMove || project.abilities.join || project.abilities.leave;
+
     return (
         <div className="relative h-full">
             <Link
@@ -465,7 +479,7 @@ function ProjectCard({
                 className={cn(
                     'flex h-full flex-col gap-2 rounded-xl border border-border p-4 transition-colors hover:border-brand/50 hover:bg-accent/40',
                     project.is_archived && 'opacity-60',
-                    canMove && 'pr-10',
+                    hasMenu && 'pr-10',
                 )}
             >
                 <div className="flex items-center gap-2.5">
@@ -495,16 +509,17 @@ function ProjectCard({
                 </p>
             </Link>
 
-            {canMove && (
+            {hasMenu && (
                 /*
                  * A sibling of the link rather than a child of it: a button
                  * inside an anchor is invalid, and a click on it would navigate
                  * to the board on its way to opening the menu.
                  */
                 <div className="absolute top-2 right-2">
-                    <MoveProjectMenu
+                    <ProjectCardMenu
                         project={project}
                         groups={groups}
+                        canMove={canMove}
                         workspaceSlug={workspaceSlug}
                     />
                 </div>
@@ -514,19 +529,27 @@ function ProjectCard({
 }
 
 /**
- * Which heading this project sits under.
+ * What can be done to a project from the list: joining it, leaving it, and
+ * which heading it sits under.
  *
- * A radio group rather than a list of commands, because the project is always
- * in exactly one state and the menu should show which — "Ungrouped" is one of
- * the choices, not a separate "remove from group" verb.
+ * Membership comes first because it is the one thing that changes what the
+ * viewer sees elsewhere — the sidebar lists the projects you are *on*, so a
+ * project sitting in a group here without being in your sidebar is a project
+ * you have not joined, and this is where that is fixed.
+ *
+ * The group is a radio group rather than a list of commands, because the
+ * project is always in exactly one state and the menu should show which —
+ * "Ungrouped" is one of the choices, not a separate "remove from group" verb.
  */
-function MoveProjectMenu({
+function ProjectCardMenu({
     project,
     groups,
+    canMove,
     workspaceSlug,
 }: {
     project: Project;
     groups: ProjectGroup[];
+    canMove: boolean;
     workspaceSlug: string;
 }) {
     // "none" rather than an empty string: a radio group compares values as
@@ -544,13 +567,52 @@ function MoveProjectMenu({
                     className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
                     <MoreHorizontal aria-hidden="true" className="size-4" />
-                    <span className="sr-only">Move {project.name}</span>
+                    <span className="sr-only">Actions for {project.name}</span>
                 </button>
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuLabel>Move to group</DropdownMenuLabel>
+                {project.abilities.join && (
+                    <DropdownMenuItem
+                        onSelect={() =>
+                            router.post(
+                                joinProject([workspaceSlug, project.slug]),
+                                {},
+                                { preserveScroll: true },
+                            )
+                        }
+                    >
+                        <UserPlus aria-hidden="true" />
+                        Join project
+                    </DropdownMenuItem>
+                )}
 
+                {project.abilities.leave && (
+                    <DropdownMenuItem
+                        onSelect={() =>
+                            router.delete(
+                                leaveProject([workspaceSlug, project.slug]),
+                                { preserveScroll: true },
+                            )
+                        }
+                    >
+                        <UserMinus aria-hidden="true" />
+                        Leave project
+                    </DropdownMenuItem>
+                )}
+
+                {!canMove ? null : (
+                    <>
+                        {(project.abilities.join ||
+                            project.abilities.leave) && (
+                            <DropdownMenuSeparator />
+                        )}
+
+                        <DropdownMenuLabel>Move to group</DropdownMenuLabel>
+                    </>
+                )}
+
+                {canMove && (
                 <DropdownMenuRadioGroup
                     value={current}
                     onValueChange={(value) => {
@@ -583,6 +645,7 @@ function MoveProjectMenu({
                         Ungrouped
                     </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
+                )}
             </DropdownMenuContent>
         </DropdownMenu>
     );

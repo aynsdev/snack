@@ -63,6 +63,17 @@ class ProjectResource extends JsonResource
             'abilities' => [
                 'contribute' => $user?->can('contribute', $this->resource) ?? false,
                 'manage' => $user?->can('update', $this->resource) ?? false,
+
+                /*
+                 * Whether this person can put themselves on the project, or
+                 * take themselves off it. Both read the membership row already
+                 * loaded for the viewer, so neither costs a query — and without
+                 * them the client would have to infer "can join" from
+                 * `is_member`, which is wrong for a guest and for an archived
+                 * project.
+                 */
+                'join' => $user?->can('join', $this->resource) ?? false,
+                'leave' => $user?->can('leave', $this->resource) ?? false,
             ],
 
             'created_at' => $this->created_at?->toIso8601String(),

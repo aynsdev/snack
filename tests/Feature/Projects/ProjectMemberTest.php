@@ -3,6 +3,8 @@
 use App\Enums\ColumnCategory;
 use App\Enums\MemberStatus;
 use App\Enums\ProjectRole;
+use App\Enums\WorkspaceRole;
+use App\Models\ProjectGroup;
 use App\Models\ProjectMember;
 use App\Models\Task;
 use App\Models\User;
@@ -123,4 +125,68 @@ it('refuses a member the right to add other people', function () {
             'user_ids' => [joinWorkspace($workspace)->id],
         ])
         ->assertForbidden();
+});
+
+it('explains the gap between a group’s count and the sidebar, and offers the way across', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $group = ProjectGroup::factory()->create([
+        'workspace_id' => $workspace->id,
+        'name' => 'Development',
+    ]);
+
+    $mine = makeProject($workspace, $owner, ['name' => 'Pedi Client App']);
+    $theirs = makeProject($workspace, joinWorkspace($workspace), ['name' => 'Pedi Eticket Web App']);
+
+    foreach ([$mine, $theirs] as $project) {
+        $project->update(['project_group_id' => $group->id]);
+    }
+
+    /*
+     * The list page counts every project in the group; the sidebar counts the
+     * ones this person is on. Both are right, and the difference is membership
+     * — which is exactly what somebody seeing "2" beside a one-row sidebar
+     * needs the page to tell them.
+     */
+    $this->actingAs($owner)
+        ->get(route('projects.index', $workspace->slug))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('projects', 2)
+            ->where('projects.0.name', 'Pedi Client App')
+            ->where('projects.0.is_member', true)
+            ->where('projects.0.abilities.join', false)
+            ->where('projects.0.abilities.leave', true)
+            ->where('projects.1.name', 'Pedi Eticket Web App')
+            ->where('projects.1.is_member', false)
+            // The control the card draws, and the only route into a project
+            // somebody is not already on.
+            ->where('projects.1.abilities.join', true)
+            ->where('projects.1.abilities.leave', false)
+        );
+
+    $this->actingAs($owner)
+        ->post(route('projects.membership.store', [$workspace->slug, $theirs->slug]))
+        ->assertRedirect();
+
+    // And then it is in the sidebar, which is the thing that was missing.
+    $this->actingAs($owner)
+        ->get(route('projects.index', $workspace->slug))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('snack.current.projects', 2)
+            ->where('snack.current.projects.1.name', 'Pedi Eticket Web App')
+        );
+});
+
+it('offers a guest no way onto a project they were not added to', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+    $guest = joinWorkspace($workspace, role: WorkspaceRole::Guest);
+
+    // A guest cannot even see it, so "join" is not a door that is merely shut.
+    expect($guest->can('join', $project))->toBeFalse();
+
+    $this->actingAs($guest)
+        ->post(route('projects.membership.store', [$workspace->slug, $project->slug]))
+        ->assertNotFound();
 });
