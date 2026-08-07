@@ -77,6 +77,26 @@ enum AuditAction: string
     case WebhookCreated = 'webhook.created';
     case WebhookUpdated = 'webhook.updated';
     case WebhookRevoked = 'webhook.revoked';
+
+    /*
+     * Its own case rather than a second `webhook.updated`, because it is the
+     * entry somebody investigating actually needs: a hook that was off and is
+     * now on again means a URL went dead and came back, and the log has to say
+     * who did that and when. Folded into "updated" it would read as a rename.
+     */
+    case WebhookRestored = 'webhook.restored';
+
+    /*
+     * Signing, as three cases rather than one. Turning it on, turning it off,
+     * and replacing the secret are three different sentences in an incident
+     * review — "the hook stopped requiring proof" is the one that matters, and
+     * a shared `webhook.signing_changed` would bury it next to a routine
+     * rotation.
+     */
+    case WebhookSigningEnabled = 'webhook.signing_enabled';
+    case WebhookSigningDisabled = 'webhook.signing_disabled';
+    case WebhookSecretRotated = 'webhook.secret_rotated';
+
     case WebhookDeleted = 'webhook.deleted';
 
     case MessageDeletedByAdmin = 'message.deleted_by_admin';
@@ -118,7 +138,11 @@ enum AuditAction: string
             self::StandupDeleted => 'Standup deleted',
             self::WebhookCreated => 'Webhook created',
             self::WebhookUpdated => 'Webhook updated',
-            self::WebhookRevoked => 'Webhook revoked',
+            self::WebhookRevoked => 'Webhook turned off',
+            self::WebhookRestored => 'Webhook turned back on',
+            self::WebhookSigningEnabled => 'Webhook signing required',
+            self::WebhookSigningDisabled => 'Webhook signing no longer required',
+            self::WebhookSecretRotated => 'Webhook signing secret replaced',
             self::WebhookDeleted => 'Webhook deleted',
             self::MessageDeletedByAdmin => 'Message removed by admin',
         };

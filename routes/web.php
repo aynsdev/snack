@@ -645,6 +645,24 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::patch('webhooks/{webhook}/revoke', [IncomingWebhookController::class, 'revoke'])
             ->name('webhooks.revoke');
 
+        /*
+         * And the undo. Its own endpoint rather than `update` with a flag,
+         * matching revoke: this puts a live credential back into the world, so
+         * it gets its own policy check and its own audit entry rather than
+         * hiding inside a rename.
+         */
+        Route::patch('webhooks/{webhook}/restore', [IncomingWebhookController::class, 'restore'])
+            ->name('webhooks.restore');
+
+        /*
+         * The optional signing secret: require it, stop requiring it, or replace
+         * it. Separate from `update` because one of the three takes a security
+         * control away, and it has its own policy method so that permission
+         * cannot be widened by loosening the one that governs renaming.
+         */
+        Route::patch('webhooks/{webhook}/signing', [IncomingWebhookController::class, 'updateSigning'])
+            ->name('webhooks.signing');
+
         Route::delete('webhooks/{webhook}', [IncomingWebhookController::class, 'destroy'])
             ->name('webhooks.destroy');
 

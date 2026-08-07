@@ -58,6 +58,21 @@ class IncomingWebhookResource extends JsonResource
 
             'url' => $this->resource->isRevoked() ? null : $this->resource->url(),
 
+            /*
+             * The signing secret, on the same terms as the URL and for the same
+             * reason: there is nowhere else it could come from, and the policy
+             * gating this screen is what makes publishing it acceptable. See the
+             * class note.
+             *
+             * Withheld once revoked, like the URL — a dead hook's secret is a
+             * credential for nothing, and showing it only invites somebody to
+             * wire it up and wonder why deliveries 404.
+             */
+            'signing_required' => $this->resource->requiresSignature(),
+            'signing_secret' => $this->resource->isRevoked()
+                ? null
+                : $this->signing_secret,
+
             'is_revoked' => $this->resource->isRevoked(),
             'revoked_at' => $this->revoked_at?->toIso8601String(),
 

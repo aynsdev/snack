@@ -31,6 +31,8 @@ use Illuminate\Support\Str;
  * @property string|null $default_icon
  * @property string $token_hash
  * @property string $token The plaintext, decrypted on read.
+ * @property string|null $signing_secret Null when the hook is unsigned, which
+ *                                       is the default — see {@see requiresSignature()}.
  * @property CarbonImmutable|null $last_delivered_at
  * @property int $delivery_count
  * @property CarbonImmutable|null $revoked_at
@@ -43,7 +45,8 @@ use Illuminate\Support\Str;
  */
 #[Fillable([
     'workspace_id', 'channel_id', 'created_by', 'bot_user_id', 'name',
-    'default_username', 'default_icon', 'token_hash', 'token', 'revoked_at',
+    'default_username', 'default_icon', 'token_hash', 'token', 'signing_secret',
+    'revoked_at',
 ])]
 /*
  * Hidden so the plaintext cannot leave through a stray `->toArray()`. The admin
@@ -51,7 +54,7 @@ use Illuminate\Support\Str;
  * it is meant to be published, and only to somebody who has just been authorized
  * to administer the workspace.
  */
-#[Hidden(['token', 'token_hash'])]
+#[Hidden(['token', 'token_hash', 'signing_secret'])]
 class IncomingWebhook extends Model
 {
     /** @use HasFactory<IncomingWebhookFactory> */
@@ -67,6 +70,13 @@ class IncomingWebhook extends Model
             // See the migration: encrypted rather than plain so a leaked
             // database without APP_KEY yields no working URLs.
             'token' => 'encrypted',
+            /*
+             * Encrypted rather than hashed, unlike `token`. Verifying an HMAC
+             * needs the secret itself — a digest of it cannot key the same
+             * function — so this is one of the few things Snack stores that it
+             * must be able to read back. See the migration that added it.
+             */
+            'signing_secret' => 'encrypted',
             'last_delivered_at' => 'immutable_datetime',
             'revoked_at' => 'immutable_datetime',
         ];
@@ -166,6 +176,17 @@ class IncomingWebhook extends Model
     public function isRevoked(): bool
     {
         return $this->revoked_at !== null;
+    }
+
+    /**
+     * Whether deliveries to this hook must be signed.
+     *
+     * Off by default. When on, holding the URL is no longer enough — see
+     * {@see App\Services\WebhookSignature}.
+     */
+    public function requiresSignature(): bool
+    {
+        return $this->signing_secret !== null;
     }
 
     /**

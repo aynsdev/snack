@@ -6,6 +6,7 @@ use App\Actions\Webhooks\DeliverWebhookMessage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Webhooks\DeliverWebhookRequest;
 use App\Models\IncomingWebhook;
+use App\Services\WebhookSignature;
 use App\Support\WebhookPayload;
 use Illuminate\Http\JsonResponse;
 
@@ -39,6 +40,8 @@ use Illuminate\Http\JsonResponse;
  */
 class WebhookDeliveryController extends Controller
 {
+    public function __construct(private readonly WebhookSignature $signatures) {}
+
     /**
      * @param  string  $token  The plaintext from the URL. Never logged, and
      *                         never echoed back: an error page quoting the credential it just
@@ -72,6 +75,33 @@ class WebhookDeliveryController extends Controller
          * this delivery attempt: the hook is fine, and will start working again
          * the moment the channel is unarchived.
          */
+        /*
+         * The signature, for hooks that have a secret. A no-op for the rest,
+         * which is every hook until somebody turns signing on.
+         *
+         * Before the archived-channel check and before anything is written: an
+         * unsigned caller is not entitled to learn anything about the hook's
+         * state, including whether its channel still exists.
+         */
+        $reason = $this->signatures->verify($webhook, $request);
+
+        if ($reason !== null) {
+            /*
+             * 401 with a reason, rather than the blanket 404 above.
+             *
+             * This does confirm the token is real, which the 404 path is
+             * careful not to do — but the two are protecting different things.
+             * That 404 keeps an attacker from *discovering* a working token by
+             * probing. This request already presented one; what it lacks is the
+             * secret, and the whole point of the secret is that the token
+             * without it is inert. Refusing to say why would leave a developer
+             * with a signing bug hunting a revoked hook instead, which is a
+             * long afternoon in exchange for withholding a fact the recipient
+             * already has.
+             */
+            return $this->failure(WebhookSignature::explain($reason), 401);
+        }
+
         if ($webhook->channel->is_archived) {
             return $this->failure('That webhook\'s channel has been archived.', 410);
         }

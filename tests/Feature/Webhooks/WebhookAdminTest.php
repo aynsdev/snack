@@ -146,6 +146,197 @@ it('stops deliveries the moment a hook is revoked', function () {
         ->and(AuditLog::query()->where('action', AuditAction::WebhookRevoked)->exists())->toBeTrue();
 });
 
+it('turns a hook back on with the URL it had before', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->create();
+    $token = $webhook->token;
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/revoke");
+
+    $this->postJson("/hooks/{$token}", ['text' => 'while off'])->assertNotFound();
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/restore")
+        ->assertRedirect();
+
+    /*
+     * The *same* token, which is the whole point: an admin who clicked the
+     * wrong row needs the deploy script on the other side to keep working, not
+     * a fresh URL to go and paste into it.
+     */
+    $this->postJson("/hooks/{$token}", ['text' => 'back on'])->assertCreated();
+
+    expect($webhook->fresh()->isRevoked())->toBeFalse()
+        ->and($webhook->fresh()->token)->toBe($token)
+        ->and(Message::query()->count())->toBe(1);
+});
+
+it('shows the URL again once a hook is restored', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->revoked()->create([
+        'name' => 'Back from the dead',
+    ]);
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/restore");
+
+    $page = $this->actingAs($this->owner)
+        ->get("/w/{$this->workspace->slug}/webhooks")
+        ->viewData('page');
+
+    expect($page['props']['webhooks'][0]['url'])->toContain($webhook->token);
+});
+
+it('records the restore separately from an edit', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->revoked()->create();
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/restore");
+
+    // Its own action, not a `webhook.updated`: a URL that went dead and came
+    // back is what somebody investigating an incident is looking for, and
+    // folded into "updated" it would read as a rename.
+    expect(AuditLog::query()->where('action', AuditAction::WebhookRestored)->exists())->toBeTrue()
+        ->and(AuditLog::query()->where('action', AuditAction::WebhookUpdated)->exists())->toBeFalse();
+});
+
+it('writes nothing when restoring a hook that was never off', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->create();
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/restore")
+        ->assertRedirect();
+
+    // A stale tab, or two admins clicking at once. A "turned back on" entry for
+    // a hook that never went off is a lie in an append-only log.
+    expect($webhook->fresh()->isRevoked())->toBeFalse()
+        ->and(AuditLog::query()->where('action', AuditAction::WebhookRestored)->exists())->toBeFalse();
+});
+
+it('refuses a member trying to turn one back on', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->revoked()->create();
+
+    // The same right as creating one: restoring puts a live URL back into the
+    // world, so it must cost what issuing one costs.
+    $this->actingAs($this->member)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/restore")
+        ->assertForbidden();
+
+    expect($webhook->fresh()->isRevoked())->toBeTrue();
+});
+
+it('turns signing on and hands over a secret', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->create();
+
+    expect($webhook->requiresSignature())->toBeFalse();
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/signing", ['mode' => 'enable'])
+        ->assertRedirect();
+
+    $webhook = $webhook->fresh();
+
+    expect($webhook->requiresSignature())->toBeTrue()
+        // Long enough that the secret is never the weak half of the HMAC.
+        ->and($webhook->signing_secret)->toHaveLength(64);
+
+    // And it is refused without one from that moment on.
+    $this->postJson("/hooks/{$webhook->token}", ['text' => 'unsigned'])->assertStatus(401);
+});
+
+it('does not rotate the secret when signing is enabled twice', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->signed()->create();
+    $secret = $webhook->signing_secret;
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/signing", ['mode' => 'enable']);
+
+    // Somebody re-saving a form must not break a live integration.
+    expect($webhook->fresh()->signing_secret)->toBe($secret)
+        ->and(AuditLog::query()->where('action', AuditAction::WebhookSigningEnabled)->count())->toBe(0);
+});
+
+it('rotates the secret without touching the URL', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->signed()->create();
+    [$token, $old] = [$webhook->token, $webhook->signing_secret];
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/signing", ['mode' => 'rotate'])
+        ->assertRedirect();
+
+    $webhook = $webhook->fresh();
+
+    /*
+     * The remedy for a leaked secret, and why it is not a whole new hook: the
+     * URL is untouched, so every system holding it keeps its configuration and
+     * only the secret line changes.
+     */
+    expect($webhook->signing_secret)->not->toBe($old)
+        ->and($webhook->token)->toBe($token)
+        ->and($webhook->requiresSignature())->toBeTrue()
+        ->and(AuditLog::query()->where('action', AuditAction::WebhookSecretRotated)->exists())->toBeTrue();
+});
+
+it('turns signing off and accepts a bare URL again', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->signed()->create();
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/signing", ['mode' => 'disable'])
+        ->assertRedirect();
+
+    expect($webhook->fresh()->requiresSignature())->toBeFalse();
+
+    $this->postJson("/hooks/{$webhook->token}", ['text' => 'unsigned again'])->assertCreated();
+});
+
+it('never writes the secret into the audit log', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->create();
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/signing", ['mode' => 'enable']);
+
+    // The log is read, exported, and often shipped somewhere central. A
+    // credential in it would defeat the encryption on the column it came from.
+    $entries = AuditLog::query()->get()->map(fn ($entry): string => json_encode([
+        $entry->old_values, $entry->new_values,
+    ]))->implode(' ');
+
+    expect($entries)->not->toContain($webhook->fresh()->signing_secret);
+});
+
+it('refuses a member trying to change signing', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->signed()->create();
+
+    // Its own policy method: disabling *removes* a security control, so the
+    // permission must not ride along with the one that governs renaming.
+    $this->actingAs($this->member)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/signing", ['mode' => 'disable'])
+        ->assertForbidden();
+
+    expect($webhook->fresh()->requiresSignature())->toBeTrue();
+});
+
+it('rejects a signing mode it does not recognise', function () {
+    $webhook = IncomingWebhook::factory()->forChannel($this->channel)->create();
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/webhooks/{$webhook->id}/signing", ['mode' => 'whatever'])
+        ->assertSessionHasErrors('mode');
+});
+
+it('shows the secret to an admin and withholds a revoked hook\'s', function () {
+    $live = IncomingWebhook::factory()->forChannel($this->channel)->signed()->create(['name' => 'Live']);
+    $dead = IncomingWebhook::factory()->forChannel($this->channel)->signed()->revoked()->create(['name' => 'Dead']);
+
+    $page = $this->actingAs($this->owner)
+        ->get("/w/{$this->workspace->slug}/webhooks")
+        ->viewData('page');
+
+    $secrets = collect($page['props']['webhooks'])->pluck('signing_secret', 'name');
+
+    expect($secrets['Live'])->toBe($live->signing_secret)
+        ->and($secrets['Dead'])->toBeNull();
+});
+
 it('does not move the revocation time when revoked twice', function () {
     $webhook = IncomingWebhook::factory()->forChannel($this->channel)->create();
 
