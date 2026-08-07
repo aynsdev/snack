@@ -7,6 +7,7 @@ import {
     Compass,
     Headphones,
     MessagesSquare,
+    Plug,
     Plus,
     ScrollText,
     Search,
@@ -65,6 +66,7 @@ import {
 import { index as searchIndex } from '@/routes/search';
 import { index as standupsIndex } from '@/routes/standups';
 import { index as threadsIndex } from '@/routes/threads';
+import { index as webhooksIndex } from '@/routes/webhooks';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
 import { edit as workspaceSettings } from '@/routes/workspace-settings';
 import type { Channel, Conversation, WorkspacePerson } from '@/types';
@@ -765,6 +767,20 @@ function SidebarHeader({
                             <Link href={standupsIndex(workspace.slug)}>
                                 <ClipboardList className="mr-2 size-4" />
                                 Standups
+                            </Link>
+                        </DropdownMenuItem>
+                    )}
+
+                    {/*
+                     * Beside the standups, and admin-only for a stronger reason
+                     * than the others: that screen prints live webhook URLs, so
+                     * opening it is the same right as issuing one.
+                     */}
+                    {workspace.abilities.administer && (
+                        <DropdownMenuItem asChild>
+                            <Link href={webhooksIndex(workspace.slug)}>
+                                <Plug className="mr-2 size-4" />
+                                Webhooks
                             </Link>
                         </DropdownMenuItem>
                     )}

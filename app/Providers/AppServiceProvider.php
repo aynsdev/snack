@@ -108,7 +108,8 @@ class AppServiceProvider extends ServiceProvider
      * Keyed by user id rather than IP: an office behind one NAT gateway is a
      * single IP, and a shared limit there would have colleagues throttling each
      * other out of their own chat. Every route these are mounted on sits behind
-     * the auth middleware, so there is always a user to key by.
+     * the auth middleware, so there is always a user to key by — with the one
+     * exception noted on `webhooks` below.
      */
     protected function configureRateLimiters(): void
     {
@@ -156,6 +157,29 @@ class AppServiceProvider extends ServiceProvider
          */
         RateLimiter::for('presence', fn (Request $request) => Limit::perMinute(60)
             ->by((string) $request->user()->id));
+
+        /*
+         * Incoming webhook deliveries — the one limiter with no user to key by.
+         *
+         * Keyed by the token instead, so the limit belongs to the integration
+         * rather than to whoever it happens to be running on: a dozen hooks
+         * behind one CI provider share an address, and an IP key would let one
+         * team's retry loop silence every other team's notifications.
+         *
+         * The token is hashed into the key rather than used raw. Throttle keys
+         * end up in the cache store, in Redis' keyspace, and in anything that
+         * dumps slow commands — none of which are places a live credential
+         * should be sitting in plaintext.
+         *
+         * A miss falls back to the IP so a request with no token at all still
+         * cannot be replayed without limit.
+         */
+        RateLimiter::for('webhooks', function (Request $request) {
+            $token = $request->route('token');
+
+            return Limit::perMinute((int) config('snack.webhooks.rate_limit_per_minute'))
+                ->by(is_string($token) ? 'hook:'.hash('sha256', $token) : 'hook-ip:'.$request->ip());
+        });
     }
 
     /**

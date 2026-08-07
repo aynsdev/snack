@@ -154,6 +154,20 @@ class Workspace extends Model
     }
 
     /**
+     * The incoming webhooks pointed at this workspace's channels.
+     *
+     * Also what `webhooks/{webhook}` scopes through, so an id from another
+     * tenant 404s at the router rather than at a policy — the same job
+     * {@see self::tasks()} does for `tasks/{task}`.
+     *
+     * @return HasMany<IncomingWebhook, $this>
+     */
+    public function webhooks(): HasMany
+    {
+        return $this->hasMany(IncomingWebhook::class);
+    }
+
+    /**
      * Every task in every project of this workspace.
      *
      * Exists for the route binding rather than for reading: `tasks/{task}` sits

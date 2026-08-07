@@ -219,6 +219,19 @@ export type Message = {
      */
     standup?: StandupCard | null;
     /**
+     * Present only on messages an outside system posted through an incoming
+     * webhook — null on everything else.
+     *
+     * Carried by the message for the reason `standup` is: the cards were built
+     * at delivery time from a payload that exists nowhere else, so a channel of
+     * build notifications draws every one of them without a request each.
+     *
+     * It is a *snapshot*. The hook may have been renamed or revoked since, and a
+     * year-old deploy notice should still say which system sent it — so
+     * `username` here wins over the sender's current name.
+     */
+    webhook?: WebhookMessage | null;
+    /**
      * Absent on messages that arrived over the WebSocket: one broadcast reaches
      * every subscriber, so it cannot carry per-viewer permissions. The timeline
      * fills in a local hint for those; the server re-authorizes regardless.
@@ -1244,4 +1257,77 @@ export type StandupLastRun = {
     closed_at: string | null;
     answered: number;
     asked: number;
+};
+
+/**
+ * The block a message posted through an incoming webhook carries — mirrors the
+ * `webhook` key App\Support\WebhookPayload writes into `messages.metadata`.
+ *
+ * Every field here came from an unauthenticated request. It is safe to render
+ * because the server rebuilt the whole structure key by key and dropped what it
+ * did not recognise — see that class — so there is nothing in here the caller
+ * chose the *shape* of. Render it as text and attributes all the same; nothing
+ * in it goes near `dangerouslySetInnerHTML`, which the app does not use at all.
+ */
+export type WebhookMessage = {
+    webhook_id: number;
+    /** Who the message is attributed to, snapshotted at delivery. */
+    username: string;
+    /** An emoji shortcode without its colons, or null. */
+    icon: string | null;
+    attachments: WebhookAttachment[];
+};
+
+/**
+ * One card beneath a webhook message — Slack's legacy attachment shape, which
+ * is what existing integrations already emit.
+ *
+ * Almost every field is optional because almost every caller sends a different
+ * three of them.
+ */
+export type WebhookAttachment = {
+    /** 'good' | 'warning' | 'danger' | 'default', or a `#rrggbb` triple. */
+    color?: string;
+    pretext?: string;
+    author_name?: string;
+    title?: string;
+    /** Always http or https — other schemes are dropped server-side. */
+    title_link?: string;
+    text?: string;
+    footer?: string;
+    /** Unix seconds, rendered in the reader's own locale. */
+    ts?: number;
+    fields?: WebhookField[];
+};
+
+export type WebhookField = {
+    title: string;
+    value: string;
+    /** Slack's flag for a half-width field. */
+    short: boolean;
+};
+
+/**
+ * An incoming webhook as the admin screen sees it — mirrors
+ * App\Http\Resources\IncomingWebhookResource.
+ *
+ * `url` carries a live credential and is null once the hook is revoked. The
+ * screen that renders it is admin-gated for that reason rather than a
+ * presentational one.
+ */
+export type IncomingWebhook = {
+    id: number;
+    name: string;
+    channel: { id: number; name: string; slug: string };
+    default_username: string | null;
+    default_icon: string | null;
+    /** What its messages are actually attributed to. */
+    display_name: string;
+    url: string | null;
+    is_revoked: boolean;
+    revoked_at: string | null;
+    delivery_count: number;
+    last_delivered_at: string | null;
+    created_by?: { id: number; name: string } | null;
+    created_at: string | null;
 };

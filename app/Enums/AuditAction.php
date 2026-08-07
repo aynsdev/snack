@@ -62,6 +62,23 @@ enum AuditAction: string
     case StandupUpdated = 'standup.updated';
     case StandupDeleted = 'standup.deleted';
 
+    /*
+     * Its own subject, for the reason standups have one. A webhook is a
+     * standing permission for something outside the building to write into a
+     * channel, and "what can post here without a login, who set that up, and
+     * when was it turned off" is a question an administrator arrives with
+     * whole.
+     *
+     * There is deliberately no `webhook.delivered` case. Deliveries are
+     * messages, they land in a channel where everybody can read them, and
+     * writing an audit row per delivery would bury every other entry in the log
+     * under a CI job's build notifications.
+     */
+    case WebhookCreated = 'webhook.created';
+    case WebhookUpdated = 'webhook.updated';
+    case WebhookRevoked = 'webhook.revoked';
+    case WebhookDeleted = 'webhook.deleted';
+
     case MessageDeletedByAdmin = 'message.deleted_by_admin';
 
     public function label(): string
@@ -99,6 +116,10 @@ enum AuditAction: string
             self::StandupCreated => 'Standup created',
             self::StandupUpdated => 'Standup updated',
             self::StandupDeleted => 'Standup deleted',
+            self::WebhookCreated => 'Webhook created',
+            self::WebhookUpdated => 'Webhook updated',
+            self::WebhookRevoked => 'Webhook revoked',
+            self::WebhookDeleted => 'Webhook deleted',
             self::MessageDeletedByAdmin => 'Message removed by admin',
         };
     }

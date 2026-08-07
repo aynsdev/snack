@@ -51,6 +51,7 @@ use App\Http\Controllers\Standups\StandupResponseController;
 use App\Http\Controllers\UploadController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\Workspaces\AuditLogController;
+use App\Http\Controllers\Workspaces\IncomingWebhookController;
 use App\Http\Controllers\Workspaces\InvitationController;
 use App\Http\Controllers\Workspaces\InviteLinkController;
 use App\Http\Controllers\Workspaces\LogoController;
@@ -607,6 +608,45 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->name('workspace-logo.destroy');
 
         Route::get('audit', [AuditLogController::class, 'index'])->name('audit.index');
+
+        /*
+         *--------------------------------------------------------------------
+         * Incoming webhooks
+         *--------------------------------------------------------------------
+         *
+         * Managing the URLs that let outside systems post into a channel. The
+         * deliveries themselves are not here at all — they arrive on
+         * routes/webhooks.php, outside this prefix and outside `web`, because a
+         * deploy script has no session and a workspace slug in the path would
+         * break every integration the day somebody renames the workspace.
+         *
+         * Admin-gated including the index, which is unusual: the list shows live
+         * tokens, so reading it is the same right as issuing one. See
+         * App\Policies\IncomingWebhookPolicy.
+         *
+         * Addressed by id, like {standup} and for the same reasons: a hook has
+         * no page of its own for a slug to carry, and scopeBindings() ties
+         * {webhook} to this workspace's own — so an id from another tenant 404s
+         * at the router rather than at a policy that would have to catch it.
+         */
+        Route::get('webhooks', [IncomingWebhookController::class, 'index'])
+            ->name('webhooks.index');
+        Route::post('webhooks', [IncomingWebhookController::class, 'store'])
+            ->middleware('throttle:20,1')
+            ->name('webhooks.store');
+        Route::patch('webhooks/{webhook}', [IncomingWebhookController::class, 'update'])
+            ->name('webhooks.update');
+
+        /*
+         * Turning one off. A PATCH rather than a DELETE because the row
+         * survives — the point of revoking is that the incident stays readable
+         * afterwards. See App\Actions\Webhooks\RevokeIncomingWebhook.
+         */
+        Route::patch('webhooks/{webhook}/revoke', [IncomingWebhookController::class, 'revoke'])
+            ->name('webhooks.revoke');
+
+        Route::delete('webhooks/{webhook}', [IncomingWebhookController::class, 'destroy'])
+            ->name('webhooks.destroy');
 
         /*
          *--------------------------------------------------------------------
