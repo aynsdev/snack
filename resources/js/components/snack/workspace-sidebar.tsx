@@ -13,6 +13,7 @@ import {
     Search,
     Settings,
     SquarePen,
+    Star,
     UsersRound,
     X,
 } from 'lucide-react';
@@ -69,7 +70,7 @@ import { index as threadsIndex } from '@/routes/threads';
 import { index as webhooksIndex } from '@/routes/webhooks';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
 import { edit as workspaceSettings } from '@/routes/workspace-settings';
-import type { Channel, Conversation, WorkspacePerson } from '@/types';
+import type { Channel, Conversation, Project, WorkspacePerson } from '@/types';
 
 /**
  * The second column: workspace identity, global navigation, and the channel
@@ -354,15 +355,19 @@ export function WorkspaceSidebar({
  */
 function ProjectSection({ onNavigate }: { onNavigate?: () => void }) {
     const workspace = useWorkspace();
-    const { projects, sections } = useSidebarProjects();
+    const { projects, starred, sections } = useSidebarProjects();
     const activeProjectSlug = useActiveProjectSlug();
 
     /*
-     * A single unheaded section is the flat list this has always been — one
-     * "Ungrouped" heading over the whole list would name a distinction the
-     * reader cannot see.
+     * A named group always names itself, even when it is the only one.
+     *
+     * Filing a project under "Platform" and then being shown a bare list is the
+     * heading going missing — the reader did the filing and cannot see it. The
+     * only heading worth suppressing is the synthetic "Ungrouped" one when
+     * there is nothing else beside it: a list whose every project is ungrouped
+     * is not a section, it is a list.
      */
-    const showHeadings = sections.length > 1;
+    const showUngrouped = sections.length > 1;
 
     return (
         <SidebarSection
@@ -387,51 +392,46 @@ function ProjectSection({ onNavigate }: { onNavigate?: () => void }) {
                     You are not on any projects yet.
                 </p>
             ) : (
-                sections.map((section) => (
-                    <div
-                        key={section.group?.id ?? 'ungrouped'}
-                        className="mt-1.5 first:mt-0"
-                    >
-                        {showHeadings && (
-                            <p className="px-2 pt-1 pb-0.5 text-[0.6875rem] font-medium tracking-wide text-muted-foreground/70 uppercase">
-                                {section.group?.name ?? 'Ungrouped'}
+                <>
+                    {starred.length > 0 && (
+                        <div>
+                            <p className="flex items-center gap-1 px-2 pt-1 pb-0.5 text-[0.6875rem] font-medium tracking-wide text-muted-foreground/70 uppercase">
+                                <Star
+                                    aria-hidden="true"
+                                    className="size-3 fill-current text-amber-500"
+                                />
+                                Starred
                             </p>
-                        )}
 
-                        <ul className="space-y-0.5">
-                            {section.projects.map((project) => (
-                                <li key={project.id}>
-                                    <Link
-                                        href={projectBoard([
-                                            workspace.slug,
-                                            project.slug,
-                                        ])}
-                                        onClick={onNavigate}
-                                        aria-current={
-                                            project.slug === activeProjectSlug
-                                                ? 'page'
-                                                : undefined
-                                        }
-                                        className={cn(
-                                            'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
-                                            project.slug === activeProjectSlug
-                                                ? 'bg-sidebar-accent font-semibold text-foreground'
-                                                : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
-                                        )}
-                                    >
-                                        <ProjectAvatar
-                                            project={project}
-                                            size="sm"
-                                        />
-                                        <span className="truncate">
-                                            {project.name}
-                                        </span>
-                                    </Link>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                ))
+                            <ProjectRows
+                                projects={starred}
+                                workspaceSlug={workspace.slug}
+                                activeProjectSlug={activeProjectSlug}
+                                onNavigate={onNavigate}
+                            />
+                        </div>
+                    )}
+
+                    {sections.map((section) => (
+                        <div
+                            key={section.group?.id ?? 'ungrouped'}
+                            className="mt-1.5 first:mt-0"
+                        >
+                            {(section.group !== null || showUngrouped) && (
+                                <p className="px-2 pt-1 pb-0.5 text-[0.6875rem] font-medium tracking-wide text-muted-foreground/70 uppercase">
+                                    {section.group?.name ?? 'Ungrouped'}
+                                </p>
+                            )}
+
+                            <ProjectRows
+                                projects={section.projects}
+                                workspaceSlug={workspace.slug}
+                                activeProjectSlug={activeProjectSlug}
+                                onNavigate={onNavigate}
+                            />
+                        </div>
+                    ))}
+                </>
             )}
 
             <Link
@@ -443,6 +443,50 @@ function ProjectSection({ onNavigate }: { onNavigate?: () => void }) {
                 Browse projects
             </Link>
         </SidebarSection>
+    );
+}
+
+/**
+ * The rows themselves, shared by the starred list and every heading below it —
+ * a starred project is the same row in a different place, not a second kind of
+ * row with its own styling to keep in step.
+ */
+function ProjectRows({
+    projects,
+    workspaceSlug,
+    activeProjectSlug,
+    onNavigate,
+}: {
+    projects: Project[];
+    workspaceSlug: string;
+    activeProjectSlug: string | null;
+    onNavigate?: () => void;
+}) {
+    return (
+        <ul className="space-y-0.5">
+            {projects.map((project) => (
+                <li key={project.id}>
+                    <Link
+                        href={projectBoard([workspaceSlug, project.slug])}
+                        onClick={onNavigate}
+                        aria-current={
+                            project.slug === activeProjectSlug
+                                ? 'page'
+                                : undefined
+                        }
+                        className={cn(
+                            'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
+                            project.slug === activeProjectSlug
+                                ? 'bg-sidebar-accent font-semibold text-foreground'
+                                : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+                        )}
+                    >
+                        <ProjectAvatar project={project} size="sm" />
+                        <span className="truncate">{project.name}</span>
+                    </Link>
+                </li>
+            ))}
+        </ul>
     );
 }
 

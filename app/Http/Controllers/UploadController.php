@@ -58,7 +58,11 @@ class UploadController extends Controller
         DeleteUpload $uploads,
     ): JsonResponse {
         abort_unless(
-            $attachment->message_id === null && $attachment->uploaded_by === $request->user()->id,
+            $attachment->message_id === null
+                // A file on a card is not tray state either: it is removed
+                // through the card, where the project's policy applies.
+                && $attachment->task_id === null
+                && $attachment->uploaded_by === $request->user()->id,
             404,
         );
 

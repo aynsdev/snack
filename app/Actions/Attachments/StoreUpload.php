@@ -4,6 +4,7 @@ namespace App\Actions\Attachments;
 
 use App\Jobs\ProcessAttachment;
 use App\Models\MessageAttachment;
+use App\Models\Task;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Http\UploadedFile;
@@ -32,7 +33,14 @@ use Illuminate\Support\Str;
  */
 class StoreUpload
 {
-    public function handle(Workspace $workspace, User $uploader, UploadedFile $file): MessageAttachment
+    /**
+     * @param  Task|null  $task  The card this file belongs to, when it is being
+     *                           attached to one. A card already exists when its
+     *                           file is chosen, so there is nothing to claim
+     *                           later and the row is never orphaned — which is
+     *                           the whole difference from the composer's path.
+     */
+    public function handle(Workspace $workspace, User $uploader, UploadedFile $file, ?Task $task = null): MessageAttachment
     {
         $disk = (string) config('snack.uploads.disk', 'local');
 
@@ -45,6 +53,7 @@ class StoreUpload
         $attachment = MessageAttachment::create([
             'workspace_id' => $workspace->id,
             'message_id' => null,
+            'task_id' => $task?->id,
             'uploaded_by' => $uploader->id,
             'disk' => $disk,
             'path' => (string) $path,

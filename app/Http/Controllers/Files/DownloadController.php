@@ -97,6 +97,21 @@ class DownloadController extends Controller
      */
     private function authorizeAccess(MessageAttachment $attachment, User $user): void
     {
+        /*
+         * A file on a card is read by whoever may read the card, which is
+         * whoever may read its project — the same delegation TaskPolicy makes,
+         * so a board and its files can never disagree about who sees them.
+         */
+        if ($attachment->task_id !== null) {
+            $task = $attachment->task;
+
+            abort_if($task === null, 404);
+
+            Gate::authorize('view', $task);
+
+            return;
+        }
+
         if ($attachment->message_id === null) {
             abort_unless($attachment->uploaded_by === $user->id, 404);
 

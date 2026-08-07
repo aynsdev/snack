@@ -1,5 +1,8 @@
 import { Check, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import { DevelopmentSection } from '@/components/snack/projects/development-section';
+import { TaskAttachments } from '@/components/snack/projects/task-attachments';
+import { TaskComments } from '@/components/snack/projects/task-comments';
 import {
     LabelChip,
     TASK_PRIORITIES,
@@ -22,11 +25,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useTaskDetail } from '@/hooks/use-task-detail';
 import { cn } from '@/lib/utils';
 import type {
     BoardColumn,
     EpicOption,
     ProjectMembership,
+    ReleaseOption,
     Task,
     TaskLabel,
     TaskPriority,
@@ -60,6 +65,8 @@ export function TaskPanel({
     members,
     labels,
     epics,
+    releases,
+    workspaceSlug,
     canContribute,
     canDelete,
     onClose,
@@ -72,6 +79,8 @@ export function TaskPanel({
     members: ProjectMembership[];
     labels: TaskLabel[];
     epics: EpicOption[];
+    releases: ReleaseOption[];
+    workspaceSlug: string;
     canContribute: boolean;
     canDelete: boolean;
     onClose: () => void;
@@ -91,7 +100,7 @@ export function TaskPanel({
                 }
             }}
         >
-            <DialogContent className="max-h-[90dvh] w-[min(52rem,95vw)] max-w-none overflow-y-auto sm:max-w-none">
+            <DialogContent className="max-h-[90dvh] w-[min(60rem,95vw)] max-w-none overflow-y-auto sm:max-w-none">
                 {task !== null && (
                     <TaskPanelBody
                         /*
@@ -107,6 +116,8 @@ export function TaskPanel({
                         members={members}
                         labels={labels}
                         epics={epics}
+                        releases={releases}
+                        workspaceSlug={workspaceSlug}
                         canContribute={canContribute}
                         canDelete={canDelete}
                         onUpdate={onUpdate}
@@ -126,6 +137,8 @@ function TaskPanelBody({
     members,
     labels,
     epics,
+    releases,
+    workspaceSlug,
     canContribute,
     canDelete,
     onUpdate,
@@ -138,6 +151,8 @@ function TaskPanelBody({
     members: ProjectMembership[];
     labels: TaskLabel[];
     epics: EpicOption[];
+    releases: ReleaseOption[];
+    workspaceSlug: string;
     canContribute: boolean;
     canDelete: boolean;
     onUpdate: (
@@ -151,6 +166,12 @@ function TaskPanelBody({
     const [title, setTitle] = useState(task.title);
     const [description, setDescription] = useState(task.description ?? '');
     const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+    /*
+     * The discussion and the files are not on the board's copy of the card —
+     * they are fetched when it is opened. See useTaskDetail for why.
+     */
+    const detail = useTaskDetail({ workspaceSlug, taskId: task.id });
 
     /*
      * Somebody else edited this card while it was open.
@@ -246,6 +267,40 @@ function TaskPanelBody({
                         });
                     }}
                     className="mt-1.5 w-full resize-y rounded-lg border border-border bg-background p-2.5 text-sm outline-none focus:border-brand"
+                />
+
+                {detail.error !== null && (
+                    <div className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+                        <span className="flex-1">{detail.error}</span>
+                        <button
+                            type="button"
+                            onClick={detail.dismissError}
+                            className="text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                            <X aria-hidden="true" className="size-4" />
+                            <span className="sr-only">Dismiss</span>
+                        </button>
+                    </div>
+                )}
+
+                <TaskAttachments
+                    attachments={detail.detail?.attachments ?? []}
+                    uploading={detail.uploading}
+                    canContribute={canContribute}
+                    onAdd={(file) => void detail.addFile(file)}
+                    onRemove={(attachment) =>
+                        void detail.removeFile(attachment)
+                    }
+                />
+
+                <TaskComments
+                    comments={detail.detail?.comments ?? []}
+                    canContribute={canContribute}
+                    isLoading={detail.isLoading}
+                    isSaving={detail.isSavingComment}
+                    onAdd={(body) => void detail.addComment(body)}
+                    onEdit={(id, body) => void detail.editComment(id, body)}
+                    onRemove={(id) => void detail.removeComment(id)}
                 />
 
                 {canDelete && (
@@ -451,6 +506,47 @@ function TaskPanelBody({
                     </Field>
                 )}
 
+                {/* Which version this goes out in — a different question from
+                    which sprint it is worked in, and deliberately a separate
+                    control. Hidden when the project has planned no releases,
+                    so a team not shipping versions is not asked about them. */}
+                {releases.length > 0 && (
+                    <Field label="Release">
+                        <Select
+                            value={
+                                task.release?.id
+                                    ? String(task.release.id)
+                                    : NONE
+                            }
+                            disabled={!canContribute}
+                            onValueChange={(value) =>
+                                save({
+                                    release_id:
+                                        value === NONE ? null : Number(value),
+                                })
+                            }
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={NONE}>
+                                    Not scheduled
+                                </SelectItem>
+
+                                {releases.map((release) => (
+                                    <SelectItem
+                                        key={release.id}
+                                        value={String(release.id)}
+                                    >
+                                        {release.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </Field>
+                )}
+
                 <Field label="Story points">
                     <input
                         type="number"
@@ -486,6 +582,12 @@ function TaskPanelBody({
                         className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-brand"
                     />
                 </Field>
+
+                {/* Where the work happens, beside the fields describing it —
+                    the same place Jira keeps it, and for the same reason: it is
+                    consulted at the start of the work rather than read with the
+                    description. */}
+                <DevelopmentSection task={task} />
 
                 {labels.length > 0 && (
                     <Field label="Labels">

@@ -9,7 +9,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Projects\AssignProjectGroupRequest;
 use App\Http\Requests\Projects\StoreProjectRequest;
 use App\Http\Requests\Projects\UpdateProjectRequest;
-use App\Http\Resources\BoardColumnResource;
 use App\Http\Resources\ProjectGroupResource;
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\UserResource;
@@ -140,9 +139,8 @@ class ProjectController extends Controller
                 $workspace->projectGroups()->ordered()->get(),
             )->resolve($request),
 
-            'columns' => BoardColumnResource::collection(
-                $project->columns()->ordered()->get(),
-            )->resolve($request),
+            // No columns here: the board's own shape is edited on the board,
+            // where you can see what you are changing. See BoardColumnView.
             'members' => $this->boards->members($project),
             'labels' => $project->labels()->get()
                 ->map(fn ($label): array => [
@@ -178,6 +176,7 @@ class ProjectController extends Controller
             actor: $request->user(),
             attributes: $request->safe()->only([
                 'name', 'key', 'description', 'color', 'uses_sprints', 'card_fields',
+                'next_task_number',
             ]),
         );
 

@@ -9,7 +9,7 @@ import {
     move as moveTask,
     update as updateTask,
 } from '@/routes/tasks';
-import type { Task, TaskChangedEvent } from '@/types';
+import type { Task, TaskChangedEvent, TaskType } from '@/types';
 
 /**
  * The cards on one board, and every way they change.
@@ -109,6 +109,7 @@ export function useBoard({
                     'sprint',
                     'plannedSprints',
                     'sprints',
+                    'backlogCount',
                 ],
             });
         },
@@ -223,6 +224,116 @@ export function tasksInColumn(tasks: Task[], columnId: number): Task[] {
             (left, right) =>
                 left.position - right.position || left.id - right.id,
         );
+}
+
+/**
+ * What the board's filter bar is set to.
+ *
+ * Empty/`all`/false everywhere means "show the board", which is the state it
+ * starts in and the one `hasBoardFilters` reports on.
+ */
+export type BoardFilters = {
+    /** Matched against the title and the reference — people paste both. */
+    search: string;
+    /** Whose cards to show; `'unassigned'` is a choice like any other. */
+    assignees: (number | 'unassigned')[];
+    /** A release id, `'none'` for work scheduled into no version, or `'all'`. */
+    release: number | 'none' | 'all';
+    type: TaskType | 'all';
+    /** Jira's quick filters: mine, and touched in the last day. */
+    onlyMine: boolean;
+    recentlyUpdated: boolean;
+};
+
+export const NO_BOARD_FILTERS: BoardFilters = {
+    search: '',
+    assignees: [],
+    release: 'all',
+    type: 'all',
+    onlyMine: false,
+    recentlyUpdated: false,
+};
+
+/** A day, which is what "recently updated" means on a board. */
+const RECENT_MS = 24 * 60 * 60 * 1000;
+
+export function hasBoardFilters(filters: BoardFilters): boolean {
+    return (
+        filters.search.trim() !== '' ||
+        filters.assignees.length > 0 ||
+        filters.release !== 'all' ||
+        filters.type !== 'all' ||
+        filters.onlyMine ||
+        filters.recentlyUpdated
+    );
+}
+
+/**
+ * The cards a filtered board shows.
+ *
+ * Every clause is an AND and every filter is applied to the cards the client
+ * already holds — the board is fully in memory, so narrowing it must not cost a
+ * round trip, and a filter that did would make the columns flicker through an
+ * empty state on every keystroke.
+ *
+ * The columns keep their own counts, so a filtered board says how many cards
+ * match *in each column* rather than how many exist. That is the honest reading:
+ * a number that ignored the filter would describe a board nobody is looking at.
+ */
+export function filterTasks(
+    tasks: Task[],
+    filters: BoardFilters,
+    viewerId: number | null,
+    now: number = Date.now(),
+): Task[] {
+    const search = filters.search.trim().toLowerCase();
+
+    return tasks.filter((task) => {
+        if (
+            search !== '' &&
+            !task.title.toLowerCase().includes(search) &&
+            !task.reference.toLowerCase().includes(search)
+        ) {
+            return false;
+        }
+
+        if (filters.assignees.length > 0) {
+            const who = task.assignee?.id ?? 'unassigned';
+
+            if (!filters.assignees.includes(who)) {
+                return false;
+            }
+        }
+
+        if (filters.onlyMine && task.assignee?.id !== viewerId) {
+            return false;
+        }
+
+        if (filters.release !== 'all') {
+            const release = task.release?.id ?? 'none';
+
+            if (release !== filters.release) {
+                return false;
+            }
+        }
+
+        if (filters.type !== 'all' && task.type !== filters.type) {
+            return false;
+        }
+
+        if (filters.recentlyUpdated) {
+            const updated =
+                task.updated_at === null
+                    ? null
+                    : new Date(task.updated_at).getTime();
+
+            if (updated === null || now - updated > RECENT_MS) {
+                return false;
+            }
+        }
+
+        return true;
+    });
 }
 
 /**

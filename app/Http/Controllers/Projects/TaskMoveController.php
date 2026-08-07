@@ -31,7 +31,7 @@ class TaskMoveController extends Controller
 
         return response()->json([
             'task' => (new TaskResource(
-                $moved->load(['project', 'assignee', 'labels', 'epic']),
+                $moved->load(['project', 'assignee', 'labels', 'epic', 'release']),
             ))->resolve($request),
         ]);
     }

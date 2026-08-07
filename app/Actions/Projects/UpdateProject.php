@@ -38,12 +38,14 @@ class UpdateProject
      *     uses_sprints?: bool,
      *     card_fields?: array<string, bool>,
      *     project_group_id?: int|null,
+     *     next_task_number?: int,
      * }  $attributes
      */
     public function handle(Project $project, User $actor, array $attributes): Project
     {
         $before = $project->only([
-            'name', 'key', 'description', 'color', 'uses_sprints', 'card_fields', 'project_group_id',
+            'name', 'key', 'description', 'color', 'uses_sprints', 'card_fields',
+            'project_group_id', 'next_task_number',
         ]);
 
         if (array_key_exists('name', $attributes) && $attributes['name'] !== $project->name) {

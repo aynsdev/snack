@@ -37,6 +37,11 @@ class ProjectResource extends JsonResource
             'uses_sprints' => $this->uses_sprints,
             'is_archived' => $this->is_archived,
 
+            // The number the next card filed here will carry. Sent so the
+            // settings screen can show where numbering has reached rather than
+            // asking somebody to work it out from the last card they saw.
+            'next_task_number' => $this->next_task_number,
+
             // The heading this project sits under, by id. The group's name is
             // sent once alongside the list rather than repeated on every
             // project — see ProjectGroupResource.
@@ -49,6 +54,11 @@ class ProjectResource extends JsonResource
             'member_count' => $this->whenCounted('members'),
             'task_count' => $this->whenCounted('tasks'),
             'is_member' => $user !== null && $this->hasMember($user),
+
+            // Whether this viewer keeps it at the top of their sidebar. Per
+            // person, so it rides on their membership rather than on the
+            // project — see the `starred_at` migration.
+            'is_starred' => $user !== null && $this->isStarredBy($user),
 
             'abilities' => [
                 'contribute' => $user?->can('contribute', $this->resource) ?? false,

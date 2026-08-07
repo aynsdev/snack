@@ -178,6 +178,7 @@ export type ProjectSection = {
  */
 export function useSidebarProjects(): {
     projects: Project[];
+    starred: Project[];
     sections: ProjectSection[];
 } {
     const current = useCurrentWorkspace();
@@ -186,16 +187,30 @@ export function useSidebarProjects(): {
         const projects = current?.projects ?? [];
         const groups = current?.project_groups ?? [];
 
-        const sections: ProjectSection[] = groups.map((group) => ({
-            group,
-            projects: projects.filter(
-                (project) => project.project_group_id === group.id,
-            ),
-        }));
+        /*
+         * Starred projects are lifted out of their groups rather than repeated
+         * above them. A project in two places in a list of eight rows is two
+         * rows saying the same thing, and the reader who starred it has said
+         * which of the two they want to look at.
+         */
+        const starred = projects.filter((project) => project.is_starred);
+        const rest = projects.filter((project) => !project.is_starred);
+
+        const sections: ProjectSection[] = groups
+            .map((group) => ({
+                group,
+                projects: rest.filter(
+                    (project) => project.project_group_id === group.id,
+                ),
+            }))
+            // A heading whose every project is starred has nothing left under
+            // it, and a heading over nothing is a wasted row in the narrowest
+            // column in the application.
+            .filter((section) => section.projects.length > 0);
 
         const filed = new Set(groups.map((group) => group.id));
 
-        const ungrouped = projects.filter(
+        const ungrouped = rest.filter(
             (project) =>
                 project.project_group_id === null ||
                 !filed.has(project.project_group_id),
@@ -211,6 +226,6 @@ export function useSidebarProjects(): {
             sections.push({ group: null, projects: ungrouped });
         }
 
-        return { projects, sections };
+        return { projects, starred, sections };
     }, [current?.projects, current?.project_groups]);
 }

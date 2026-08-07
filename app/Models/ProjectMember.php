@@ -22,12 +22,13 @@ use Illuminate\Support\Carbon;
  * @property int $user_id
  * @property ProjectRole $role
  * @property Carbon $joined_at
+ * @property Carbon|null $starred_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Project $project
  * @property-read User $user
  */
-#[Fillable(['project_id', 'user_id', 'role', 'joined_at'])]
+#[Fillable(['project_id', 'user_id', 'role', 'joined_at', 'starred_at'])]
 class ProjectMember extends Pivot
 {
     /** @use HasFactory<ProjectMemberFactory> */
@@ -45,6 +46,7 @@ class ProjectMember extends Pivot
         return [
             'role' => ProjectRole::class,
             'joined_at' => 'datetime',
+            'starred_at' => 'datetime',
         ];
     }
 

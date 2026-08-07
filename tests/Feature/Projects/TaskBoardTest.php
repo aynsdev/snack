@@ -26,6 +26,49 @@ it('numbers tasks per project and never reuses a number', function () {
     expect($third['reference'])->toBe($project->key.'-3');
 });
 
+it('carries numbering on from where a lead says', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+
+    // A team arriving from another tracker has references people already quoted.
+    $this->actingAs($owner)
+        ->patch(route('projects.update', [$workspace->slug, $project->slug]), [
+            'next_task_number' => 1499,
+        ])
+        ->assertRedirect();
+
+    $task = fileTask($this, $workspace, $project, $owner, 'Carried over');
+
+    expect($task['reference'])->toBe($project->key.'-1499')
+        ->and($project->refresh()->next_task_number)->toBe(1500);
+});
+
+it('refuses to wind numbering back over a reference already issued', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+
+    fileTask($this, $workspace, $project, $owner, 'First');
+    fileTask($this, $workspace, $project, $owner, 'Second');
+
+    // `(project_id, number)` is unique, so a counter behind the highest
+    // reference does not fail here — it fails much later, on somebody's
+    // perfectly ordinary click. Refused at the point it is set.
+    $this->actingAs($owner)
+        ->patch(route('projects.update', [$workspace->slug, $project->slug]), [
+            'next_task_number' => 2,
+        ])
+        ->assertSessionHasErrors('next_task_number');
+
+    expect($project->refresh()->next_task_number)->toBe(3);
+
+    // The number after the last one issued is the floor, not a number past it.
+    $this->actingAs($owner)
+        ->patch(route('projects.update', [$workspace->slug, $project->slug]), [
+            'next_task_number' => 3,
+        ])
+        ->assertSessionHasNoErrors();
+});
+
 it('lands a new task in the first unstarted column and broadcasts it', function () {
     [$workspace, $owner] = makeWorkspaceWithOwner();
     $project = makeProject($workspace, $owner);
@@ -37,6 +80,22 @@ it('lands a new task in the first unstarted column and broadcasts it', function 
 
     Event::assertDispatched(TaskChanged::class, fn (TaskChanged $event): bool => $event->action === 'created'
         && $event->taskId === $task['id']);
+});
+
+it('hands every card a branch name, and re-files it when the card is retyped', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+
+    $task = fileTask($this, $workspace, $project, $owner, 'Cancel a ride');
+
+    expect($task['branch_name'])->toBe("feature/{$task['reference']}-cancel-a-ride");
+
+    // The prefix is derived from the type rather than stored, so retyping the
+    // card re-files the branch and there is no second thing to keep in step.
+    $this->actingAs($owner)
+        ->patchJson(route('tasks.update', [$workspace->slug, $task['id']]), ['type' => 'bug'])
+        ->assertOk()
+        ->assertJsonPath('task.branch_name', "bugfix/{$task['reference']}-cancel-a-ride");
 });
 
 it('drops an assignee who is not on the project', function () {

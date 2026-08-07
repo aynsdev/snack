@@ -7,6 +7,7 @@ use App\Enums\TaskType;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,6 +28,7 @@ use Illuminate\Support\Carbon;
  * @property int $number
  * @property int $board_column_id
  * @property int|null $sprint_id
+ * @property int|null $release_id
  * @property int|null $parent_task_id
  * @property TaskType $type
  * @property TaskPriority $priority
@@ -42,9 +44,11 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Project $project
  * @property-read BoardColumn $column
+ * @property-read Collection<int, TaskComment> $comments
+ * @property-read Collection<int, MessageAttachment> $attachments
  */
 #[Fillable([
-    'project_id', 'number', 'board_column_id', 'sprint_id', 'parent_task_id',
+    'project_id', 'number', 'board_column_id', 'sprint_id', 'release_id', 'parent_task_id',
     'type', 'priority', 'title', 'description', 'assignee_id', 'reporter_id',
     'position', 'story_points', 'due_on', 'completed_at',
 ])]
@@ -96,6 +100,19 @@ class Task extends Model
     }
 
     /**
+     * The version this goes out in, or null for work nobody has scheduled.
+     *
+     * A second, independent placement alongside `sprint` — when a team works on
+     * something and when it ships are different questions.
+     *
+     * @return BelongsTo<Release, $this>
+     */
+    public function release(): BelongsTo
+    {
+        return $this->belongsTo(Release::class);
+    }
+
+    /**
      * @return BelongsTo<Task, $this>
      */
     public function epic(): BelongsTo
@@ -125,6 +142,32 @@ class Task extends Model
     public function reporter(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reporter_id');
+    }
+
+    /**
+     * The discussion on this card, oldest first.
+     *
+     * Never eager-loaded by the board: eighty cards' worth of discussion is a
+     * payload nobody is reading. It arrives only with the `tasks.show` endpoint,
+     * which is what the panel asks for when a card is opened.
+     *
+     * @return HasMany<TaskComment, $this>
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TaskComment::class)->ordered();
+    }
+
+    /**
+     * Files attached to this card — the same table, storage and download route
+     * as a message's files. See the attachments migration for why there is not a
+     * second one.
+     *
+     * @return HasMany<MessageAttachment, $this>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(MessageAttachment::class)->orderBy('id');
     }
 
     /**
@@ -193,6 +236,11 @@ class Task extends Model
      */
     public function scopeWithCardData(Builder $query): void
     {
-        $query->with(['assignee', 'labels', 'epic:id,project_id,number,title,type']);
+        $query->with([
+            'assignee',
+            'labels',
+            'epic:id,project_id,number,title,type',
+            'release:id,project_id,name',
+        ]);
     }
 }

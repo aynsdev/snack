@@ -19,23 +19,64 @@ use Illuminate\Validation\ValidationException;
 class SaveBoardColumn
 {
     /**
-     * @param  array{name: string, category?: string, wip_limit?: int|null}  $attributes
+     * @param  array{
+     *     name: string,
+     *     category?: string,
+     *     wip_limit?: int|null,
+     *     before_column_id?: int|null,
+     *     after_column_id?: int|null,
+     *  }  $attributes
      */
     public function create(Project $project, array $attributes): BoardColumn
     {
-        $last = $project->columns()->max('position');
-
         $column = BoardColumn::create([
             'project_id' => $project->id,
             'name' => $attributes['name'],
             'category' => $attributes['category'] ?? ColumnCategory::Unstarted->value,
-            'position' => Positions::between($last, null),
+            'position' => $this->placement($project, $attributes),
             'wip_limit' => $attributes['wip_limit'] ?? null,
         ]);
 
         BoardChanged::dispatch($project);
 
         return $column;
+    }
+
+    /**
+     * Where a new column goes.
+     *
+     * The end of the board unless the caller named the columns it belongs
+     * between — which the board's own add button does, because a status added
+     * there is nearly always one more step *before* Done, and a column landing
+     * to the right of Done is a board that reads backwards until somebody
+     * reorders it.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function placement(Project $project, array $attributes): int
+    {
+        $beforeId = $attributes['before_column_id'] ?? null;
+        $afterId = $attributes['after_column_id'] ?? null;
+
+        if ($beforeId === null && $afterId === null) {
+            return Positions::between($project->columns()->max('position'), null);
+        }
+
+        $neighbours = $project->columns()
+            ->whereIn('id', array_filter([$beforeId, $afterId]))
+            ->get()
+            ->keyBy('id');
+
+        $before = $beforeId === null ? null : $neighbours->get((int) $beforeId)?->position;
+        $after = $afterId === null ? null : $neighbours->get((int) $afterId)?->position;
+
+        if (Positions::needsRebalance($before, $after)) {
+            $this->spread($project);
+
+            return $this->placement($project, $attributes);
+        }
+
+        return Positions::between($before, $after);
     }
 
     /**
@@ -130,15 +171,24 @@ class SaveBoardColumn
             return Positions::between($before, $after);
         }
 
-        // A board has a handful of columns, so spreading them all is cheap and
-        // there is no reason for the fractional-insert dance tasks need.
+        $this->spread($project);
+
+        return $this->positionBetween($project, $column, $beforeId, $afterId);
+    }
+
+    /**
+     * Spreads every column of a board back out.
+     *
+     * A board has a handful of columns, so renumbering all of them is cheap and
+     * there is no reason for the fractional-insert dance tasks need.
+     */
+    private function spread(Project $project): void
+    {
         $columns = $project->columns()->ordered()->get();
         $positions = Positions::spread($columns);
 
         foreach ($columns as $index => $each) {
             $each->forceFill(['position' => $positions[$index]])->save();
         }
-
-        return $this->positionBetween($project, $column, $beforeId, $afterId);
     }
 }

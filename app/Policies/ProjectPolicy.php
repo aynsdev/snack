@@ -167,6 +167,21 @@ class ProjectPolicy
             : Response::allow();
     }
 
+    /**
+     * Keeping a project at the top of one's own sidebar.
+     *
+     * A member's right, and the lightest one here: a star changes nothing
+     * anybody else can see, which is why it is not gated on contributing. It
+     * does need membership — the sidebar list a star reorders is the list of
+     * projects you are on.
+     */
+    public function star(User $user, Project $project): Response
+    {
+        return $project->hasMember($user)
+            ? Response::allow()
+            : Response::deny('Join this project to star it.');
+    }
+
     public function leave(User $user, Project $project): Response
     {
         return $project->hasMember($user)

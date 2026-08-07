@@ -41,6 +41,15 @@ class UpdateProjectRequest extends FormRequest
             'uses_sprints' => ['sometimes', 'boolean'],
 
             /*
+             * Where this project's references carry on from — the 1499 in
+             * PWA-1499. Moved rather than reset: a team arriving from another
+             * tracker sets it past the numbers they already quoted, so nothing
+             * they wrote down means two different things. The floor is checked
+             * in {@see after()}, where the numbers already handed out are known.
+             */
+            'next_task_number' => ['sometimes', 'integer', 'min:1', 'max:999999999'],
+
+            /*
              * Which fields the cards on this board draw. Keyed by field name and
              * bounded to the fields that exist, so an unknown key is a
              * validation failure here rather than a stray entry stored in the
@@ -57,6 +66,31 @@ class UpdateProjectRequest extends FormRequest
     public function after(): array
     {
         return [
+            /*
+             * The counter may not be wound back over a number already in use.
+             *
+             * `(project_id, number)` is unique, so a counter behind the highest
+             * reference does not fail here — it fails later, on somebody's
+             * perfectly ordinary click, once the counter catches up. Refused at
+             * the point it is set, naming the reference in the way.
+             */
+            function (Validator $validator): void {
+                $next = $this->input('next_task_number');
+
+                if ($next === null) {
+                    return;
+                }
+
+                $highest = (int) $this->project()->tasks()->max('number');
+
+                if ($highest > 0 && (int) $next <= $highest) {
+                    $validator->errors()->add(
+                        'next_task_number',
+                        "This project has already issued {$this->project()->reference($highest)}, so the next number must be at least ".($highest + 1).'.',
+                    );
+                }
+            },
+
             function (Validator $validator): void {
                 $fields = $this->input('card_fields');
 

@@ -43,18 +43,27 @@ class TaskController extends Controller
         );
 
         return response()->json([
-            'task' => (new TaskResource($task->load(['project', 'assignee', 'labels', 'epic'])))->resolve($request),
+            'task' => (new TaskResource($task->load(['project', 'assignee', 'labels', 'epic', 'release'])))->resolve($request),
         ], 201);
     }
 
+    /**
+     * One card in full.
+     *
+     * The only place a card's discussion and files are sent, which is why the
+     * panel asks for this on open rather than drawing everything from the board
+     * it was clicked on: a board is eighty cards, and eighty cards' worth of
+     * comments is a payload nobody reads.
+     */
     public function show(Workspace $workspace, Task $task, Request $request): JsonResponse
     {
         $this->authorize('view', $task);
 
         return response()->json([
-            'task' => (new TaskResource(
-                $task->load(['project', 'assignee', 'labels', 'epic', 'reporter']),
-            ))->resolve($request),
+            'task' => (new TaskResource($task->load([
+                'project', 'assignee', 'labels', 'epic', 'release', 'reporter',
+                'comments.author', 'attachments',
+            ])))->resolve($request),
         ]);
     }
 
@@ -72,7 +81,7 @@ class TaskController extends Controller
 
         return response()->json([
             'task' => (new TaskResource(
-                $saved->load(['project', 'assignee', 'labels', 'epic']),
+                $saved->load(['project', 'assignee', 'labels', 'epic', 'release']),
             ))->resolve($request),
         ]);
     }

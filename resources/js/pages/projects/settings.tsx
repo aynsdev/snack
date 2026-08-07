@@ -27,11 +27,6 @@ import { useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import { update as updateProject } from '@/routes/projects';
 import { store as archiveProject } from '@/routes/projects/archive';
-import {
-    destroy as destroyColumn,
-    store as storeColumn,
-    update as updateColumn,
-} from '@/routes/projects/columns';
 import { update as assignGroup } from '@/routes/projects/group';
 import {
     destroy as destroyLabel,
@@ -43,9 +38,7 @@ import {
     update as updateMember,
 } from '@/routes/projects/members';
 import type {
-    BoardColumn,
     CardFields,
-    ColumnCategory,
     Project,
     ProjectGroup,
     ProjectMembership,
@@ -65,7 +58,6 @@ type Props = {
     project: Project;
     /** Every group in the workspace, so the picker can name this one's. */
     groups: ProjectGroup[];
-    columns: BoardColumn[];
     members: ProjectMembership[];
     labels: TaskLabel[];
     canManage: boolean;
@@ -76,8 +68,10 @@ type Props = {
 /**
  * Everything about a project that is not the work itself.
  *
- * Four sections in the order a team actually reaches for them: what the project
- * is, what its cards show, what its board looks like, and who is on it.
+ * Three sections in the order a team actually reaches for them: what the project
+ * is, what its cards show, its vocabulary, and who is on it. The board's own
+ * shape is not here — a column is renamed, retyped and removed from the board
+ * itself, where you can see what you are changing.
  *
  * Read-only for anyone who is not a lead. Rendering the page and refusing every
  * control is deliberate — "you cannot change this" is a more useful answer than
@@ -86,7 +80,6 @@ type Props = {
 export default function ProjectSettingsPage({
     project,
     groups,
-    columns,
     members,
     labels,
     canManage,
@@ -116,13 +109,6 @@ export default function ProjectSettingsPage({
 
                     <CardFieldsSection
                         project={project}
-                        workspaceSlug={workspace.slug}
-                        canManage={canManage}
-                    />
-
-                    <ColumnsSection
-                        project={project}
-                        columns={columns}
                         workspaceSlug={workspace.slug}
                         canManage={canManage}
                     />
@@ -164,6 +150,7 @@ function DetailsSection({
         description: project.description ?? '',
         color: project.color,
         uses_sprints: project.uses_sprints,
+        next_task_number: String(project.next_task_number),
     });
 
     return (
@@ -175,6 +162,14 @@ function DetailsSection({
                 className="space-y-4"
                 onSubmit={(event) => {
                     event.preventDefault();
+
+                    // The counter is typed, so it travels as text; the server
+                    // wants the number. Blank becomes 0 rather than nothing, so
+                    // it is refused by the same rule that refuses a zero.
+                    form.transform((data) => ({
+                        ...data,
+                        next_task_number: Number(data.next_task_number),
+                    }));
 
                     form.patch(
                         updateProject.url({
@@ -235,6 +230,53 @@ function DetailsSection({
                             form.setData('description', event.target.value)
                         }
                     />
+                </div>
+
+                {/*
+                 * Where numbering carries on from.
+                 *
+                 * Editable because a team arriving from another tracker has
+                 * references people already quoted — starting again at 1 would
+                 * make PWA-1499 mean two different things. It only ever moves
+                 * forward: the server refuses a number already issued, because
+                 * a counter behind the highest reference fails much later, on
+                 * somebody's ordinary click.
+                 */}
+                <div className="max-w-xs space-y-1.5">
+                    <Label htmlFor="next-task-number">Next ticket number</Label>
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">
+                            {project.key}-
+                        </span>
+
+                        <Input
+                            id="next-task-number"
+                            type="number"
+                            min={1}
+                            inputMode="numeric"
+                            value={form.data.next_task_number}
+                            disabled={!canManage}
+                            onChange={(event) =>
+                                form.setData(
+                                    'next_task_number',
+                                    event.target.value,
+                                )
+                            }
+                        />
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                        The reference the next task filed here will carry. It
+                        can only move forward — numbers already issued stay
+                        meaning what they meant.
+                    </p>
+
+                    {form.errors.next_task_number !== undefined && (
+                        <p className="text-xs text-destructive">
+                            {form.errors.next_task_number}
+                        </p>
+                    )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -444,186 +486,6 @@ const CARD_FIELD_LABELS: Array<[keyof CardFields, string, string]> = [
     ['due_on', 'Due date', 'Turns red when it passes.'],
     ['epic', 'Epic', 'Which larger piece this belongs to.'],
 ];
-
-function ColumnsSection({
-    project,
-    columns,
-    workspaceSlug,
-    canManage,
-}: {
-    project: Project;
-    columns: BoardColumn[];
-    workspaceSlug: string;
-    canManage: boolean;
-}) {
-    const [name, setName] = useState('');
-    const [category, setCategory] = useState<ColumnCategory>('started');
-
-    const projectArgs = { workspace: workspaceSlug, project: project.slug };
-
-    return (
-        <Section
-            title="Board columns"
-            description="Your statuses, left to right. What each one means decides where new work lands and what counts as done when a sprint closes."
-        >
-            <ul className="space-y-2">
-                {columns.map((column) => (
-                    <li
-                        key={column.id}
-                        className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2.5"
-                    >
-                        <Input
-                            defaultValue={column.name}
-                            disabled={!canManage}
-                            className="w-40"
-                            onBlur={(event) => {
-                                if (event.target.value === column.name) {
-                                    return;
-                                }
-
-                                router.patch(
-                                    updateColumn.url({
-                                        ...projectArgs,
-                                        column: column.id,
-                                    }),
-                                    { name: event.target.value },
-                                    { preserveScroll: true },
-                                );
-                            }}
-                        />
-
-                        <Select
-                            value={column.category}
-                            disabled={!canManage}
-                            onValueChange={(value) =>
-                                router.patch(
-                                    updateColumn.url({
-                                        ...projectArgs,
-                                        column: column.id,
-                                    }),
-                                    { category: value },
-                                    { preserveScroll: true },
-                                )
-                            }
-                        >
-                            <SelectTrigger className="w-40">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="unstarted">To do</SelectItem>
-                                <SelectItem value="started">
-                                    In progress
-                                </SelectItem>
-                                <SelectItem value="done">Done</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Input
-                            type="number"
-                            min={1}
-                            max={999}
-                            defaultValue={column.wip_limit ?? ''}
-                            placeholder="No limit"
-                            disabled={!canManage}
-                            className="w-28"
-                            onBlur={(event) => {
-                                const raw = event.target.value.trim();
-                                const next = raw === '' ? null : Number(raw);
-
-                                if (next === column.wip_limit) {
-                                    return;
-                                }
-
-                                router.patch(
-                                    updateColumn.url({
-                                        ...projectArgs,
-                                        column: column.id,
-                                    }),
-                                    { wip_limit: next },
-                                    { preserveScroll: true },
-                                );
-                            }}
-                        />
-
-                        {canManage && (
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="ml-auto text-muted-foreground"
-                                title="Remove — its tasks move to the next column"
-                                onClick={() =>
-                                    router.delete(
-                                        destroyColumn.url({
-                                            ...projectArgs,
-                                            column: column.id,
-                                        }),
-                                        { preserveScroll: true },
-                                    )
-                                }
-                            >
-                                <Trash2 className="size-4" />
-                                <span className="sr-only">
-                                    Remove {column.name}
-                                </span>
-                            </Button>
-                        )}
-                    </li>
-                ))}
-            </ul>
-
-            {canManage && (
-                <form
-                    className="mt-3 flex flex-wrap items-center gap-2"
-                    onSubmit={(event) => {
-                        event.preventDefault();
-
-                        if (name.trim() === '') {
-                            return;
-                        }
-
-                        router.post(
-                            storeColumn.url(projectArgs),
-                            { name: name.trim(), category },
-                            {
-                                preserveScroll: true,
-                                onSuccess: () => setName(''),
-                            },
-                        );
-                    }}
-                >
-                    <Input
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        placeholder="To test"
-                        className="w-40"
-                    />
-
-                    <Select
-                        value={category}
-                        onValueChange={(value) =>
-                            setCategory(value as ColumnCategory)
-                        }
-                    >
-                        <SelectTrigger className="w-40">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="unstarted">To do</SelectItem>
-                            <SelectItem value="started">In progress</SelectItem>
-                            <SelectItem value="done">Done</SelectItem>
-                        </SelectContent>
-                    </Select>
-
-                    <Button type="submit" variant="outline">
-                        <Plus className="size-4" />
-                        Add column
-                    </Button>
-                </form>
-            )}
-        </Section>
-    );
-}
 
 function LabelsSection({
     project,
