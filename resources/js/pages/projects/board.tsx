@@ -1,5 +1,11 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { CalendarClock, Play, SquareCheckBig, X } from 'lucide-react';
+import {
+    CalendarClock,
+    Play,
+    SquareCheckBig,
+    UserPlus,
+    X,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AddColumnTile } from '@/components/snack/projects/add-column-tile';
 import { BoardColumnView } from '@/components/snack/projects/board-column-view';
@@ -32,6 +38,7 @@ import {
 import type {BoardFilters} from '@/hooks/use-board';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
 import { backlog as backlogRoute } from '@/routes/projects';
+import { store as joinProject } from '@/routes/projects/membership';
 import { edit as settingsRoute } from '@/routes/projects/settings';
 import {
     complete as completeSprint,
@@ -197,9 +204,29 @@ export default function ProjectBoardPage({
             </ProjectHeader>
 
             {!canContribute && (
-                <p className="border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+                <p className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
                     You are reading this board. Join the project to file and
-                    move work on it.
+                    move work on it — and to see it in your sidebar.
+                    {/* The sentence promised this; until now there was nothing
+                        here to press, and no other route into a project the
+                        viewer is not already on. */}
+                    {project.abilities.join && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                                router.post(
+                                    joinProject([workspace.slug, project.slug]),
+                                    {},
+                                    { preserveScroll: true },
+                                )
+                            }
+                        >
+                            <UserPlus aria-hidden="true" />
+                            Join project
+                        </Button>
+                    )}
                 </p>
             )}
 
