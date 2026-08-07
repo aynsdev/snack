@@ -82,6 +82,22 @@ class TaskResource extends JsonResource
                     ],
             ),
 
+            /*
+             * The version this ships in, flattened to what a picker and a card
+             * render. A second placement beside `sprint_id` and never a
+             * substitute for it — when work is done and when it goes out are
+             * different questions. See the releases migration.
+             */
+            'release' => $this->whenLoaded(
+                'release',
+                fn (): ?array => $this->release === null
+                    ? null
+                    : [
+                        'id' => $this->release->id,
+                        'name' => $this->release->name,
+                    ],
+            ),
+
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

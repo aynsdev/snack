@@ -28,6 +28,7 @@ import type {
     EpicOption,
     Project,
     ProjectMembership,
+    ReleaseOption,
     Sprint,
     Task,
     TaskLabel,
@@ -41,6 +42,7 @@ type Props = {
     members: ProjectMembership[];
     labels: TaskLabel[];
     epics: EpicOption[];
+    releases: ReleaseOption[];
     canContribute: boolean;
     canManage: boolean;
 };
@@ -68,6 +70,7 @@ export default function ProjectBacklogPage({
     members,
     labels,
     epics,
+    releases,
     canContribute,
     canManage,
 }: Props) {
@@ -203,6 +206,7 @@ export default function ProjectBacklogPage({
                 members={members}
                 labels={labels}
                 epics={epics}
+                releases={releases}
                 canContribute={canContribute}
                 canDelete={canContribute}
                 onClose={() => setOpenTaskId(null)}

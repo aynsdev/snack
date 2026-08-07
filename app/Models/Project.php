@@ -40,6 +40,7 @@ use Illuminate\Support\Carbon;
 #[Fillable([
     'workspace_id', 'created_by', 'project_group_id', 'name', 'slug', 'key',
     'description', 'color', 'uses_sprints', 'is_archived', 'card_fields',
+    'next_task_number',
 ])]
 #[RouteKey('slug')]
 class Project extends Model
@@ -162,6 +163,14 @@ class Project extends Model
         return $this->hasMany(TaskLabel::class)->orderBy('name');
     }
 
+    /**
+     * @return HasMany<Release, $this>
+     */
+    public function releases(): HasMany
+    {
+        return $this->hasMany(Release::class);
+    }
+
     // -- Membership ----------------------------------------------------------
 
     public function membershipFor(User $user): ?ProjectMember
@@ -181,6 +190,18 @@ class Project extends Model
     public function roleFor(User $user): ?ProjectRole
     {
         return $this->membershipFor($user)?->role;
+    }
+
+    /**
+     * Whether this person keeps this project at the top of their sidebar.
+     *
+     * Read off the membership, which the sidebar has already loaded — see the
+     * `starred_at` migration for why the star lives there rather than in a
+     * table of its own.
+     */
+    public function isStarredBy(User $user): bool
+    {
+        return $this->membershipFor($user)?->starred_at !== null;
     }
 
     // -- Board ---------------------------------------------------------------

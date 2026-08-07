@@ -27,6 +27,7 @@ import type {
     BoardColumn,
     EpicOption,
     ProjectMembership,
+    ReleaseOption,
     Task,
     TaskLabel,
     TaskPriority,
@@ -60,6 +61,7 @@ export function TaskPanel({
     members,
     labels,
     epics,
+    releases,
     canContribute,
     canDelete,
     onClose,
@@ -72,6 +74,7 @@ export function TaskPanel({
     members: ProjectMembership[];
     labels: TaskLabel[];
     epics: EpicOption[];
+    releases: ReleaseOption[];
     canContribute: boolean;
     canDelete: boolean;
     onClose: () => void;
@@ -107,6 +110,7 @@ export function TaskPanel({
                         members={members}
                         labels={labels}
                         epics={epics}
+                        releases={releases}
                         canContribute={canContribute}
                         canDelete={canDelete}
                         onUpdate={onUpdate}
@@ -126,6 +130,7 @@ function TaskPanelBody({
     members,
     labels,
     epics,
+    releases,
     canContribute,
     canDelete,
     onUpdate,
@@ -138,6 +143,7 @@ function TaskPanelBody({
     members: ProjectMembership[];
     labels: TaskLabel[];
     epics: EpicOption[];
+    releases: ReleaseOption[];
     canContribute: boolean;
     canDelete: boolean;
     onUpdate: (
@@ -444,6 +450,47 @@ function TaskPanelBody({
                                         value={String(epic.id)}
                                     >
                                         {epic.title}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </Field>
+                )}
+
+                {/* Which version this goes out in — a different question from
+                    which sprint it is worked in, and deliberately a separate
+                    control. Hidden when the project has planned no releases,
+                    so a team not shipping versions is not asked about them. */}
+                {releases.length > 0 && (
+                    <Field label="Release">
+                        <Select
+                            value={
+                                task.release?.id
+                                    ? String(task.release.id)
+                                    : NONE
+                            }
+                            disabled={!canContribute}
+                            onValueChange={(value) =>
+                                save({
+                                    release_id:
+                                        value === NONE ? null : Number(value),
+                                })
+                            }
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={NONE}>
+                                    Not scheduled
+                                </SelectItem>
+
+                                {releases.map((release) => (
+                                    <SelectItem
+                                        key={release.id}
+                                        value={String(release.id)}
+                                    >
+                                        {release.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

@@ -1,8 +1,22 @@
-import { Plus } from 'lucide-react';
+import { router } from '@inertiajs/react';
+import { Check, MoreHorizontal, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { TaskCard } from '@/components/snack/projects/task-card';
+import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import type { BoardColumn, CardFields, Task } from '@/types';
+import {
+    destroy as destroyColumn,
+    update as updateColumn,
+} from '@/routes/projects/columns';
+import type { BoardColumn, CardFields, ColumnCategory, Task } from '@/types';
 
 /**
  * One column of the board: its cards, its count, and the seam a dragged card
@@ -25,6 +39,9 @@ export function BoardColumnView({
     tasks,
     fields,
     canContribute,
+    canManage,
+    workspaceSlug,
+    projectSlug,
     draggingId,
     onOpenTask,
     onDragStart,
@@ -36,6 +53,10 @@ export function BoardColumnView({
     tasks: Task[];
     fields: CardFields;
     canContribute: boolean;
+    /** A lead may reshape the board: rename, retype and remove its columns. */
+    canManage: boolean;
+    workspaceSlug: string;
+    projectSlug: string;
     /** The card currently being dragged, so it can be dimmed in place. */
     draggingId: number | null;
     onOpenTask: (task: Task) => void;
@@ -86,9 +107,12 @@ export function BoardColumnView({
             className="flex w-72 shrink-0 flex-col rounded-xl bg-muted/40"
         >
             <header className="flex items-center gap-2 px-3 pt-3 pb-1">
-                <h2 className="text-[0.6875rem] font-semibold tracking-wide text-muted-foreground uppercase">
-                    {column.name}
-                </h2>
+                <ColumnName
+                    column={column}
+                    canManage={canManage}
+                    workspaceSlug={workspaceSlug}
+                    projectSlug={projectSlug}
+                />
 
                 <span
                     className={cn(
@@ -109,6 +133,14 @@ export function BoardColumnView({
                         ? tasks.length
                         : `${tasks.length}/${column.wip_limit}`}
                 </span>
+
+                {canManage && (
+                    <ColumnMenu
+                        column={column}
+                        workspaceSlug={workspaceSlug}
+                        projectSlug={projectSlug}
+                    />
+                )}
             </header>
 
             <div
@@ -178,6 +210,277 @@ export function BoardColumnView({
         </section>
     );
 }
+
+/**
+ * The column's name, renamed by clicking it.
+ *
+ * There is no settings screen for this any more: a column is renamed where it
+ * is, because the thing being renamed is right there and the name only means
+ * anything next to the ones either side of it. Enter or blur saves, Escape puts
+ * the old name back, and an emptied name is a slip rather than an intent — the
+ * same rules the card title follows.
+ */
+function ColumnName({
+    column,
+    canManage,
+    workspaceSlug,
+    projectSlug,
+}: {
+    column: BoardColumn;
+    canManage: boolean;
+    workspaceSlug: string;
+    projectSlug: string;
+}) {
+    const [renaming, setRenaming] = useState(false);
+    const [name, setName] = useState(column.name);
+
+    const heading =
+        'min-w-0 flex-1 truncate text-left text-[0.6875rem] font-semibold tracking-wide text-muted-foreground uppercase';
+
+    if (!canManage) {
+        return <h2 className={heading}>{column.name}</h2>;
+    }
+
+    if (!renaming) {
+        return (
+            <h2 className="min-w-0 flex-1">
+                <button
+                    type="button"
+                    title="Rename column"
+                    onClick={() => {
+                        setName(column.name);
+                        setRenaming(true);
+                    }}
+                    className={cn(
+                        heading,
+                        'w-full rounded transition-colors hover:text-foreground',
+                    )}
+                >
+                    {column.name}
+                </button>
+            </h2>
+        );
+    }
+
+    const save = () => {
+        const trimmed = name.trim();
+
+        setRenaming(false);
+
+        if (trimmed === '' || trimmed === column.name) {
+            return;
+        }
+
+        router.patch(
+            updateColumn.url({
+                workspace: workspaceSlug,
+                project: projectSlug,
+                column: column.id,
+            }),
+            { name: trimmed },
+            { preserveScroll: true },
+        );
+    };
+
+    return (
+        <input
+            autoFocus
+            value={name}
+            maxLength={40}
+            aria-label={`Rename ${column.name}`}
+            onChange={(event) => setName(event.target.value)}
+            onBlur={save}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    save();
+                }
+
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    setName(column.name);
+                    setRenaming(false);
+                }
+            }}
+            className="min-w-0 flex-1 rounded border border-brand bg-background px-1 py-0.5 text-[0.6875rem] font-semibold tracking-wide uppercase outline-none"
+        />
+    );
+}
+
+/**
+ * The rest of what a column can be: what it means, how much fits in it, and
+ * removing it.
+ *
+ * Here rather than on the settings screen, for the reason the rename is: the
+ * two questions this answers — "is this status started or done" and "is this
+ * column too full" — are only askable while looking at the board.
+ *
+ * Removing does not take the cards with it: {@see App\Actions\Projects\DeleteBoardColumn}
+ * moves them to the column beside it, which is why there is no confirmation to
+ * click through.
+ */
+function ColumnMenu({
+    column,
+    workspaceSlug,
+    projectSlug,
+}: {
+    column: BoardColumn;
+    workspaceSlug: string;
+    projectSlug: string;
+}) {
+    const args = {
+        workspace: workspaceSlug,
+        project: projectSlug,
+        column: column.id,
+    };
+
+    const save = (attributes: {
+        category?: ColumnCategory;
+        wip_limit?: number | null;
+    }) => {
+        router.patch(updateColumn.url(args), attributes, {
+            preserveScroll: true,
+        });
+    };
+
+    /*
+     * The limit is typed rather than picked, so it is held here and written
+     * when the menu closes.
+     *
+     * Saving it on blur is what a field in a form would do, and it is wrong
+     * here: closing the menu — by clicking away, or with Escape — unmounts the
+     * input, and an unmounted field does not blur. The number would be lost by
+     * the gesture that means "done".
+     */
+    const [open, setOpen] = useState(false);
+    const [limit, setLimit] = useState(text(column.wip_limit));
+    const [seen, setSeen] = useState(column.wip_limit);
+
+    // The server's answer wins, including one arriving over the socket.
+    if (seen !== column.wip_limit) {
+        setSeen(column.wip_limit);
+        setLimit(text(column.wip_limit));
+    }
+
+    /**
+     * `typed` is passed by the Enter handler, which reads the field directly:
+     * the keystroke that finished the number and the Enter that commits it can
+     * arrive in the same tick, and state read in that tick is one keystroke
+     * behind.
+     */
+    const commitLimit = (typed?: string) => {
+        const raw = (typed ?? limit).trim();
+        const next = raw === '' ? null : Number(raw);
+
+        if (next !== column.wip_limit && (next === null || next > 0)) {
+            save({ wip_limit: next });
+        }
+    };
+
+    return (
+        <DropdownMenu
+            open={open}
+            onOpenChange={(next) => {
+                setOpen(next);
+
+                if (!next) {
+                    commitLimit();
+                }
+            }}
+        >
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-mr-1.5 size-6 p-0 text-muted-foreground"
+                >
+                    <MoreHorizontal className="size-4" />
+                    <span className="sr-only">Column options</span>
+                </Button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    What it means
+                </DropdownMenuLabel>
+
+                {COLUMN_CATEGORIES.map(([category, label]) => (
+                    <DropdownMenuItem
+                        key={category}
+                        onSelect={() => save({ category })}
+                    >
+                        {label}
+                        {column.category === category && (
+                            <Check className="ml-auto size-4" />
+                        )}
+                    </DropdownMenuItem>
+                ))}
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    Limit
+                </DropdownMenuLabel>
+
+                <div className="px-2 pb-1.5">
+                    <input
+                        type="number"
+                        min={1}
+                        max={999}
+                        value={limit}
+                        placeholder="No limit"
+                        aria-label={`Work in progress limit for ${column.name}`}
+                        onChange={(event) => setLimit(event.target.value)}
+                        onKeyDown={(event) => {
+                            // Typing into a menu otherwise drives its
+                            // typeahead, which jumps focus to an item.
+                            event.stopPropagation();
+
+                            if (event.key === 'Enter') {
+                                event.preventDefault();
+
+                                // Committed here rather than left to the close:
+                                // setting `open` directly is this component's
+                                // own state change, and Radix only calls
+                                // onOpenChange for the ones it makes itself.
+                                commitLimit(event.currentTarget.value);
+                                setOpen(false);
+                            }
+                        }}
+                        className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-brand"
+                    />
+                </div>
+
+                <DropdownMenuSeparator />
+
+                {/* Styled text-destructive rather than variant="destructive",
+                    which paints a near-black foreground in this theme. */}
+                <DropdownMenuItem
+                    className="text-destructive"
+                    onSelect={() =>
+                        router.delete(destroyColumn.url(args), {
+                            preserveScroll: true,
+                        })
+                    }
+                >
+                    Delete column
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
+/** A limit as the input holds it: the empty string is "no limit". */
+function text(limit: number | null): string {
+    return limit === null ? '' : String(limit);
+}
+
+/** The three meanings a column can carry, and what a board calls them. */
+const COLUMN_CATEGORIES: Array<[ColumnCategory, string]> = [
+    ['unstarted', 'To do'],
+    ['started', 'In progress'],
+    ['done', 'Done'],
+];
 
 /**
  * Filing a card without leaving the board.

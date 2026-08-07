@@ -825,12 +825,16 @@ export type Project = {
     color: string;
     uses_sprints: boolean;
     is_archived: boolean;
+    /** The number the next card filed here will carry — the 1500 after PWA-1499. */
+    next_task_number: number;
     /** The heading this project sits under; null when it sits under none. */
     project_group_id: number | null;
     card_fields: CardFields;
     member_count?: number;
     task_count?: number;
     is_member: boolean;
+    /** Whether *this viewer* keeps it at the top of their sidebar. */
+    is_starred: boolean;
     abilities: {
         contribute: boolean;
         manage: boolean;
@@ -896,7 +900,8 @@ export type Sprint = {
  * for why the whole card travels every time rather than a diff.
  *
  * `board_column_id` is where the card sits on the board and is never null;
- * `sprint_id` is when it is being done, and null means the backlog.
+ * `sprint_id` is when it is being done, and null means the backlog; `release`
+ * is what it ships in, which is a third, independent question.
  */
 export type Task = {
     id: number;
@@ -918,6 +923,7 @@ export type Task = {
     assignee?: SnackUser | null;
     labels?: TaskLabel[];
     epic?: { id: number; title: string; reference: string } | null;
+    release?: { id: number; name: string } | null;
     created_at: string | null;
     updated_at: string | null;
 };
@@ -928,6 +934,82 @@ export type ProjectMembership = {
     user: SnackUser;
     role: ProjectRole;
     joined_at: string | null;
+};
+
+/**
+ * Mirrors App\Http\Resources\ReleaseResource.
+ *
+ * A version of the project and the work going out in it. `tasks` arrives with
+ * the releases page and is absent everywhere a release is only being named.
+ */
+export type Release = {
+    id: number;
+    name: string;
+    notes: string | null;
+    starts_on: string | null;
+    ends_on: string | null;
+    released_at: string | null;
+    /** Derived from `released_at`; there is no status column to disagree. */
+    state: ReleaseState;
+    /** Its day has passed and it has not gone out. */
+    is_overdue: boolean;
+    /** Everything scheduled into it, and how much of that is finished. */
+    task_count: number;
+    completed_count: number;
+    /** Only with the release's own page — the table sends counts, not cards. */
+    tasks?: ReleaseTask[];
+    created_at: string | null;
+};
+
+/** Mirrors App\Enums\ReleaseState. */
+export type ReleaseState = 'unreleased' | 'released';
+
+/** One card as a release lists it — a checklist row, not a board card. */
+export type ReleaseTask = {
+    id: number;
+    reference: string;
+    title: string;
+    type: TaskType;
+    is_complete: boolean;
+};
+
+/**
+ * The project summary's payloads — mirrors Projects\ProjectSummaryController.
+ *
+ * Counts rather than cards: every panel there is an aggregate the database did,
+ * and a board of a thousand tasks must not be serialized to draw five bars.
+ */
+export type SummaryStatus = {
+    id: number;
+    name: string;
+    category: ColumnCategory;
+    count: number;
+};
+
+/** One bar of the priority or type breakdown. */
+export type SummaryCount = {
+    value: string;
+    label: string;
+    count: number;
+};
+
+/** One line of the summary's activity list. */
+export type SummaryActivity = {
+    id: number;
+    reference: string;
+    title: string;
+    type: TaskType;
+    /** The column it is sitting in now, by name. */
+    status: string;
+    is_complete: boolean;
+    assignee: string | null;
+    updated_at: string | null;
+};
+
+/** A release as the picker on a card offers it. */
+export type ReleaseOption = {
+    id: number;
+    name: string;
 };
 
 /** An epic as the picker on a card offers it. */

@@ -34,6 +34,12 @@ class BoardColumnController extends Controller
             'name' => ['required', 'string', 'max:40'],
             'category' => ['required', Rule::enum(ColumnCategory::class)],
             'wip_limit' => ['nullable', 'integer', 'min:1', 'max:999'],
+
+            // Where it goes, named by the columns it sits between — the board's
+            // own add button inserts before Done rather than appending. Ids
+            // rather than a position, as everywhere else here.
+            'before_column_id' => ['sometimes', 'nullable', 'integer'],
+            'after_column_id' => ['sometimes', 'nullable', 'integer'],
         ]));
 
         return back()->with('success', 'Column added.');

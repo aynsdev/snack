@@ -43,7 +43,7 @@ class TaskController extends Controller
         );
 
         return response()->json([
-            'task' => (new TaskResource($task->load(['project', 'assignee', 'labels', 'epic'])))->resolve($request),
+            'task' => (new TaskResource($task->load(['project', 'assignee', 'labels', 'epic', 'release'])))->resolve($request),
         ], 201);
     }
 
@@ -53,7 +53,7 @@ class TaskController extends Controller
 
         return response()->json([
             'task' => (new TaskResource(
-                $task->load(['project', 'assignee', 'labels', 'epic', 'reporter']),
+                $task->load(['project', 'assignee', 'labels', 'epic', 'release', 'reporter']),
             ))->resolve($request),
         ]);
     }
@@ -72,7 +72,7 @@ class TaskController extends Controller
 
         return response()->json([
             'task' => (new TaskResource(
-                $saved->load(['project', 'assignee', 'labels', 'epic']),
+                $saved->load(['project', 'assignee', 'labels', 'epic', 'release']),
             ))->resolve($request),
         ]);
     }

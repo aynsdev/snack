@@ -8,6 +8,7 @@ use App\Http\Resources\TaskResource;
 use App\Http\Resources\UserResource;
 use App\Models\Project;
 use App\Models\ProjectMember;
+use App\Models\Release;
 use App\Models\Sprint;
 use App\Models\Task;
 use App\Models\User;
@@ -67,9 +68,25 @@ class ProjectBoard
                 )->resolve(request())
                 : [],
 
+            /*
+             * How much work is sitting off the board, and only when there is no
+             * board to sit on.
+             *
+             * A scrum project with no running sprint draws nothing at all, and
+             * an empty board with cards in the database is the one state a
+             * reader cannot tell apart from a broken one. The count is what
+             * makes the difference sayable — "your work is in the backlog"
+             * rather than three empty columns. Null when a sprint is running,
+             * so the query is not paid for on every ordinary board load.
+             */
+            'backlogCount' => $project->uses_sprints && $sprint === null
+                ? $project->tasks()->whereNull('sprint_id')->count()
+                : null,
+
             'members' => $this->members($project),
             'labels' => $this->labels($project),
             'epics' => $this->epics($project),
+            'releases' => $this->releases($project),
 
             // What the viewer may do here, so the board can hide the controls it
             // would only refuse. Re-checked on every write regardless.
@@ -115,6 +132,7 @@ class ProjectBoard
             'members' => $this->members($project),
             'labels' => $this->labels($project),
             'epics' => $this->epics($project),
+            'releases' => $this->releases($project),
 
             'canContribute' => $viewer->can('contribute', $project),
             'canManage' => $viewer->can('update', $project),
@@ -154,6 +172,22 @@ class ProjectBoard
                 'id' => $label->id,
                 'name' => $label->name,
                 'color' => $label->color,
+            ])
+            ->all();
+    }
+
+    /**
+     * The project's releases, for the picker on a card — a name and an id, not
+     * the notes and contents the releases page draws.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function releases(Project $project): array
+    {
+        return $project->releases()->ordered()->get()
+            ->map(fn (Release $release): array => [
+                'id' => $release->id,
+                'name' => $release->name,
             ])
             ->all();
     }

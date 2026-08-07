@@ -52,7 +52,7 @@ class TaskChanged implements ShouldBroadcast
      */
     public static function for(Task $task, string $action): self
     {
-        $task->loadMissing(['project', 'assignee', 'labels', 'epic']);
+        $task->loadMissing(['project', 'assignee', 'labels', 'epic', 'release']);
 
         return new self(
             project: $task->project,

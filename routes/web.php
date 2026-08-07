@@ -40,6 +40,9 @@ use App\Http\Controllers\Projects\ProjectController;
 use App\Http\Controllers\Projects\ProjectGroupController;
 use App\Http\Controllers\Projects\ProjectMemberController;
 use App\Http\Controllers\Projects\ProjectMembershipController;
+use App\Http\Controllers\Projects\ProjectStarController;
+use App\Http\Controllers\Projects\ProjectSummaryController;
+use App\Http\Controllers\Projects\ReleaseController;
 use App\Http\Controllers\Projects\SprintController;
 use App\Http\Controllers\Projects\TaskController;
 use App\Http\Controllers\Projects\TaskLabelController;
@@ -499,6 +502,11 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::get('projects/{project}', [BoardController::class, 'show'])->name('projects.board');
         Route::get('projects/{project}/backlog', [BacklogController::class, 'index'])->name('projects.backlog');
 
+        // The project at a glance — counts and charts over the whole project,
+        // aggregated in the database. See Projects\ProjectSummaryController.
+        Route::get('projects/{project}/summary', [ProjectSummaryController::class, 'show'])
+            ->name('projects.summary');
+
         Route::get('projects/{project}/settings', [ProjectController::class, 'edit'])
             ->name('projects.settings.edit');
         Route::patch('projects/{project}', [ProjectController::class, 'update'])
@@ -517,6 +525,16 @@ Route::middleware(['auth', 'verified', 'workspace'])
 
         // Joining and leaving under your own steam, which is a different right
         // from adding somebody else — see Projects\ProjectMembershipController.
+        /*
+         * Starring. A fact about the viewer rather than about the project, so
+         * it is a pair of endpoints on their membership — see
+         * Projects\ProjectStarController.
+         */
+        Route::post('projects/{project}/star', [ProjectStarController::class, 'store'])
+            ->name('projects.star.store');
+        Route::delete('projects/{project}/star', [ProjectStarController::class, 'destroy'])
+            ->name('projects.star.destroy');
+
         Route::post('projects/{project}/membership', [ProjectMembershipController::class, 'store'])
             ->name('projects.membership.store');
         Route::delete('projects/{project}/membership', [ProjectMembershipController::class, 'destroy'])
@@ -561,6 +579,33 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->name('projects.sprints.start');
         Route::post('projects/{project}/sprints/{sprint}/complete', [SprintController::class, 'complete'])
             ->name('projects.sprints.complete');
+
+        /*
+         * Releases — what ships, as against when a team works. A version is not
+         * started or completed the way a sprint is, so there are only the four
+         * ordinary endpoints; what goes into one is set on the cards themselves.
+         */
+        Route::get('projects/{project}/releases', [ReleaseController::class, 'index'])
+            ->name('projects.releases.index');
+        Route::post('projects/{project}/releases', [ReleaseController::class, 'store'])
+            ->name('projects.releases.store');
+        Route::get('projects/{project}/releases/{release}', [ReleaseController::class, 'show'])
+            ->name('projects.releases.show');
+        Route::patch('projects/{project}/releases/{release}', [ReleaseController::class, 'update'])
+            ->name('projects.releases.update');
+        Route::delete('projects/{project}/releases/{release}', [ReleaseController::class, 'destroy'])
+            ->name('projects.releases.destroy');
+
+        /*
+         * Shipping one, and taking that back. Its own endpoint rather than a
+         * field on the update, for the reason archiving a channel is: it is not
+         * an edit, and a double-submitted "Release" must not move the date it
+         * already recorded.
+         */
+        Route::post('projects/{project}/releases/{release}/released', [ReleaseController::class, 'release'])
+            ->name('projects.releases.released.store');
+        Route::delete('projects/{project}/releases/{release}/released', [ReleaseController::class, 'unrelease'])
+            ->name('projects.releases.released.destroy');
 
         // Cards.
         Route::post('projects/{project}/tasks', [TaskController::class, 'store'])

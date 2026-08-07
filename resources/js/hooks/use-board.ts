@@ -109,6 +109,7 @@ export function useBoard({
                     'sprint',
                     'plannedSprints',
                     'sprints',
+                    'backlogCount',
                 ],
             });
         },

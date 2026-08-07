@@ -69,6 +69,7 @@ class SaveTask
                 'title' => $attributes['title'] ?? 'Untitled',
                 'description' => $attributes['description'] ?? null,
                 'assignee_id' => $this->assigneeId($project, $attributes),
+                'release_id' => $this->releaseId($project, $attributes),
                 'reporter_id' => $reporter->id,
                 // Appended, not prepended: a card filed while somebody is
                 // working the top of the column must not jump the queue.
@@ -116,6 +117,10 @@ class SaveTask
 
             if (array_key_exists('assignee_id', $attributes)) {
                 $changes['assignee_id'] = $this->assigneeId($project, $attributes);
+            }
+
+            if (array_key_exists('release_id', $attributes)) {
+                $changes['release_id'] = $this->releaseId($project, $attributes);
             }
 
             if (array_key_exists('parent_task_id', $attributes)) {
@@ -263,6 +268,29 @@ class SaveTask
             ->exists();
 
         return $exists ? (int) $epicId : null;
+    }
+
+    /**
+     * The release this card goes out in, if it is this project's.
+     *
+     * Silently null for an id belonging to somebody else's project rather than
+     * an error, the same as an assignee who is not a member: the id came from a
+     * picker, and a picker showing a stale list is a race, not a mistake to
+     * scold anybody for.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function releaseId(Project $project, array $attributes): ?int
+    {
+        $releaseId = $attributes['release_id'] ?? null;
+
+        if ($releaseId === null) {
+            return null;
+        }
+
+        return $project->releases()->whereKey((int) $releaseId)->exists()
+            ? (int) $releaseId
+            : null;
     }
 
     /**

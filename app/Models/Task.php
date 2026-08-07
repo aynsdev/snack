@@ -27,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property int $number
  * @property int $board_column_id
  * @property int|null $sprint_id
+ * @property int|null $release_id
  * @property int|null $parent_task_id
  * @property TaskType $type
  * @property TaskPriority $priority
@@ -44,7 +45,7 @@ use Illuminate\Support\Carbon;
  * @property-read BoardColumn $column
  */
 #[Fillable([
-    'project_id', 'number', 'board_column_id', 'sprint_id', 'parent_task_id',
+    'project_id', 'number', 'board_column_id', 'sprint_id', 'release_id', 'parent_task_id',
     'type', 'priority', 'title', 'description', 'assignee_id', 'reporter_id',
     'position', 'story_points', 'due_on', 'completed_at',
 ])]
@@ -93,6 +94,19 @@ class Task extends Model
     public function sprint(): BelongsTo
     {
         return $this->belongsTo(Sprint::class);
+    }
+
+    /**
+     * The version this goes out in, or null for work nobody has scheduled.
+     *
+     * A second, independent placement alongside `sprint` — when a team works on
+     * something and when it ships are different questions.
+     *
+     * @return BelongsTo<Release, $this>
+     */
+    public function release(): BelongsTo
+    {
+        return $this->belongsTo(Release::class);
     }
 
     /**
@@ -193,6 +207,11 @@ class Task extends Model
      */
     public function scopeWithCardData(Builder $query): void
     {
-        $query->with(['assignee', 'labels', 'epic:id,project_id,number,title,type']);
+        $query->with([
+            'assignee',
+            'labels',
+            'epic:id,project_id,number,title,type',
+            'release:id,project_id,name',
+        ]);
     }
 }

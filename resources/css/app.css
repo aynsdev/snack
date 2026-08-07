@@ -173,6 +173,22 @@
     --mention: oklch(0.637 0.237 25.331);
     --mention-foreground: oklch(1 0 0);
 
+    /*
+     | The two ends of the summary charts' sequential ramp.
+     |
+     | One hue, light to dark, so "further along the board" reads as "darker"
+     | without asking anybody to learn a colour key. Deliberately not the brand
+     | accent: an orange bar beside orange buttons reads as something to click,
+     | and the accent is re-themed per workspace while a measured ramp cannot be.
+     |
+     | Both ends clear 3:1 against the surface they sit on (3.13 light, 3.36
+     | dark) and the lightness is monotone between them, which is the check that
+     | matters for a sequential ramp. Segments are mixed between these two in
+     | oklab, so a board of three columns and one of nine both get an even ramp.
+     */
+    --viz-ramp-from: oklch(0.66 0.12 255);
+    --viz-ramp-to: oklch(0.42 0.165 255);
+
     --radius: 0.75rem;
 }
 
@@ -242,6 +258,10 @@
     --unread: oklch(0.985 0 0);
     --mention: oklch(0.704 0.191 22.216);
     --mention-foreground: oklch(0.205 0 0);
+
+    /* Its own steps for the dark surface, not a flipped copy — see :root. */
+    --viz-ramp-from: oklch(0.55 0.125 255);
+    --viz-ramp-to: oklch(0.85 0.1 255);
 }
 
 /*

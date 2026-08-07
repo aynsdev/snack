@@ -15,10 +15,35 @@ it('shows an empty board while no sprint is running', function () {
 
     // The board answers "what are we working on now", and during planning the
     // honest answer is "nothing yet" — not "the whole backlog".
+    //
+    // `backlogCount` is what keeps that from reading as lost work: an empty
+    // board over three cards in the database is the one state a reader cannot
+    // tell apart from a broken one, so the page says where they went.
     $this->actingAs($owner)
         ->get(route('projects.board', [$workspace->slug, $project->slug]))
         ->assertOk()
-        ->assertInertia(fn ($page) => $page->has('tasks', 0)->where('sprint', null));
+        ->assertInertia(fn ($page) => $page
+            ->has('tasks', 0)
+            ->where('sprint', null)
+            ->where('backlogCount', 3));
+});
+
+it('counts nothing off the board while a sprint is running', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+
+    $sprint = Sprint::factory()->create(['project_id' => $project->id]);
+
+    $this->actingAs($owner)
+        ->post(route('projects.sprints.start', [$workspace->slug, $project->slug, $sprint->id]))
+        ->assertRedirect();
+
+    // The count is only asked for when there is no board to draw, so an
+    // ordinary board load does not pay for the query.
+    $this->actingAs($owner)
+        ->get(route('projects.board', [$workspace->slug, $project->slug]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('backlogCount', null));
 });
 
 it('puts every task on the board for a kanban project', function () {

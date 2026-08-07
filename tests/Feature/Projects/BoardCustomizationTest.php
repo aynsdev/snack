@@ -73,6 +73,46 @@ it('keeps at least one column of each load-bearing category', function () {
     expect($project->columns()->where('category', 'done')->count())->toBe(1);
 });
 
+it('adds a column between the neighbours the board names', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+
+    $columns = $project->columns()->ordered()->get();
+    [$inProgress, $done] = [$columns[1], $columns[2]];
+
+    // The board's own add button sits left of Done and says so, because a
+    // status added mid-flow is another step before finished — a column landing
+    // to the right of Done is a board that reads backwards.
+    $this->actingAs($owner)
+        ->post(route('projects.columns.store', [$workspace->slug, $project->slug]), [
+            'name' => 'To test',
+            'category' => 'started',
+            'before_column_id' => $inProgress->id,
+            'after_column_id' => $done->id,
+        ])
+        ->assertRedirect();
+
+    expect($project->columns()->ordered()->pluck('name')->all())
+        ->toBe(['To do', 'In progress', 'To test', 'Done']);
+});
+
+it('still appends a column nobody placed', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+
+    // The settings screen names no neighbours, and the end of the board is
+    // where a column added from a list of columns belongs.
+    $this->actingAs($owner)
+        ->post(route('projects.columns.store', [$workspace->slug, $project->slug]), [
+            'name' => 'Archived',
+            'category' => 'done',
+        ])
+        ->assertRedirect();
+
+    expect($project->columns()->ordered()->pluck('name')->all())
+        ->toBe(['To do', 'In progress', 'Done', 'Archived']);
+});
+
 it('reorders a column by naming its new neighbours', function () {
     [$workspace, $owner] = makeWorkspaceWithOwner();
     $project = makeProject($workspace, $owner);
