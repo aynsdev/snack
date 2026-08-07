@@ -9,6 +9,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -16,6 +17,16 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         channels: __DIR__.'/../routes/channels.php',
         health: '/up',
+
+        /*
+         * Incoming webhooks, registered outside the `web` group on purpose —
+         * see routes/webhooks.php. A machine posting from a deploy script has no
+         * session and no CSRF token, and giving it one of each would reject
+         * every delivery and mint a session for nobody.
+         */
+        then: function (): void {
+            Route::group([], base_path('routes/webhooks.php'));
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
@@ -43,6 +54,16 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
+            /*
+             * `hooks/*` is here because its callers are machines that mostly do
+             * not send an Accept header — curl sends a bare wildcard — so
+             * `expectsJson()` says no and a validation failure would answer with
+             * a 302 to a login page. The path is matched rather than the header
+             * for exactly that reason: what makes this endpoint JSON is what it
+             * is, not what the caller remembered to ask for.
+             */
+            fn (Request $request) => $request->is('api/*')
+                || $request->is('hooks/*')
+                || $request->expectsJson(),
         );
     })->create();

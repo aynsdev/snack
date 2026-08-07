@@ -9,6 +9,7 @@ import {
     TextQuote,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useSyncExternalStore } from 'react';
 import type { FormatCommand } from '@/lib/composer-format';
 import { cn } from '@/lib/utils';
 
@@ -31,6 +32,10 @@ export function FormattingToolbar({
 }: {
     onCommand: (command: FormatCommand) => void;
 }) {
+    // Subscribed once here and passed down, rather than eight buttons each
+    // subscribing to a store that never fires.
+    const modifier = useModifierLabel();
+
     return (
         <div
             role="toolbar"
@@ -51,6 +56,7 @@ export function FormattingToolbar({
                         <FormatButton
                             key={button.command}
                             button={button}
+                            modifier={modifier}
                             onCommand={onCommand}
                         />
                     ))}
@@ -121,9 +127,12 @@ const GROUPS: FormatButtonSpec[][] = [
 
 function FormatButton({
     button,
+    modifier,
     onCommand,
 }: {
     button: FormatButtonSpec;
+    /** How this machine writes the modifier — see {@see useModifierLabel}. */
+    modifier: string;
     onCommand: (command: FormatCommand) => void;
 }) {
     const Icon = button.icon;
@@ -135,7 +144,7 @@ function FormatButton({
             title={
                 button.shortcut === undefined
                     ? button.label
-                    : `${button.label} (${modifierLabel()}${button.shortcut})`
+                    : `${button.label} (${modifier}${button.shortcut})`
             }
             // Keeps the selection in the textarea; see the note on the toolbar.
             onMouseDown={(event) => event.preventDefault()}
@@ -154,13 +163,37 @@ function FormatButton({
 /**
  * How this machine writes the shortcut modifier.
  *
- * Read at call time rather than at module load so it is never baked into a
- * server-rendered page, where there is no keyboard to describe.
+ * # Why this is a store and not a function call
+ *
+ * Reading `navigator` during render is the obvious version and it is a hydration
+ * error: the server has no keyboard to describe so it renders "Ctrl", the client
+ * renders "⌘", and React finds a tree whose attributes do not match the HTML it
+ * was given. It warns, gives up on patching that subtree, and every title in the
+ * toolbar is then whatever the server guessed.
+ *
+ * `useSyncExternalStore` is the mechanism for exactly this: the third argument is
+ * the server snapshot, so the first client render *also* says "Ctrl" — matching
+ * the HTML — and the real value arrives in the commit straight after. The
+ * titles are correct by the time anyone can hover one.
+ *
+ * `subscribe` is a no-op because the answer cannot change: the machine does not
+ * become a Mac. It still has to be a stable reference, or React resubscribes on
+ * every render.
  */
-function modifierLabel(): string {
-    if (typeof navigator === 'undefined') {
-        return 'Ctrl ';
-    }
+const NEVER_CHANGES = () => () => {};
 
+function useModifierLabel(): string {
+    return useSyncExternalStore(NEVER_CHANGES, clientModifier, serverModifier);
+}
+
+/*
+ * Both return string literals, which is what keeps this safe: React compares
+ * snapshots with Object.is and would loop forever on a fresh object each call.
+ */
+function clientModifier(): string {
     return /mac|iphone|ipad/i.test(navigator.userAgent) ? '⌘ ' : 'Ctrl ';
+}
+
+function serverModifier(): string {
+    return 'Ctrl ';
 }

@@ -33,6 +33,30 @@ describe('continuesGroup', () => {
         ).toBe(false);
     });
 
+    it('does not group two webhook names behind one bot account', () => {
+        // One hook can post as "CI" then "Alerts" from the same URL, and both
+        // are the same sender row. Grouping on the sender alone would fold them
+        // into one block under whichever name went first.
+        expect(
+            continuesGroup(
+                { ...at('2026-07-29T10:00:00Z'), webhook: { username: 'CI' } },
+                {
+                    ...at('2026-07-29T10:00:30Z'),
+                    webhook: { username: 'Alerts' },
+                },
+            ),
+        ).toBe(false);
+    });
+
+    it('groups a webhook posting repeatedly under one name', () => {
+        expect(
+            continuesGroup(
+                { ...at('2026-07-29T10:00:00Z'), webhook: { username: 'CI' } },
+                { ...at('2026-07-29T10:00:30Z'), webhook: { username: 'CI' } },
+            ),
+        ).toBe(true);
+    });
+
     it('breaks the group after the time window', () => {
         // An hour later is a new thought, not a continuation.
         expect(

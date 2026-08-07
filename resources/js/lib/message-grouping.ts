@@ -11,6 +11,12 @@ const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 type Groupable = Pick<Message, 'created_at'> & {
     sender: { id: number } | null;
+    /**
+     * Only the display name matters here — see the check in
+     * {@see continuesGroup}. Optional so a pending message, which can never be
+     * from a webhook, satisfies the type without carrying the field.
+     */
+    webhook?: { username: string } | null;
 };
 
 /**
@@ -33,6 +39,23 @@ export function continuesGroup(
     }
 
     if (previous.sender.id !== current.sender.id) {
+        return false;
+    }
+
+    /*
+     * One webhook can post under several names — "CI" then "Alerts" from the
+     * same URL is how a pipeline usually uses one — and every one of those is
+     * the same bot account. Grouping on the sender alone would fold them into
+     * one block under whichever name happened to go first, silently
+     * misattributing every message after it.
+     *
+     * Compared on the displayed name rather than the hook id, because that is
+     * what the reader sees change.
+     */
+    if (
+        (previous.webhook?.username ?? null) !==
+        (current.webhook?.username ?? null)
+    ) {
         return false;
     }
 

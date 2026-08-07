@@ -97,7 +97,9 @@ it('offers every subject the enum defines, not just the ones already logged', fu
     $this->actingAs($owner)
         ->get(route('audit.index', ['workspace' => $workspace->slug]))
         ->assertInertia(fn ($page) => $page
-            ->where('subjects', ['workspace', 'member', 'channel', 'project', 'standup', 'message']));
+            ->where('subjects', [
+                'workspace', 'member', 'channel', 'project', 'standup', 'webhook', 'message',
+            ]));
 });
 
 it('keeps an entry whose actor has been deleted', function () {

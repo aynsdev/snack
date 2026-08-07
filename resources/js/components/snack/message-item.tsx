@@ -15,6 +15,7 @@ import { AttachmentList } from '@/components/snack/attachment-list';
 import { MessageText } from '@/components/snack/message-text';
 import { StandupCard } from '@/components/snack/standup-card';
 import { UserAvatar } from '@/components/snack/user-avatar';
+import { WebhookAttachments } from '@/components/snack/webhook-attachments';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -147,8 +148,32 @@ export function MessageItem({
                 {!grouped && (
                     <div className="flex items-baseline gap-2">
                         <span className="text-sm font-bold">
-                            {message.sender?.name ?? 'Snack'}
+                            {/*
+                             * The webhook's snapshotted name wins over the
+                             * sender's current one. The bot account follows the
+                             * hook when an admin renames it, so the sender is
+                             * "what this integration is called now" while this
+                             * is "what posted this message" — and on an old
+                             * deploy notice those are different facts.
+                             */}
+                            {message.webhook?.username ??
+                                message.sender?.name ??
+                                'Snack'}
                         </span>
+
+                        {message.webhook != null && (
+                            /*
+                             * Said plainly, because the name beside it is a
+                             * string an unauthenticated caller chose. A payload
+                             * cannot pick the *account* it posts as, but it can
+                             * claim any display name it likes — so the badge is
+                             * what stops "Ada Lovelace" in a channel from
+                             * reading as Ada.
+                             */
+                            <span className="rounded bg-muted px-1 py-px text-[0.625rem] font-semibold text-muted-foreground uppercase">
+                                App
+                            </span>
+                        )}
 
                         <time
                             dateTime={message.created_at ?? undefined}
@@ -205,6 +230,18 @@ export function MessageItem({
                             <StandupCard
                                 key={message.standup.response_id}
                                 card={message.standup}
+                            />
+                        )}
+
+                        {/*
+                         * The cards an outside system sent, below the body for
+                         * the reason the standup form is: the body carries the
+                         * headline too, which is what search indexes, what the
+                         * sidebar previews, and what a notification reads out.
+                         */}
+                        {message.webhook != null && (
+                            <WebhookAttachments
+                                attachments={message.webhook.attachments}
                             />
                         )}
 

@@ -117,13 +117,39 @@ it('withholds mail during the member\'s own quiet hours', function () {
 
     $membership = $owner->membershipIn($workspace);
 
-    // A window that wraps midnight is the normal case, so the whole day is
-    // inside it and the assertion does not depend on when the suite runs.
+    // 22:00 to 07:00 — a window that really does wrap midnight, which is the
+    // normal shape of the setting and the branch worth covering.
     $membership->forceFill([
-        'notification_preferences' => ['do_not_disturb' => ['start' => '00:00', 'end' => '23:59']],
+        'notification_preferences' => ['do_not_disturb' => ['start' => '22:00', 'end' => '07:00']],
     ])->save();
 
-    expect($delivery->shouldMail($owner->fresh(), $membership->fresh()))->toBeFalse();
+    /*
+     * The clock is pinned rather than the window widened.
+     *
+     * This test used to set 00:00 to 23:59 and call it "the whole day", on the
+     * theory that any minute the suite ran at would be inside it. Two things
+     * were wrong with that. Those bounds do not wrap at all — start is before
+     * end, so the range branch runs — and it excluded 23:59, which is exactly
+     * the minute the suite eventually ran at. But widening it further would not
+     * have helped either: the wrapping branch covers [start, 24:00) plus
+     * [00:00, end), so its gap is [end, start), and closing that gap needs
+     * end >= start, which is the condition for not wrapping. No window covers
+     * all 1440 minutes. A test about a time-of-day rule has to own the clock.
+     *
+     * Set in the member's own zone, for the reason spelled out in
+     * NotificationDigestTest: the service asks Carbon::now($user->timezone).
+     */
+    $clock = fn (int $hour) => now()->setTimezone('UTC')->setTime($hour, 0);
+
+    $this->travelTo($clock(23), function () use ($delivery, $owner, $membership) {
+        expect($delivery->shouldMail($owner->fresh(), $membership->fresh()))->toBeFalse();
+    });
+
+    // And the other side of the same window, which is what proves the rule is
+    // being evaluated at all rather than something else withholding the mail.
+    $this->travelTo($clock(12), function () use ($delivery, $owner, $membership) {
+        expect($delivery->shouldMail($owner->fresh(), $membership->fresh()))->toBeTrue();
+    });
 });
 
 it('respects a member who has turned email off', function () {

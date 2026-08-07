@@ -117,6 +117,25 @@ class MessageResource extends JsonResource
             'standup' => is_array($message->metadata['standup'] ?? null)
                 ? $message->metadata['standup']
                 : null,
+
+            /*
+             * The webhook block, when an outside system posted this message.
+             *
+             * Read off the row for the same reason the standup card is: the
+             * cards were built at delivery time from a payload that no longer
+             * exists anywhere else, and a channel of build notifications draws
+             * every one of them without a query.
+             *
+             * It carries the display name and icon as well as the cards, so a
+             * message keeps rendering as what it was posted as — the hook may
+             * have been renamed or revoked since, and a year-old deploy notice
+             * should still say which system sent it. See
+             * {@see App\Support\WebhookPayload::toMetadata()}, which is the only
+             * thing that writes it and rebuilds every key.
+             */
+            'webhook' => is_array($message->metadata['webhook'] ?? null)
+                ? $message->metadata['webhook']
+                : null,
         ];
     }
 

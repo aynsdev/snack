@@ -220,6 +220,50 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Incoming webhooks
+    |--------------------------------------------------------------------------
+    |
+    | A URL an outside system posts JSON to, which becomes a message in one
+    | channel. See the incoming_webhooks migration for why the URL is the whole
+    | credential and the destination channel is a column rather than a field a
+    | caller may set.
+    |
+    | The limits below bound the *payload*, which arrives unauthenticated by any
+    | user and is therefore the one input in Snack nobody is accountable for.
+    | They are deliberately much tighter than a person's own message: a deploy
+    | notification that needs twelve thousand characters is a link to a build
+    | log, and a card with forty fields is a table nobody reads in a chat window.
+    |
+    */
+
+    'webhooks' => [
+        /*
+         * The `text` ceiling. Well under `messages.max_length` because the two
+         * are different things: that one is what a person can be bothered to
+         * type, this one is what a script will happily send in a loop.
+         */
+        'max_text_length' => 4_000,
+
+        /*
+         * Attachment cards per delivery, and the fields inside one. Slack's
+         * legacy attachment shape, which is what almost every existing
+         * integration already knows how to build.
+         */
+        'max_attachments' => 10,
+        'max_fields' => 20,
+
+        /*
+         * Deliveries per minute, per hook. A build pipeline posts a handful; a
+         * runaway retry loop posts thousands, into a channel real people are
+         * trying to read. Per hook rather than per IP: hooks behind one CI
+         * provider share an address, and one team's broken job must not throttle
+         * another team's.
+         */
+        'rate_limit_per_minute' => (int) env('SNACK_WEBHOOK_RATE_LIMIT', 60),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Reactions
     |--------------------------------------------------------------------------
     |
