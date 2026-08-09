@@ -3,6 +3,7 @@
 use App\Http\Controllers\Activity\ActivityController;
 use App\Http\Controllers\Channels\ChannelArchiveController;
 use App\Http\Controllers\Channels\ChannelController;
+use App\Http\Controllers\Channels\ChannelGroupController;
 use App\Http\Controllers\Channels\ChannelMemberController;
 use App\Http\Controllers\Channels\ChannelMembershipController;
 use App\Http\Controllers\Channels\ChannelPreferenceController;
@@ -207,6 +208,34 @@ Route::middleware(['auth', 'verified', 'workspace'])
         // silencing a busy channel must not silence it for anyone else.
         Route::patch('channels/{channel}/preferences', [ChannelPreferenceController::class, 'update'])
             ->name('channels.preferences.update');
+
+        /*
+         * Which section of *your* sidebar this channel sits in. Private to the
+         * member who asks, like the preferences above and unlike the channel's
+         * shared settings: the arrangement is written on your membership row.
+         */
+        Route::patch('channels/{channel}/group', [ChannelGroupController::class, 'assign'])
+            ->name('channels.group.update');
+
+        /*
+         * The sections themselves.
+         *
+         * Their own path rather than `channels/groups`, which {channel} would
+         * otherwise swallow — "groups" is a legal channel slug. Addressed by id
+         * because a section has no page of its own for a slug to carry.
+         *
+         * Unlike project groups, these belong to one person: ChannelGroupPolicy
+         * answers not-found for anybody else's, so the id in the URL is only
+         * ever the sender's own.
+         */
+        Route::post('channel-groups', [ChannelGroupController::class, 'store'])
+            ->name('channel-groups.store');
+        Route::patch('channel-groups/{channelGroup}', [ChannelGroupController::class, 'update'])
+            ->name('channel-groups.update');
+        Route::post('channel-groups/{channelGroup}/move', [ChannelGroupController::class, 'move'])
+            ->name('channel-groups.move');
+        Route::delete('channel-groups/{channelGroup}', [ChannelGroupController::class, 'destroy'])
+            ->name('channel-groups.destroy');
 
         /*
          * Messages.

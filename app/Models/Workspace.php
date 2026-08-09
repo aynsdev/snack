@@ -144,6 +144,19 @@ class Workspace extends Model
     }
 
     /**
+     * Every member's channel sidebar sections — one person's at a time in
+     * practice, since a section belongs to whoever made it. The relation exists
+     * so scoped route binding can tie {channelGroup} to this workspace; who may
+     * see one is {@see App\Policies\ChannelGroupPolicy}'s question.
+     *
+     * @return HasMany<ChannelGroup, $this>
+     */
+    public function channelGroups(): HasMany
+    {
+        return $this->hasMany(ChannelGroup::class);
+    }
+
+    /**
      * The recurring standups the bot runs in this workspace.
      *
      * @return HasMany<Standup, $this>

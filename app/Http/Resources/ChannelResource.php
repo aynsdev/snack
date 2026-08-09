@@ -41,6 +41,12 @@ class ChannelResource extends JsonResource
             'member_count' => $this->whenCounted('members'),
             'is_member' => $membership !== null,
             'is_muted' => $membership->is_muted ?? false,
+
+            // Which section of *this* viewer's sidebar the channel sits in.
+            // Null for a channel they have not filed, and for one they have not
+            // joined — a non-member has no membership row to file it on.
+            'channel_group_id' => $membership?->channel_group_id,
+
             'notification_level' => $membership?->notification_level->value,
             'last_read_message_id' => $membership?->last_read_message_id,
             'created_at' => $this->created_at?->toIso8601String(),

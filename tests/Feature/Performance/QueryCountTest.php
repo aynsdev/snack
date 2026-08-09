@@ -2,6 +2,7 @@
 
 use App\Enums\NotificationReason;
 use App\Models\BoardColumn;
+use App\Models\ChannelGroup;
 use App\Models\ConversationParticipant;
 use App\Models\Mention;
 use App\Models\Message;
@@ -229,6 +230,43 @@ it('serves the channel list in a constant number of queries', function () {
         }
 
         return route('channels.index', $workspace);
+    });
+});
+
+/**
+ * The sidebar's channel sections.
+ *
+ * They ride on the shared props, so every workspace page pays for them — which
+ * is the whole reason to pin them. A section is drawn from one row and holds no
+ * channels of its own (the channels name their section, not the other way
+ * round), so a person with twenty sections must cost exactly what a person with
+ * one costs.
+ */
+it('serves the channel sections in a constant number of queries', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $channel = makeChannel($workspace);
+    $membership = addToChannel($channel, $owner);
+
+    expectConstantQueries($owner, function (int $rows) use ($workspace, $owner, $channel, $membership): string {
+        $membership->update(['channel_group_id' => null]);
+        ChannelGroup::query()->ownedBy($workspace, $owner)->delete();
+
+        foreach (range(1, $rows) as $index) {
+            $group = ChannelGroup::factory()->create([
+                'workspace_id' => $workspace->id,
+                'user_id' => $owner->id,
+                'position' => $index * 1000,
+            ]);
+
+            // The last one keeps the channel, so the filing is exercised too
+            // rather than every section being empty.
+            $membership->update(['channel_group_id' => $group->id]);
+        }
+
+        return route('channels.show', [
+            'workspace' => $workspace->slug,
+            'channel' => $channel->slug,
+        ]);
     });
 });
 

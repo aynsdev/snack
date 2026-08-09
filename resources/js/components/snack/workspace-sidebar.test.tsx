@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { router } from '@inertiajs/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceSidebar } from '@/components/snack/workspace-sidebar';
@@ -9,7 +10,26 @@ const currentUrl = vi.hoisted(() => ({ value: '/w/snack-hq/dms' }));
 
 vi.mock('@inertiajs/react', () => ({
     usePage,
-    router: { on: () => () => {} },
+    router: { on: () => () => {}, visit: vi.fn(), patch: vi.fn() },
+    // The section dialogs are mounted (closed) alongside every menu that can
+    // open one, so the module's form component has to exist even when no
+    // dialog in the test is ever opened.
+    Form: ({
+        children,
+    }: {
+        children:
+            | React.ReactNode
+            | ((state: {
+                  processing: boolean;
+                  errors: Record<string, string>;
+              }) => React.ReactNode);
+    }) => (
+        <form>
+            {typeof children === 'function'
+                ? children({ processing: false, errors: {} })
+                : children}
+        </form>
+    ),
     Link: ({
         children,
         href,
@@ -67,6 +87,33 @@ const group: Conversation = {
     created_at: null,
 };
 
+function makeChannel(
+    id: number,
+    name: string,
+    channelGroupId: number | null = null,
+    overrides: Record<string, unknown> = {},
+) {
+    return {
+        id,
+        name,
+        slug: name.toLowerCase().replace(/\s+/g, '-'),
+        description: null,
+        topic: null,
+        type: 'public',
+        is_private: false,
+        is_archived: false,
+        is_default: false,
+        last_message_at: null,
+        is_member: true,
+        is_muted: false,
+        channel_group_id: channelGroupId,
+        notification_level: 'all',
+        last_read_message_id: null,
+        created_at: null,
+        ...overrides,
+    };
+}
+
 function makeProject(id: number, name: string, groupId: number | null) {
     return {
         id,
@@ -114,6 +161,7 @@ function mockWorkspace(overrides: Record<string, unknown> = {}) {
                         },
                     },
                     channels: [],
+                    channel_groups: [],
                     conversations: [group],
                     people: [
                         makePerson(2, 'Ada Lovelace'),
@@ -138,9 +186,13 @@ function mockWorkspace(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
     usePage.mockReset();
+    vi.mocked(router.patch).mockClear();
     // Which shape the sidebar takes is remembered across navigations on purpose
     // — see use-sidebar-section.ts — so it has to be cleared between tests.
     sessionStorage.clear();
+    // Folded sections are remembered in localStorage, so one test's fold would
+    // otherwise start the next test folded.
+    localStorage.clear();
     currentUrl.value = '/w/snack-hq/dms';
     mockWorkspace();
 });
@@ -303,6 +355,259 @@ describe('WorkspaceSidebar outside direct messages', () => {
         // reader cannot see, and costs a row a board could have had.
         expect(screen.queryByText('Ungrouped')).toBeNull();
         expect(screen.getByText('Pedicab Web')).toBeInTheDocument();
+    });
+
+    it('arranges the channel list under the sections you filed it in', () => {
+        currentUrl.value = '/w/snack-hq/channels/general';
+
+        mockWorkspace({
+            channels: [makeChannel(1, 'general', 7), makeChannel(2, 'random')],
+            channel_groups: [{ id: 7, name: 'Team', position: 65536 }],
+        });
+
+        render(<WorkspaceSidebar />);
+
+        expect(screen.getByText('Team')).toBeInTheDocument();
+        expect(screen.getByText('Other')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /general/ })).toHaveAttribute(
+            'href',
+            '/w/snack-hq/channels/general',
+        );
+    });
+
+    it('draws a flat channel list when nothing is filed anywhere', () => {
+        currentUrl.value = '/w/snack-hq/channels/general';
+
+        mockWorkspace({ channels: [makeChannel(1, 'general')] });
+
+        render(<WorkspaceSidebar />);
+
+        // A single "Other" heading over the whole list names a
+        // distinction the reader cannot see.
+        expect(screen.queryByText('Other')).toBeNull();
+        expect(screen.getByText('general')).toBeInTheDocument();
+    });
+
+    it('keeps an emptied section on screen, and says it is empty', () => {
+        currentUrl.value = '/w/snack-hq/channels/general';
+
+        mockWorkspace({
+            channels: [],
+            channel_groups: [{ id: 7, name: 'Team', position: 65536 }],
+        });
+
+        render(<WorkspaceSidebar />);
+
+        expect(screen.getByText('Team')).toBeInTheDocument();
+        expect(screen.getByText(/Empty\./)).toBeInTheDocument();
+
+        // And not the "you have not joined any channels" line: they have a
+        // section, so the list is theirs and merely empty.
+        expect(screen.queryByText(/have not joined any channels/)).toBeNull();
+    });
+
+    it('offers each channel a way into a section', async () => {
+        const user = userEvent.setup();
+        currentUrl.value = '/w/snack-hq/channels/general';
+
+        mockWorkspace({
+            channels: [makeChannel(1, 'general')],
+            channel_groups: [{ id: 7, name: 'Team', position: 65536 }],
+        });
+
+        render(<WorkspaceSidebar />);
+
+        await user.click(
+            screen.getByRole('button', { name: 'Section for #general' }),
+        );
+
+        expect(
+            screen.getByRole('menuitemradio', { name: 'Team' }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole('menuitem', { name: 'New section…' }),
+        ).toBeInTheDocument();
+    });
+
+    it('files a channel into the section it is dropped on', () => {
+        currentUrl.value = '/w/snack-hq/channels/general';
+
+        mockWorkspace({
+            channels: [makeChannel(1, 'general')],
+            channel_groups: [{ id: 7, name: 'Team', position: 65536 }],
+        });
+
+        render(<WorkspaceSidebar />);
+
+        const row = screen.getByRole('link', { name: /general/ });
+        const dataTransfer = { setData: vi.fn(), effectAllowed: 'none' };
+
+        fireEvent.dragStart(row, { dataTransfer });
+
+        // The heading's own section is the drop target — the whole section is,
+        // since channels inside one are ordered by name and there is no slot to
+        // aim at.
+        const section = screen.getByText('Team').closest('div')!.parentElement!;
+
+        fireEvent.dragOver(section, { dataTransfer });
+        fireEvent.drop(section, { dataTransfer });
+
+        expect(router.patch).toHaveBeenCalledWith(
+            '/w/snack-hq/channels/general/group',
+            { channel_group_id: 7 },
+            { preserveScroll: true },
+        );
+    });
+
+    it('unfiles a channel dropped back on the leftovers', () => {
+        currentUrl.value = '/w/snack-hq/channels/general';
+
+        mockWorkspace({
+            channels: [makeChannel(1, 'general', 7)],
+            channel_groups: [{ id: 7, name: 'Team', position: 65536 }],
+        });
+
+        render(<WorkspaceSidebar />);
+
+        const dataTransfer = { setData: vi.fn(), effectAllowed: 'none' };
+
+        fireEvent.dragStart(screen.getByRole('link', { name: /general/ }), {
+            dataTransfer,
+        });
+
+        const leftovers = screen.getByText('Other').parentElement!;
+
+        fireEvent.dragOver(leftovers, { dataTransfer });
+        fireEvent.drop(leftovers, { dataTransfer });
+
+        // Null is the whole of "take it out of its section", the same null the
+        // ⋯ menu sends.
+        expect(router.patch).toHaveBeenCalledWith(
+            '/w/snack-hq/channels/general/group',
+            { channel_group_id: null },
+            { preserveScroll: true },
+        );
+    });
+
+    it('ignores a drop back onto the section the channel came from', () => {
+        currentUrl.value = '/w/snack-hq/channels/general';
+
+        mockWorkspace({
+            channels: [makeChannel(1, 'general', 7)],
+            channel_groups: [{ id: 7, name: 'Team', position: 65536 }],
+        });
+
+        render(<WorkspaceSidebar />);
+
+        const dataTransfer = { setData: vi.fn(), effectAllowed: 'none' };
+
+        fireEvent.dragStart(screen.getByRole('link', { name: /general/ }), {
+            dataTransfer,
+        });
+
+        const section = screen.getByText('Team').closest('div')!.parentElement!;
+
+        fireEvent.drop(section, { dataTransfer });
+
+        // A request that changes nothing, and a redraw of the sidebar to show
+        // the same arrangement.
+        expect(router.patch).not.toHaveBeenCalled();
+    });
+
+    it('folds a section away, and remembers that it is folded', async () => {
+        const user = userEvent.setup();
+        currentUrl.value = '/w/snack-hq/channels/announcements';
+
+        mockWorkspace({
+            channels: [makeChannel(1, 'general', 7)],
+            channel_groups: [{ id: 7, name: 'Team', position: 65536 }],
+        });
+
+        const { unmount } = render(<WorkspaceSidebar />);
+
+        await user.click(screen.getByRole('button', { name: /^Team/ }));
+
+        expect(screen.queryByRole('link', { name: /general/ })).toBeNull();
+
+        // The count is what the fold is holding back, so a folded section still
+        // says how much is in it.
+        expect(screen.getByRole('button', { name: /^Team/ })).toHaveTextContent(
+            '1',
+        );
+
+        unmount();
+        render(<WorkspaceSidebar />);
+
+        // Folding is a standing preference, not a per-visit one.
+        expect(screen.queryByRole('link', { name: /general/ })).toBeNull();
+    });
+
+    it('keeps unread and current channels visible through a fold', async () => {
+        const user = userEvent.setup();
+        currentUrl.value = '/w/snack-hq/channels/general';
+
+        mockWorkspace({
+            channels: [
+                makeChannel(1, 'general', 7),
+                makeChannel(2, 'random', 7),
+                makeChannel(3, 'engineering', 7),
+            ],
+            channel_groups: [{ id: 7, name: 'Team', position: 65536 }],
+            unread: {
+                channels: { 2: { messages: 3, mentions: 0 } },
+                conversations: {},
+                mentions: 0,
+                threads: 0,
+                notifications: 0,
+            },
+        });
+
+        render(<WorkspaceSidebar />);
+
+        await user.click(screen.getByRole('button', { name: /^Team/ }));
+
+        // Folding says "I do not need to see these", not "stop telling me
+        // things" — a swallowed unread badge would make the fold unusable.
+        expect(
+            screen.getByRole('link', { name: /random/ }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole('link', { name: /general/ }),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: /engineering/ })).toBeNull();
+    });
+
+    it('unfolds a section when a channel is dropped into it', async () => {
+        const user = userEvent.setup();
+        currentUrl.value = '/w/snack-hq/channels/announcements';
+
+        mockWorkspace({
+            channels: [makeChannel(1, 'general'), makeChannel(2, 'random', 7)],
+            channel_groups: [{ id: 7, name: 'Team', position: 65536 }],
+        });
+
+        render(<WorkspaceSidebar />);
+
+        await user.click(screen.getByRole('button', { name: /^Team/ }));
+        expect(screen.queryByRole('link', { name: /random/ })).toBeNull();
+
+        const dataTransfer = { setData: vi.fn(), effectAllowed: 'none' };
+
+        fireEvent.dragStart(screen.getByRole('link', { name: /general/ }), {
+            dataTransfer,
+        });
+
+        const section = screen
+            .getByRole('button', { name: /^Team/ })
+            .closest('div')!.parentElement!;
+
+        fireEvent.drop(section, { dataTransfer });
+
+        // Dropping something into a folded section and seeing nothing happen is
+        // the one way this gesture can look broken.
+        expect(
+            screen.getByRole('link', { name: /random/ }),
+        ).toBeInTheDocument();
     });
 
     it('gives way to the DM list for a conversation opened from it', () => {

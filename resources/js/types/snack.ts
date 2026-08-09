@@ -169,9 +169,30 @@ export type Channel = {
     member_count?: number;
     is_member: boolean;
     is_muted: boolean;
+    /**
+     * The section of *this viewer's* sidebar the channel is filed under; null
+     * when they have filed it nowhere, and for a channel they have not joined.
+     */
+    channel_group_id: number | null;
     notification_level: NotificationLevel | null;
     last_read_message_id: number | null;
     created_at: string | null;
+};
+
+/**
+ * A section of the viewer's channel list.
+ *
+ * Mirrors App\Http\Resources\ChannelGroupResource. Carries no channels of its
+ * own: the payload sends every joined channel once, each naming its section by
+ * id.
+ *
+ * Unlike ProjectGroup, this belongs to one person — the sidebar lists the
+ * channels *you* joined, so its arrangement can only be yours.
+ */
+export type ChannelGroup = {
+    id: number;
+    name: string;
+    position: number;
 };
 
 /**
@@ -1066,6 +1087,12 @@ export type TaskChangedEvent = {
 export type CurrentWorkspace = {
     workspace: Workspace;
     channels: Channel[];
+    /**
+     * The headings `channels` is drawn under — the viewer's own sections, empty
+     * ones included. The sidebar is where they are made and filled, so a
+     * section that has just been emptied has to stay on screen.
+     */
+    channel_groups: ChannelGroup[];
     /**
      * Every conversation the viewer is in, direct and group alike. The sidebar
      * renders the groups from here and the direct ones through `people`, but

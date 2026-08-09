@@ -19,6 +19,13 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { ChannelListItem } from '@/components/snack/channel-list-item';
+import {
+    ChannelListMenu,
+    ChannelSectionDropZone,
+    ChannelSectionHeading,
+    ChannelSectionPicker,
+    ChannelSectionToggle,
+} from '@/components/snack/channel-sections';
 import { ConversationListItem } from '@/components/snack/conversation-list-item';
 import { NewMessageDialog } from '@/components/snack/new-message-dialog';
 import { NotificationPermissionPrompt } from '@/components/snack/notification-permission-prompt';
@@ -43,7 +50,9 @@ import {
     useIsHuddlesView,
     useIsThreadsView,
 } from '@/hooks/use-active-channel';
+import { useCollapsedChannelSections } from '@/hooks/use-collapsed-channel-sections';
 import { useSidebarSection } from '@/hooks/use-sidebar-section';
+import type { ChannelSection } from '@/hooks/use-workspace';
 import {
     useCurrentUser,
     useCurrentWorkspace,
@@ -70,7 +79,13 @@ import { index as threadsIndex } from '@/routes/threads';
 import { index as webhooksIndex } from '@/routes/webhooks';
 import { index as workspaceInvitations } from '@/routes/workspace-invitations';
 import { edit as workspaceSettings } from '@/routes/workspace-settings';
-import type { Channel, Conversation, Project, WorkspacePerson } from '@/types';
+import type {
+    Channel,
+    ChannelGroup,
+    Conversation,
+    Project,
+    WorkspacePerson,
+} from '@/types';
 
 /**
  * The second column: workspace identity, global navigation, and the channel
@@ -95,7 +110,12 @@ export function WorkspaceSidebar({
     const workspace = useWorkspace();
     const current = useCurrentWorkspace();
     const currentUser = useCurrentUser();
-    const { channels, muted } = useSidebarChannels();
+    const {
+        channels,
+        muted,
+        sections,
+        groups: channelGroups,
+    } = useSidebarChannels();
     const { mutedGroups } = useSidebarConversations();
     const unread = useUnreadState();
     const activeChannelSlug = useActiveChannelSlug();
@@ -252,40 +272,27 @@ export function WorkspaceSidebar({
                 <SidebarSection
                     title="Channels"
                     action={
-                        current?.workspace.abilities.create_channels ? (
-                            <Link
-                                href={browseChannels(workspace.slug)}
-                                onClick={onNavigate}
-                                className="rounded-md p-1 hover:bg-sidebar-accent"
-                            >
-                                <Plus aria-hidden="true" className="size-4" />
-                                <span className="sr-only">
-                                    Add or browse channels
-                                </span>
-                            </Link>
-                        ) : null
+                        <ChannelListMenu
+                            workspaceSlug={workspace.slug}
+                            canBrowse={
+                                current?.workspace.abilities.create_channels ??
+                                false
+                            }
+                            onBrowse={() => {
+                                onNavigate?.();
+                                router.visit(browseChannels(workspace.slug));
+                            }}
+                        />
                     }
                 >
-                    {channels.length === 0 ? (
-                        <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                            You have not joined any channels yet.
-                        </p>
-                    ) : (
-                        <ul className="space-y-0.5">
-                            {channels.map((channel) => (
-                                <li key={channel.id}>
-                                    <ChannelRow
-                                        channel={channel}
-                                        workspaceSlug={workspace.slug}
-                                        isActive={
-                                            channel.slug === activeChannelSlug
-                                        }
-                                        onNavigate={onNavigate}
-                                    />
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                    <ChannelSectionList
+                        workspaceSlug={workspace.slug}
+                        sections={sections}
+                        groups={channelGroups}
+                        hasChannels={channels.length > 0}
+                        activeChannelSlug={activeChannelSlug}
+                        onNavigate={onNavigate}
+                    />
 
                     {!workspace.abilities.is_guest && (
                         <Link
@@ -309,6 +316,7 @@ export function WorkspaceSidebar({
                                     <ChannelRow
                                         channel={channel}
                                         workspaceSlug={workspace.slug}
+                                        groups={channelGroups}
                                         isActive={
                                             channel.slug === activeChannelSlug
                                         }
@@ -637,28 +645,247 @@ function DirectMessageSection({
     );
 }
 
+/**
+ * The channel list, arranged under the reader's own sections.
+ *
+ * # Folding
+ *
+ * A folded section keeps showing anything unread and the channel you are
+ * currently in. Folding is "I do not need to see these", not "stop telling me
+ * things" — a sidebar that swallowed an unread badge because of where its owner
+ * filed the channel would make the fold a thing nobody could safely use. The
+ * count beside the heading is what is actually hidden, so the row does not go
+ * quiet about the rest.
+ *
+ * # Dragging
+ *
+ * Whole sections are the drop targets, and the drag state lives here because
+ * the row that starts the gesture and the section that ends it are siblings.
+ * See ChannelSectionDropZone.
+ */
+function ChannelSectionList({
+    workspaceSlug,
+    sections,
+    groups,
+    hasChannels,
+    activeChannelSlug,
+    onNavigate,
+}: {
+    workspaceSlug: string;
+    sections: ChannelSection[];
+    groups: ChannelGroup[];
+    /** Whether anything at all is in the list, muted channels aside. */
+    hasChannels: boolean;
+    activeChannelSlug: string | null;
+    onNavigate?: () => void;
+}) {
+    const unread = useUnreadState();
+    const { isCollapsed, toggle, expand } =
+        useCollapsedChannelSections(workspaceSlug);
+
+    const [draggingChannel, setDraggingChannel] = useState<Channel | null>(
+        null,
+    );
+
+    /*
+     * While a filed channel is in the air, the leftovers are a place to put it
+     * down — even when there is nothing in them.
+     *
+     * The list normally drops that section when it is empty, because a heading
+     * over nothing is a wasted row. But someone who has filed *every* channel
+     * has, at that moment, nowhere to drag one back to: the way out of a section
+     * would exist only in the ⋯ menu, which is not where they are looking. So it
+     * comes back for the duration of the drag and goes away again when the
+     * channel lands.
+     */
+    const dropSections = useMemo(() => {
+        const needsLeftovers =
+            draggingChannel !== null &&
+            draggingChannel.channel_group_id !== null &&
+            !sections.some((channelSection) => channelSection.group === null);
+
+        return needsLeftovers
+            ? [...sections, { group: null, channels: [] }]
+            : sections;
+    }, [sections, draggingChannel]);
+
+    if (!hasChannels && groups.length === 0) {
+        return (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                You have not joined any channels yet.
+            </p>
+        );
+    }
+
+    return (
+        <>
+            {dropSections.map((channelSection, index) => {
+                const groupId = channelSection.group?.id ?? null;
+                const collapsed = isCollapsed(groupId);
+
+                // What survives the fold: anything with something in it for
+                // you, and wherever you are standing right now.
+                const shown = collapsed
+                    ? channelSection.channels.filter((channel) => {
+                          const counts = unread.channels[channel.id];
+
+                          return (
+                              channel.slug === activeChannelSlug ||
+                              (counts?.messages ?? 0) > 0 ||
+                              (counts?.mentions ?? 0) > 0
+                          );
+                      })
+                    : channelSection.channels;
+
+                return (
+                    <ChannelSectionDropZone
+                        key={groupId ?? 'ungrouped'}
+                        groupId={groupId}
+                        workspaceSlug={workspaceSlug}
+                        draggingChannel={draggingChannel}
+                        onDropped={(landedIn) => {
+                            setDraggingChannel(null);
+                            expand(landedIn);
+                        }}
+                    >
+                        {channelSection.group !== null ? (
+                            <ChannelSectionHeading
+                                group={channelSection.group}
+                                workspaceSlug={workspaceSlug}
+                                canMoveUp={index > 0}
+                                canMoveDown={index < groups.length - 1}
+                                collapsed={collapsed}
+                                hiddenCount={
+                                    channelSection.channels.length -
+                                    shown.length
+                                }
+                                onToggle={() => toggle(groupId)}
+                            />
+                        ) : (
+                            /*
+                             * The leftovers get a heading only when something
+                             * above them has one — and it folds like the rest,
+                             * since "everything I have not filed" is exactly the
+                             * pile somebody wants out of the way.
+                             */
+                            groups.length > 0 && (
+                                <div className="flex items-center gap-1 px-2 pt-1 pb-0.5">
+                                    <ChannelSectionToggle
+                                        label="Other"
+                                        collapsed={collapsed}
+                                        hiddenCount={
+                                            channelSection.channels.length -
+                                            shown.length
+                                        }
+                                        onToggle={() => toggle(groupId)}
+                                    />
+                                </div>
+                            )
+                        )}
+
+                        {channelSection.channels.length === 0 ? (
+                            /*
+                             * An empty section keeps its heading — see
+                             * WorkspaceNavigator::sidebarChannelGroups() — so it
+                             * needs a line saying it is empty on purpose, and
+                             * where the channels come from. Folded, it says
+                             * nothing: the fold is the answer.
+                             */
+                            !collapsed && (
+                                <p className="px-2 py-1 text-xs text-muted-foreground/70">
+                                    {channelSection.group === null
+                                        ? 'Drop here to take it out of its section.'
+                                        : 'Empty. Drag a channel here, or use its ⋯ menu.'}
+                                </p>
+                            )
+                        ) : (
+                            <ul className="space-y-0.5">
+                                {shown.map((channel) => (
+                                    <li key={channel.id}>
+                                        <ChannelRow
+                                            channel={channel}
+                                            workspaceSlug={workspaceSlug}
+                                            groups={groups}
+                                            isActive={
+                                                channel.slug ===
+                                                activeChannelSlug
+                                            }
+                                            /*
+                                             * Only where there is somewhere to
+                                             * drop it. With no sections the list
+                                             * is one list, and a row that lifts
+                                             * off the page promises a
+                                             * rearrangement that cannot happen.
+                                             */
+                                            draggable={groups.length > 0}
+                                            isDragging={
+                                                draggingChannel?.id ===
+                                                channel.id
+                                            }
+                                            onDragStart={setDraggingChannel}
+                                            onDragEnd={() =>
+                                                setDraggingChannel(null)
+                                            }
+                                            onNavigate={onNavigate}
+                                        />
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </ChannelSectionDropZone>
+                );
+            })}
+        </>
+    );
+}
+
 function ChannelRow({
     channel,
     workspaceSlug,
+    groups,
     isActive,
+    draggable = false,
+    isDragging = false,
+    onDragStart,
+    onDragEnd,
     onNavigate,
 }: {
     channel: Channel;
     workspaceSlug: string;
+    /** The viewer's sections, for the row's own "move to section" menu. */
+    groups: ChannelGroup[];
     isActive: boolean;
+    draggable?: boolean;
+    isDragging?: boolean;
+    onDragStart?: (channel: Channel) => void;
+    onDragEnd?: () => void;
     onNavigate?: () => void;
 }) {
     const unread = useUnreadState();
     const counts = unread.channels[channel.id];
 
     return (
-        <div onClick={onNavigate}>
+        // `group/row` is what the picker's hover state hangs off, and `relative`
+        // is what it is positioned against — it overlays the row rather than
+        // sitting inside the link. See ChannelSectionPicker.
+        <div className="group/row relative" onClick={onNavigate}>
             <ChannelListItem
                 channel={channel}
                 workspaceSlug={workspaceSlug}
                 isActive={isActive}
                 unreadMessages={counts?.messages ?? 0}
                 unreadMentions={counts?.mentions ?? 0}
+                draggable={draggable}
+                isDragging={isDragging}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+            />
+
+            <ChannelSectionPicker
+                channel={channel}
+                groups={groups}
+                workspaceSlug={workspaceSlug}
+                isActive={isActive}
             />
         </div>
     );

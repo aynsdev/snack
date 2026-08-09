@@ -11,6 +11,7 @@ import {
 } from '@/hooks/use-workspace';
 import type {
     Channel,
+    ChannelGroup,
     Conversation,
     CurrentWorkspace,
     WorkspacePerson,
@@ -34,6 +35,7 @@ function makeChannel(overrides: Partial<Channel> = {}): Channel {
         last_message_at: null,
         is_member: true,
         is_muted: false,
+        channel_group_id: null,
         notification_level: 'mentions',
         last_read_message_id: null,
         created_at: null,
@@ -80,10 +82,15 @@ function makePerson(
     };
 }
 
+function makeChannelGroup(overrides: Partial<ChannelGroup> = {}): ChannelGroup {
+    return { id: 1, name: 'Team', position: 65536, ...overrides };
+}
+
 function makeCurrent(
     channels: Channel[] = [],
     conversations: Conversation[] = [],
     people: WorkspacePerson[] = [],
+    channelGroups: ChannelGroup[] = [],
 ): CurrentWorkspace {
     return {
         workspace: {
@@ -108,6 +115,7 @@ function makeCurrent(
             },
         },
         channels,
+        channel_groups: channelGroups,
         conversations,
         people,
         projects: [],
@@ -195,6 +203,93 @@ describe('useSidebarChannels', () => {
 
         expect(result.current.channels).toEqual([]);
         expect(result.current.muted).toEqual([]);
+        expect(result.current.sections).toEqual([]);
+    });
+
+    it('buckets channels under the sections they are filed in', () => {
+        mockPage(
+            makeCurrent(
+                [
+                    makeChannel({
+                        id: 1,
+                        slug: 'general',
+                        channel_group_id: 7,
+                    }),
+                    makeChannel({ id: 2, slug: 'random' }),
+                ],
+                [],
+                [],
+                [makeChannelGroup({ id: 7, name: 'Team' })],
+            ),
+        );
+
+        const { result } = renderHook(() => useSidebarChannels());
+
+        expect(
+            result.current.sections.map((section) => [
+                section.group?.name ?? null,
+                section.channels.map((channel) => channel.slug),
+            ]),
+        ).toEqual([
+            ['Team', ['general']],
+            [null, ['random']],
+        ]);
+    });
+
+    it('keeps a section that has nothing in it', () => {
+        mockPage(
+            makeCurrent(
+                [makeChannel({ id: 1, slug: 'general' })],
+                [],
+                [],
+                [makeChannelGroup({ id: 7, name: 'Team' })],
+            ),
+        );
+
+        const { result } = renderHook(() => useSidebarChannels());
+
+        // The sidebar is where sections are made and filled. One that vanished
+        // the moment its last channel left would take with it the only handle
+        // for putting anything back into it.
+        expect(result.current.sections[0]).toEqual({
+            group: makeChannelGroup({ id: 7, name: 'Team' }),
+            channels: [],
+        });
+    });
+
+    it('sends a muted channel to the muted shelf rather than its section', () => {
+        mockPage(
+            makeCurrent(
+                [
+                    makeChannel({
+                        id: 1,
+                        slug: 'random',
+                        channel_group_id: 7,
+                        is_muted: true,
+                    }),
+                ],
+                [],
+                [],
+                [makeChannelGroup({ id: 7, name: 'Team' })],
+            ),
+        );
+
+        const { result } = renderHook(() => useSidebarChannels());
+
+        expect(result.current.muted.map((c) => c.slug)).toEqual(['random']);
+        expect(result.current.sections[0].channels).toEqual([]);
+    });
+
+    it('treats a channel filed under a section that is gone as unfiled', () => {
+        mockPage(makeCurrent([makeChannel({ id: 1, channel_group_id: 99 })]));
+
+        const { result } = renderHook(() => useSidebarChannels());
+
+        // A deleted section nulls the assignment server-side, but a payload
+        // read mid-flight must not drop the channel out of the sidebar.
+        expect(result.current.sections).toEqual([
+            { group: null, channels: result.current.channels },
+        ]);
     });
 });
 
