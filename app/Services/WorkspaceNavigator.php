@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\ConversationType;
+use App\Http\Resources\ChannelGroupResource;
 use App\Http\Resources\ChannelResource;
 use App\Http\Resources\ConversationResource;
 use App\Http\Resources\ProjectGroupResource;
@@ -10,6 +11,7 @@ use App\Http\Resources\ProjectResource;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\WorkspaceResource;
 use App\Models\Channel;
+use App\Models\ChannelGroup;
 use App\Models\Conversation;
 use App\Models\Project;
 use App\Models\ProjectGroup;
@@ -69,6 +71,32 @@ class WorkspaceNavigator
             ->get();
 
         return ChannelResource::collection($channels)->resolve();
+    }
+
+    /**
+     * The headings that channel list is arranged under: this person's sections
+     * in this workspace, in the order they drew them.
+     *
+     * Every one of them, including the empty ones — the opposite of
+     * {@see sidebarProjectGroups()}, and for a reason that is really the same
+     * reason. Project groups are curated on the project page, so an empty one is
+     * kept visible *there* and suppressed here. A channel section has no such
+     * page: the sidebar is where it is made, named, and filled, so a section
+     * whose last channel just left has to stay on screen or the reader has
+     * watched their own heading vanish with no way to get it back.
+     *
+     * One query, on every workspace page, like everything else in this class.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function sidebarChannelGroups(Workspace $workspace, User $user): array
+    {
+        $groups = ChannelGroup::query()
+            ->ownedBy($workspace, $user)
+            ->ordered()
+            ->get();
+
+        return ChannelGroupResource::collection($groups)->resolve(request());
     }
 
     /**
@@ -311,6 +339,11 @@ class WorkspaceNavigator
         return [
             'workspace' => (new WorkspaceResource($workspace))->resolve(request()),
             'channels' => $this->sidebarChannels($workspace, $user),
+
+            // The sections those channels are drawn under — this viewer's own,
+            // empty ones included. See sidebarChannelGroups().
+            'channel_groups' => $this->sidebarChannelGroups($workspace, $user),
+
             'conversations' => $this->sidebarConversations($workspace, $user),
 
             // The DM list itself. `conversations` above stays the complete set

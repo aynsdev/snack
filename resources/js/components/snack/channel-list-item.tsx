@@ -11,6 +11,14 @@ import type { Channel } from '@/types';
  * Unread state is signalled twice over: the name goes bold *and* gains a dot,
  * so it does not rely on weight alone. A mention count is louder still, since a
  * direct mention is the one thing a person must not miss.
+ *
+ * # Dragging
+ *
+ * Native HTML5 drag and drop, as the board is — see TaskCard for why no library
+ * is involved. The row is a link, which browsers already drag as a URL, so
+ * `onDragStart` overwrites the payload with the channel id and the sections
+ * read that. Only offered when there is a section to drop into; the row's ⋯
+ * menu does the same job from the keyboard either way.
  */
 export function ChannelListItem({
     channel,
@@ -18,12 +26,21 @@ export function ChannelListItem({
     isActive,
     unreadMessages = 0,
     unreadMentions = 0,
+    draggable = false,
+    isDragging = false,
+    onDragStart,
+    onDragEnd,
 }: {
     channel: Channel;
     workspaceSlug: string;
     isActive: boolean;
     unreadMessages?: number;
     unreadMentions?: number;
+    draggable?: boolean;
+    /** Dimmed in place while it is the row being dragged. */
+    isDragging?: boolean;
+    onDragStart?: (channel: Channel) => void;
+    onDragEnd?: () => void;
 }) {
     const hasUnread = unreadMessages > 0 && !channel.is_muted;
 
@@ -35,6 +52,20 @@ export function ChannelListItem({
             })}
             prefetch="hover"
             aria-current={isActive ? 'page' : undefined}
+            draggable={draggable}
+            onDragStart={(event) => {
+                if (!draggable) {
+                    return;
+                }
+
+                // The id travels in the payload as well as in React state, for
+                // the reason TaskCard's does: a drop handler reading only from
+                // state reads whatever was last set.
+                event.dataTransfer.setData('text/plain', String(channel.id));
+                event.dataTransfer.effectAllowed = 'move';
+                onDragStart?.(channel);
+            }}
+            onDragEnd={onDragEnd}
             className={cn(
                 'group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
                 'hover:bg-sidebar-accent',
@@ -43,6 +74,8 @@ export function ChannelListItem({
                     : hasUnread
                       ? 'font-semibold text-unread'
                       : 'text-muted-foreground',
+                draggable && 'cursor-grab active:cursor-grabbing',
+                isDragging && 'opacity-40',
             )}
         >
             <ChannelIcon

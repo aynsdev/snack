@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ChannelListItem } from '@/components/snack/channel-list-item';
 import type { Channel } from '@/types';
@@ -34,6 +34,7 @@ function makeChannel(overrides: Partial<Channel> = {}): Channel {
         last_message_at: null,
         is_member: true,
         is_muted: false,
+        channel_group_id: null,
         notification_level: 'mentions',
         last_read_message_id: null,
         created_at: null,
@@ -168,6 +169,57 @@ describe('ChannelListItem', () => {
         expect(screen.getByRole('link')).toHaveAttribute(
             'href',
             '/w/snack-hq/channels/engineering',
+        );
+    });
+
+    it('is only draggable when there is somewhere to drop it', () => {
+        const { rerender } = render(
+            <ChannelListItem
+                channel={makeChannel()}
+                workspaceSlug="snack-hq"
+                isActive={false}
+            />,
+        );
+
+        // A row that lifts off the page with no sections to file it into
+        // promises a rearrangement that cannot happen.
+        expect(screen.getByRole('link')).toHaveAttribute('draggable', 'false');
+
+        rerender(
+            <ChannelListItem
+                channel={makeChannel()}
+                workspaceSlug="snack-hq"
+                isActive={false}
+                draggable
+            />,
+        );
+
+        expect(screen.getByRole('link')).toHaveAttribute('draggable', 'true');
+    });
+
+    it('carries the channel id in the drag payload', () => {
+        const setData = vi.fn();
+        const onDragStart = vi.fn();
+
+        render(
+            <ChannelListItem
+                channel={makeChannel({ id: 42 })}
+                workspaceSlug="snack-hq"
+                isActive={false}
+                draggable
+                onDragStart={onDragStart}
+            />,
+        );
+
+        fireEvent.dragStart(screen.getByRole('link'), {
+            dataTransfer: { setData, effectAllowed: 'none' },
+        });
+
+        // The id travels in the payload as well as in React state — a link is
+        // natively dragged as its URL, so the payload has to be overwritten.
+        expect(setData).toHaveBeenCalledWith('text/plain', '42');
+        expect(onDragStart).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 42 }),
         );
     });
 });

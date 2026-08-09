@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $channel_id
  * @property int $user_id
+ * @property int|null $channel_group_id
  * @property ChannelRole $role
  * @property int|null $last_read_message_id
  * @property Carbon|null $last_read_at
@@ -32,10 +33,11 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Channel $channel
  * @property-read User $user
+ * @property-read ChannelGroup|null $group
  */
 #[Fillable([
-    'channel_id', 'user_id', 'role', 'last_read_message_id', 'last_read_at',
-    'notification_level', 'is_muted', 'joined_at',
+    'channel_id', 'user_id', 'channel_group_id', 'role', 'last_read_message_id',
+    'last_read_at', 'notification_level', 'is_muted', 'joined_at',
 ])]
 class ChannelMember extends Pivot
 {
@@ -76,6 +78,17 @@ class ChannelMember extends Pivot
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The section of this member's sidebar the channel is filed under, if they
+     * have filed it. Null — ungrouped — is where every membership starts.
+     *
+     * @return BelongsTo<ChannelGroup, $this>
+     */
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(ChannelGroup::class, 'channel_group_id');
     }
 
     /**

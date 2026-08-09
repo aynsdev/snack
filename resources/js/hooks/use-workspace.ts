@@ -2,6 +2,7 @@ import { usePage } from '@inertiajs/react';
 import { useMemo } from 'react';
 import type {
     Channel,
+    ChannelGroup,
     Conversation,
     CurrentWorkspace,
     Project,
@@ -64,29 +65,82 @@ export function useCurrentUser(): SnackUser | null {
 }
 
 /**
+ * One heading in the sidebar's channel list; a null group is the leftovers.
+ */
+export type ChannelSection = {
+    group: ChannelGroup | null;
+    channels: Channel[];
+};
+
+/**
  * The user's joined channels, split into the groupings the sidebar renders.
  *
  * Sorting happens server-side; this only partitions, so the memo is cheap and
  * exists to keep the array identities stable across re-renders.
+ *
+ * `sections` is what the unmuted list renders. Someone with no sections gets a
+ * single headingless one, which is the flat list the sidebar has always been.
  */
 export function useSidebarChannels(): {
     channels: Channel[];
     starred: Channel[];
     muted: Channel[];
+    sections: ChannelSection[];
+    groups: ChannelGroup[];
 } {
     const current = useCurrentWorkspace();
 
     return useMemo(() => {
         const all = current?.channels ?? [];
+        const groups = current?.channel_groups ?? [];
+
+        /*
+         * Muted channels are lifted out of their sections and into the Muted
+         * shelf at the bottom, rather than left in place and dimmed. Muting a
+         * channel is the statement "stop showing me this", and a section of six
+         * rows where four are silent is exactly the list the reader was trying
+         * to get away from. The section is still on the channel, so unmuting
+         * puts it back where they filed it.
+         */
+        const channels = all.filter((channel) => !channel.is_muted);
+        const muted = all.filter((channel) => channel.is_muted);
+
+        const sections: ChannelSection[] = groups.map((group) => ({
+            group,
+            channels: channels.filter(
+                (channel) => channel.channel_group_id === group.id,
+            ),
+        }));
+
+        const filed = new Set(groups.map((group) => group.id));
+
+        const ungrouped = channels.filter(
+            (channel) =>
+                channel.channel_group_id === null ||
+                !filed.has(channel.channel_group_id),
+        );
+
+        /*
+         * The leftovers go last and only when there are any. Empty *named*
+         * sections do stay — this is where sections are made and filled, so one
+         * that has just been emptied must not disappear out from under the
+         * person emptying it — but "everything else" with nothing in it is not
+         * a section that went empty, it is a list that is entirely filed.
+         */
+        if (ungrouped.length > 0) {
+            sections.push({ group: null, channels: ungrouped });
+        }
 
         return {
-            channels: all.filter((channel) => !channel.is_muted),
+            channels,
             // Starring lands with the rest of the personalization work; the
             // grouping exists now so the sidebar's shape is already right.
             starred: [],
-            muted: all.filter((channel) => channel.is_muted),
+            muted,
+            sections,
+            groups,
         };
-    }, [current?.channels]);
+    }, [current?.channels, current?.channel_groups]);
 }
 
 export function useUnreadState(): UnreadState {
