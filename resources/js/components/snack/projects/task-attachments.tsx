@@ -122,7 +122,8 @@ export function TaskAttachments({
             <div
                 className={cn(
                     'mt-2 space-y-1.5 rounded-lg transition-colors',
-                    dragging && 'ring-2 ring-brand ring-offset-2 ring-offset-background',
+                    dragging &&
+                        'ring-2 ring-brand ring-offset-2 ring-offset-background',
                 )}
             >
                 {attachments.map((attachment) => (

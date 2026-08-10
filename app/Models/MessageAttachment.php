@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property int $workspace_id
  * @property int|null $message_id
  * @property int|null $task_id
+ * @property int|null $asset_id
  * @property int $uploaded_by
  * @property string $disk
  * @property string $path
@@ -34,10 +35,11 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Message|null $message
  * @property-read Task|null $task
+ * @property-read Asset|null $asset
  */
 #[Fillable([
-    'workspace_id', 'message_id', 'task_id', 'uploaded_by', 'disk', 'path', 'thumbnail_path',
-    'original_name', 'mime_type', 'size', 'metadata',
+    'workspace_id', 'message_id', 'task_id', 'asset_id', 'uploaded_by', 'disk', 'path',
+    'thumbnail_path', 'original_name', 'mime_type', 'size', 'metadata',
 ])]
 #[Hidden(['disk', 'path', 'thumbnail_path'])]
 class MessageAttachment extends Model
@@ -86,6 +88,21 @@ class MessageAttachment extends Model
     }
 
     /**
+     * The library entry these bytes are the file behind.
+     *
+     * The third and last owner an attachment can have. Unlike the other two it
+     * is written at the same moment the row is created — a library upload names
+     * its destination up front, so there is no window in which the file is
+     * unclaimed and nothing for the orphan sweep to race with.
+     *
+     * @return BelongsTo<Asset, $this>
+     */
+    public function asset(): BelongsTo
+    {
+        return $this->belongsTo(Asset::class);
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function uploader(): BelongsTo
@@ -98,15 +115,17 @@ class MessageAttachment extends Model
     /**
      * Uploads nothing ever claimed, eligible for pruning.
      *
-     * Both owners have to be null. A file attached to a card has no message and
-     * would otherwise look abandoned to `snack:prune-uploads`, which would then
-     * delete it within the day.
+     * Every owner has to be null. A file on a card has no message, and a file in
+     * the asset library has neither — both would otherwise look abandoned to
+     * `snack:prune-uploads`, which would delete them within the day. This is the
+     * reason an asset's ownership is recorded on *this* row rather than on the
+     * `assets` row: the sweep excludes it by construction.
      *
      * @param  Builder<$this>  $query
      */
     public function scopeOrphaned(Builder $query): void
     {
-        $query->whereNull('message_id')->whereNull('task_id');
+        $query->whereNull('message_id')->whereNull('task_id')->whereNull('asset_id');
     }
 
     /**
@@ -127,6 +146,30 @@ class MessageAttachment extends Model
      * @param  Builder<$this>  $query
      */
     public function scopeOfKind(Builder $query, string $kind): void
+    {
+        self::constrainToKind($query, $kind);
+    }
+
+    /**
+     * The same buckets, applied to any query over this table.
+     *
+     * A static taking a plain builder rather than only the scope above, because
+     * the asset library reaches this table through `whereHas('file', …)` — and
+     * the callback a `whereHas` hands out is a builder over the relation, not
+     * over `$this`, so a scope call inside one does not type-check. Sharing the
+     * conditions here is what keeps the library's "Images" and the file
+     * browser's "Images" from quietly meaning different things.
+     *
+     * Generic in the builder's model because `Builder` is invariant in it: the
+     * scope above holds a `Builder<$this>` and `whereHas` hands out a builder
+     * over whatever the relation points at, and a single concrete parameter type
+     * would reject one of the two callers.
+     *
+     * @template TQuery of Model
+     *
+     * @param  Builder<TQuery>  $query
+     */
+    public static function constrainToKind(Builder $query, string $kind): void
     {
         match ($kind) {
             'image', 'video', 'audio' => $query->where('mime_type', 'like', $kind.'/%'),

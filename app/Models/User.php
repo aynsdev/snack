@@ -286,7 +286,16 @@ class User extends Authenticatable implements PasskeyUser
             return null;
         }
 
-        return Storage::disk('public')->url($this->avatar_path);
+        /*
+         * The configured disk, not a hardcoded `public`.
+         *
+         * The action that writes an avatar has always read this setting; this
+         * accessor did not, so pointing avatars at object storage wrote the
+         * bytes to the bucket and then asked the browser for them from
+         * `/storage`, where nothing was. One key, both sides.
+         */
+        return Storage::disk((string) config('snack.avatars.disk', 'public'))
+            ->url($this->avatar_path);
     }
 
     /**

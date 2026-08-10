@@ -16,6 +16,7 @@ import {
 import {
     useActiveConversationId,
     useIsActivityView,
+    useIsAssetsView,
     useIsFilesView,
     useIsHomeView,
     useIsProjectsView,
@@ -25,6 +26,7 @@ import { enterSection, useSidebarSection } from '@/hooks/use-sidebar-section';
 import { useUnreadState, useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import { index as activityIndex } from '@/routes/activity';
+import { index as assetsIndex } from '@/routes/assets';
 import { index as dmsIndex } from '@/routes/conversations';
 import { index as filesIndex } from '@/routes/files';
 import { index as projectsIndex } from '@/routes/projects';
@@ -74,6 +76,7 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
     const isSaved = useIsSavedView();
     const isFiles = useIsFilesView();
     const isProjects = useIsProjectsView();
+    const isAssets = useIsAssetsView();
 
     const directMessages = Object.values(unread.conversations).reduce(
         (total, counts) => total + counts.messages,
@@ -169,12 +172,22 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
                 />
 
                 {/*
-                 * Announced rather than hidden: it is a place people will look
-                 * for — "where do we keep the logo?" is asked in every workspace
-                 * — and a labelled gap answers that question honestly, where an
-                 * empty rail sends them off to ask it in #general.
+                 * The asset library: brand kits, company information, the
+                 * documents people keep asking for a link to.
+                 *
+                 * Its own destination rather than a mode of Files, because the
+                 * two answer different questions. Files lists what was *said* —
+                 * every attachment on every message you can read. This lists
+                 * what was *put somewhere* on purpose, which is the only kind of
+                 * thing anybody goes looking for a year later.
                  */}
-                <NavRailItem icon={Images} label="Assets" comingSoon />
+                <NavRailItem
+                    icon={Images}
+                    label="Assets"
+                    href={assetsIndex(workspace.slug)}
+                    isActive={isAssets}
+                    onNavigate={onNavigate}
+                />
             </ul>
         </nav>
     );
@@ -201,7 +214,6 @@ function NavRailItem({
     href,
     badge = 0,
     isActive = false,
-    comingSoon = false,
     onNavigate,
 }: {
     icon: typeof House;
@@ -211,7 +223,6 @@ function NavRailItem({
     href?: string | { url: string; method: 'get' };
     badge?: number;
     isActive?: boolean;
-    comingSoon?: boolean;
     onNavigate?: (event: React.MouseEvent<Element>) => void;
 }) {
     const className = cn(
@@ -219,7 +230,8 @@ function NavRailItem({
         isActive
             ? 'bg-rail-active/15 text-rail-active'
             : 'text-rail-muted hover:bg-rail-foreground/10 hover:text-rail-foreground',
-        comingSoon && 'cursor-default opacity-45 hover:bg-transparent',
+        // A destination that does not exist yet renders dimmed, below.
+        href === undefined && 'cursor-default opacity-45 hover:bg-transparent',
     );
 
     const content = (
@@ -251,7 +263,7 @@ function NavRailItem({
         </>
     );
 
-    if (comingSoon || href === undefined) {
+    if (href === undefined) {
         return (
             <li>
                 <Tooltip>

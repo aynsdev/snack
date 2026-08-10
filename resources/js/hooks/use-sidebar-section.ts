@@ -1,15 +1,17 @@
 import { useEffect } from 'react';
 import {
     useActiveConversationId,
+    useIsAssetsView,
     useIsDirectMessagesView,
     useIsProjectsView,
 } from '@/hooks/use-active-channel';
 
 /**
- * Which shape the sidebar takes: the workspace's contents, the DM list, or the
- * project list.
+ * Which shape the sidebar takes: the workspace's contents, the DM list, the
+ * project list, or the asset library's folder tree.
  */
-export type SidebarSection = 'workspace' | 'direct-messages' | 'projects';
+export type SidebarSection =
+    'workspace' | 'direct-messages' | 'projects' | 'assets';
 
 const STORAGE_KEY = 'snack:sidebar-section';
 
@@ -40,6 +42,7 @@ export function useSidebarSection(): SidebarSection {
     const conversationId = useActiveConversationId();
     const isDirectMessagesView = useIsDirectMessagesView();
     const isProjectsView = useIsProjectsView();
+    const isAssetsView = useIsAssetsView();
 
     /*
      * A conversation inherits; everywhere else states. With no conversation in
@@ -47,29 +50,36 @@ export function useSidebarSection(): SidebarSection {
      * is the rail's own destination and so the one page that means "I am in
      * direct messages".
      *
-     * Projects need none of that machinery: `/projects/pwa-board` is that
-     * project and nothing else, so the URL alone settles it. The ambiguity this
-     * hook exists for is specific to conversations, which are reachable from two
-     * sections and look identical from both.
+     * Projects and the asset library need none of that machinery:
+     * `/projects/pwa-board` is that project and nothing else, and
+     * `/assets/folders/12` is that shelf. The URL alone settles both. The
+     * ambiguity this hook exists for is specific to conversations, which are
+     * reachable from two sections and look identical from both.
      */
     const section: SidebarSection =
         conversationId !== null
             ? recall()
             : isProjectsView
               ? 'projects'
-              : isDirectMessagesView
-                ? 'direct-messages'
-                : 'workspace';
+              : isAssetsView
+                ? 'assets'
+                : isDirectMessagesView
+                  ? 'direct-messages'
+                  : 'workspace';
 
     useEffect(() => {
         /*
          * Only the two sections a conversation can be opened from are worth
-         * remembering. Storing 'projects' would mean a DM opened later, from a
-         * link, inheriting a section whose sidebar has no conversations in it at
-         * all — and the reader would land beside a list they cannot get back to
-         * the conversation from.
+         * remembering. Storing 'projects' or 'assets' would mean a DM opened
+         * later, from a link, inheriting a section whose sidebar has no
+         * conversations in it at all — and the reader would land beside a list
+         * they cannot get back to the conversation from.
          */
-        if (conversationId === null && section !== 'projects') {
+        if (
+            conversationId === null &&
+            section !== 'projects' &&
+            section !== 'assets'
+        ) {
             remember(section);
         }
     }, [conversationId, section]);

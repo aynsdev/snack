@@ -62,6 +62,12 @@ class UploadController extends Controller
                 // A file on a card is not tray state either: it is removed
                 // through the card, where the project's policy applies.
                 && $attachment->task_id === null
+                // Nor is a file in the asset library, which is removed through
+                // the asset — otherwise whoever uploaded the company logo could
+                // delete it out from under the library by hitting this route
+                // with its id, and the library would be left holding a row with
+                // no bytes behind it.
+                && $attachment->asset_id === null
                 && $attachment->uploaded_by === $request->user()->id,
             404,
         );

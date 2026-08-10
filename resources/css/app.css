@@ -582,6 +582,39 @@
     }
 
     /*
+     | The transparency checkerboard behind an asset preview.
+     |
+     | Brand assets are overwhelmingly transparent PNGs and SVGs, and a white
+     | logo on a light tile is an empty box — which reads as a broken thumbnail
+     | rather than as a logo that happens to be white. The pattern is what makes
+     | "there is nothing here" and "the parts you can see through" distinguish
+     | themselves.
+     |
+     | Drawn with gradients rather than an image so it costs no request, and
+     | keyed off `--color-border` so it dims with the theme instead of glaring
+     | out of a dark page.
+     */
+    .snack-checkerboard {
+        --snack-checker: color-mix(
+            in oklab,
+            var(--color-border) 55%,
+            transparent
+        );
+
+        background-image:
+            linear-gradient(45deg, var(--snack-checker) 25%, transparent 25%),
+            linear-gradient(-45deg, var(--snack-checker) 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, var(--snack-checker) 75%),
+            linear-gradient(-45deg, transparent 75%, var(--snack-checker) 75%);
+        background-size: 1rem 1rem;
+        background-position:
+            0 0,
+            0 0.5rem,
+            0.5rem -0.5rem,
+            -0.5rem 0;
+    }
+
+    /*
      | The three dots beside "Ada is typing…".
      |
      | Transform and opacity only — the dots sit directly above the composer,

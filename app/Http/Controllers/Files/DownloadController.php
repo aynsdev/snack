@@ -112,6 +112,24 @@ class DownloadController extends Controller
             return;
         }
 
+        /*
+         * A file in the asset library is read by whoever may read the asset,
+         * which is anybody in the workspace who is not a guest — the library is
+         * the company's own shelf, and a guest is by definition somebody brought
+         * in for one channel. Same delegation as the card branch above: the
+         * policy answers once, and the download cannot disagree with the page
+         * that offered the link.
+         */
+        if ($attachment->asset_id !== null) {
+            $asset = $attachment->asset;
+
+            abort_if($asset === null, 404);
+
+            Gate::authorize('view', $asset);
+
+            return;
+        }
+
         if ($attachment->message_id === null) {
             abort_unless($attachment->uploaded_by === $user->id, 404);
 

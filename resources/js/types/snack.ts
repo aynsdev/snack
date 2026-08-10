@@ -568,6 +568,55 @@ export type FileRow = Attachment & {
     message_id: number | null;
 };
 
+// -- Asset library -----------------------------------------------------------
+
+/**
+ * A shelf in the asset library. Mirrors App\Http\Resources\AssetFolderResource.
+ *
+ * Sent flat, each node naming its parent, and assembled into a tree by the
+ * client — the move dialog wants the flat list anyway, and nesting server-side
+ * would mean sending every folder twice.
+ *
+ * The two counts are direct children only, which is what a tile says ("4 folders
+ * · 12 files") without the page having loaded any of them.
+ */
+export type AssetFolder = {
+    id: number;
+    parent_id: number | null;
+    name: string;
+    description: string | null;
+    folder_count: number;
+    asset_count: number;
+    /** Rename, re-describe, move. The creator's right, or an admin's. */
+    can_manage: boolean;
+    /**
+     * Narrower than `can_manage`: a folder with anything in it takes other
+     * people's work with it, so only an admin may delete one.
+     */
+    can_delete: boolean;
+};
+
+/**
+ * Something on a shelf. Mirrors App\Http\Resources\AssetResource.
+ *
+ * `name` is what the library calls it; `file.name` is what was uploaded. They
+ * are usually different, and both are shown — the second is how somebody checks
+ * they are about to download the right thing.
+ *
+ * `file` is null only for an entry whose bytes are gone, which nothing normal
+ * produces. It renders as a broken tile rather than crashing the gallery.
+ */
+export type LibraryAsset = {
+    id: number;
+    folder_id: number | null;
+    name: string;
+    description: string | null;
+    file: Attachment | null;
+    creator: SnackUser | null;
+    created_at: string | null;
+    can_manage: boolean;
+};
+
 // -- Search ------------------------------------------------------------------
 
 /**

@@ -140,17 +140,31 @@ describe('NavRail', () => {
         );
     });
 
-    it('announces what is coming without offering a link to it', () => {
+    it('links to the asset library', () => {
         mockWorkspace();
 
         renderRail();
 
-        // A labelled gap answers "where do we keep the logo?" honestly. A link
-        // would answer it with a broken page.
-        expect(screen.queryByRole('link', { name: 'Assets' })).toBeNull();
-        expect(screen.getByRole('button', { name: 'Assets' })).toHaveAttribute(
-            'aria-disabled',
-            'true',
+        // "Where do we keep the logo?" now has a destination rather than a
+        // labelled gap — see the assets/index page.
+        expect(screen.getByRole('link', { name: /Assets/ })).toHaveAttribute(
+            'href',
+            '/w/snack-hq/assets',
+        );
+    });
+
+    it('marks a folder inside the library as Assets', () => {
+        currentUrl.value = '/w/snack-hq/assets/folders/12';
+        mockWorkspace();
+
+        renderRail();
+
+        // The rail names a section, and every shelf in the library is inside
+        // it — arriving at one from the sidebar must not make the section go
+        // dark.
+        expect(screen.getByRole('link', { name: /Assets/ })).toHaveAttribute(
+            'aria-current',
+            'page',
         );
     });
 

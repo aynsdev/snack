@@ -83,8 +83,7 @@ describe('DevelopmentSection', () => {
             execCommand: (command: string) => {
                 // What the browser would copy: the selected carrier field,
                 // which only exists for the duration of this call.
-                copiedText =
-                    document.querySelector('textarea')?.value ?? null;
+                copiedText = document.querySelector('textarea')?.value ?? null;
 
                 return execCommand(command);
             },
