@@ -1,6 +1,10 @@
 <?php
 
+use App\Actions\Assets\DeleteAsset;
+use App\Actions\Attachments\DeleteUpload;
 use App\Actions\Profile\UpdateAvatar;
+use App\Models\Asset;
+use App\Models\MessageAttachment;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Http\UploadedFile;
@@ -132,4 +136,46 @@ it('treats an empty public bucket as unset rather than as a bucket named ""', fu
 it('makes both spaces disks throw rather than return false', function () {
     expect(config('filesystems.disks.spaces.throw'))->toBeTrue()
         ->and(config('filesystems.disks.spaces_public.throw'))->toBeTrue();
+});
+
+/**
+ * A row must be removable even when its bytes are not.
+ *
+ * This is the contract DeleteUpload has always documented, but it used to rest
+ * on the disks being configured `'throw' => false`. The Spaces disks throw —
+ * deliberately, so a silent *write* failure cannot pretend a file exists — and
+ * that inverted the behaviour delete needs: an object that is already gone, or a
+ * bucket that is unreachable, would abort the deletion and leave a library entry
+ * nobody could remove. The action now swallows storage errors explicitly.
+ */
+it('deletes an attachment row even when the disk refuses', function () {
+    Storage::shouldReceive('disk')->andThrow(new RuntimeException('bucket unreachable'));
+
+    $attachment = MessageAttachment::factory()->create([
+        'thumbnail_path' => 'nowhere/thumb.png',
+    ]);
+
+    app(DeleteUpload::class)->handle($attachment);
+
+    expect(MessageAttachment::find($attachment->id))->toBeNull();
+});
+
+it('deletes an asset whose file never reached the bucket', function () {
+    Storage::fake('local');
+
+    $asset = Asset::factory()->create();
+
+    // The exact wreckage a misconfigured endpoint left behind: a row, and no
+    // bytes anywhere.
+    MessageAttachment::factory()->create([
+        'workspace_id' => $asset->workspace_id,
+        'message_id' => null,
+        'asset_id' => $asset->id,
+        'path' => 'workspaces/1/assets/2026/08/NEVER-WRITTEN.png',
+        'thumbnail_path' => 'workspaces/1/assets/2026/08/NEVER-WRITTEN_thumb.png',
+    ]);
+
+    app(DeleteAsset::class)->handle($asset->refresh());
+
+    expect(Asset::find($asset->id))->toBeNull();
 });
