@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import {
     Bookmark,
     Folder,
@@ -8,11 +8,19 @@ import {
     KanbanSquare,
     MessageSquare,
 } from 'lucide-react';
+import { UserAvatar } from '@/components/snack/user-avatar';
+import { ThemeSwitcher } from '@/components/theme-switcher';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { UserMenuContent } from '@/components/user-menu-content';
 import {
     useActiveConversationId,
     useIsActivityView,
@@ -23,7 +31,11 @@ import {
     useIsSavedView,
 } from '@/hooks/use-active-channel';
 import { enterSection, useSidebarSection } from '@/hooks/use-sidebar-section';
-import { useUnreadState, useWorkspace } from '@/hooks/use-workspace';
+import {
+    useCurrentUser,
+    useUnreadState,
+    useWorkspace,
+} from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import { index as activityIndex } from '@/routes/activity';
 import { index as assetsIndex } from '@/routes/assets';
@@ -91,7 +103,7 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
                otherwise read as one. */
             className="flex w-[4.75rem] shrink-0 flex-col items-center gap-1 border-x border-rail-foreground/10 bg-nav py-3 text-rail-foreground"
         >
-            <ul className="flex flex-col items-center gap-1">
+            <ul className="flex flex-1 flex-col items-center gap-1">
                 <NavRailItem
                     icon={House}
                     label="Home"
@@ -189,7 +201,41 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
                     onNavigate={onNavigate}
                 />
             </ul>
+
+            <div className="flex flex-col items-center gap-2">
+                <ThemeSwitcher />
+                <RailUserMenu />
+            </div>
         </nav>
+    );
+}
+
+function RailUserMenu() {
+    const user = useCurrentUser();
+    const page = usePage();
+
+    if (!user) {
+        return null;
+    }
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger
+                aria-label="Your account and status"
+                className="rounded-lg"
+            >
+                <UserAvatar
+                    user={user}
+                    size="lg"
+                    showPresence
+                    ringClassName="ring-nav"
+                />
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent side="right" align="end" className="w-60">
+                <UserMenuContent user={page.props.auth.user} />
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }
 

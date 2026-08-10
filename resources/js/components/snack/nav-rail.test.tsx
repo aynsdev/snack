@@ -42,7 +42,22 @@ vi.mock('@/hooks/use-current-url', () => ({
     useCurrentUrl: () => ({ currentUrl: currentUrl.value }),
 }));
 
-function mockWorkspace(unread: Partial<UnreadState> = {}) {
+function mockWorkspace(
+    unread: Partial<UnreadState> = {},
+    { signedIn = false }: { signedIn?: boolean } = {},
+) {
+    const user = {
+        id: 1,
+        name: 'Ada Lovelace',
+        email: 'ada@example.com',
+        initials: 'AL',
+        avatar_url: null,
+        presence_status: 'online',
+        email_verified_at: '2026-08-10T00:00:00.000000Z',
+        created_at: '2026-08-10T00:00:00.000000Z',
+        updated_at: '2026-08-10T00:00:00.000000Z',
+    };
+
     usePage.mockReturnValue({
         props: {
             snack: {
@@ -83,7 +98,10 @@ function mockWorkspace(unread: Partial<UnreadState> = {}) {
                     },
                 },
             },
-            auth: { user: null, profile: null },
+            auth: {
+                user: signedIn ? user : null,
+                profile: signedIn ? user : null,
+            },
         },
     });
 }
@@ -151,6 +169,21 @@ describe('NavRail', () => {
             'href',
             '/w/snack-hq/assets',
         );
+    });
+
+    it('keeps theme and profile controls aligned in the section rail', () => {
+        mockWorkspace({}, { signedIn: true });
+
+        renderRail();
+
+        expect(
+            screen.getByRole('button', {
+                name: 'Change color theme. Current theme: Original',
+            }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole('button', { name: 'Your account and status' }),
+        ).toBeInTheDocument();
     });
 
     it('marks a folder inside the library as Assets', () => {

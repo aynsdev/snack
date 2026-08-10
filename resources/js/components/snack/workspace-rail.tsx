@@ -1,19 +1,11 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
-import { UserAvatar } from '@/components/snack/user-avatar';
-import { ThemeSwitcher } from '@/components/theme-switcher';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { UserMenuContent } from '@/components/user-menu-content';
-import { useCurrentUser, useWorkspaceRail } from '@/hooks/use-workspace';
+import { useWorkspaceRail } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import {
     create as createWorkspace,
@@ -22,11 +14,12 @@ import {
 import type { WorkspaceSummary } from '@/types';
 
 /**
- * The leftmost column: workspace switcher, add-workspace, and the profile menu.
+ * The leftmost column: workspace switcher and add-workspace control.
  *
- * Charcoal in both light and dark themes. It is a fixed, always-present anchor
- * — the one part of the UI that never changes as you move around — so it reads
- * better as furniture than as a themed surface.
+ * Charcoal in both light and dark themes. When needed, it is a fixed anchor —
+ * the one part of the UI that never changes as you move around — so it reads
+ * better as furniture than as a themed surface. A single workspace needs no
+ * switcher, so the entire column disappears in that common case.
  */
 export function WorkspaceRail({
     currentWorkspaceSlug,
@@ -34,14 +27,17 @@ export function WorkspaceRail({
     currentWorkspaceSlug?: string;
 }) {
     const workspaces = useWorkspaceRail();
-    const user = useCurrentUser();
+
+    if (workspaces.length <= 1) {
+        return null;
+    }
 
     return (
         <nav
             aria-label="Workspaces"
             className="flex w-16 shrink-0 flex-col items-center gap-1 bg-rail py-3 text-rail-foreground"
         >
-            <ul className="flex flex-1 flex-col items-center gap-1.5">
+            <ul className="flex flex-col items-center gap-1.5">
                 {workspaces.map((workspace) => (
                     <li key={workspace.id}>
                         <WorkspaceRailButton
@@ -71,11 +67,6 @@ export function WorkspaceRail({
                     </Tooltip>
                 </li>
             </ul>
-
-            <div className="flex flex-col items-center gap-2">
-                <ThemeSwitcher />
-                {user && <RailUserMenu />}
-            </div>
         </nav>
     );
 }
@@ -92,6 +83,7 @@ function WorkspaceRailButton({
             <TooltipTrigger asChild>
                 <Link
                     href={showWorkspace(workspace.slug)}
+                    aria-label={workspace.name}
                     aria-current={isActive ? 'page' : undefined}
                     className="group relative flex items-center justify-center"
                 >
@@ -131,32 +123,5 @@ function WorkspaceRailButton({
             </TooltipTrigger>
             <TooltipContent side="right">{workspace.name}</TooltipContent>
         </Tooltip>
-    );
-}
-
-function RailUserMenu() {
-    const user = useCurrentUser();
-    const page = usePage();
-
-    if (!user) {
-        return null;
-    }
-
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger className="rounded-lg">
-                <UserAvatar
-                    user={user}
-                    size="lg"
-                    showPresence
-                    ringClassName="ring-rail"
-                />
-                <span className="sr-only">Your account and status</span>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent side="right" align="end" className="w-60">
-                <UserMenuContent user={page.props.auth.user} />
-            </DropdownMenuContent>
-        </DropdownMenu>
     );
 }
