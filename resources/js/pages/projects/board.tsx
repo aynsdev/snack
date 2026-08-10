@@ -1,11 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import {
-    CalendarClock,
-    Play,
-    SquareCheckBig,
-    UserPlus,
-    X,
-} from 'lucide-react';
+import { CalendarClock, Play, SquareCheckBig, UserPlus, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AddColumnTile } from '@/components/snack/projects/add-column-tile';
 import { BoardColumnView } from '@/components/snack/projects/board-column-view';
@@ -28,14 +22,13 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import {
-    
     dropNeighbours,
     filterTasks,
     NO_BOARD_FILTERS,
     tasksInColumn,
-    useBoard
+    useBoard,
 } from '@/hooks/use-board';
-import type {BoardFilters} from '@/hooks/use-board';
+import type { BoardFilters } from '@/hooks/use-board';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
 import { backlog as backlogRoute } from '@/routes/projects';
 import { store as joinProject } from '@/routes/projects/membership';

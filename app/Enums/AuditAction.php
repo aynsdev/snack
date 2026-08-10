@@ -101,6 +101,19 @@ enum AuditAction: string
 
     case MessageDeletedByAdmin = 'message.deleted_by_admin';
 
+    /*
+     * The asset library, under a subject of its own.
+     *
+     * Only the destructive half is recorded. Adding a file and renaming one are
+     * visible in the library itself, with the curator's name against them, and a
+     * row per upload would bury every other entry in the log under whichever
+     * team last dropped in a folder of photographs. A deletion leaves nothing
+     * behind to look at — the shelf is simply emptier than somebody remembers —
+     * so it is the one that has to be written down.
+     */
+    case AssetDeleted = 'asset.deleted';
+    case AssetFolderDeleted = 'asset.folder_deleted';
+
     public function label(): string
     {
         return match ($this) {
@@ -145,6 +158,8 @@ enum AuditAction: string
             self::WebhookSecretRotated => 'Webhook signing secret replaced',
             self::WebhookDeleted => 'Webhook deleted',
             self::MessageDeletedByAdmin => 'Message removed by admin',
+            self::AssetDeleted => 'Asset deleted',
+            self::AssetFolderDeleted => 'Asset folder deleted',
         };
     }
 

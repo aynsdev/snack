@@ -26,7 +26,9 @@ function makeComment(overrides: Partial<TaskComment> = {}): TaskComment {
     };
 }
 
-function renderComments(props: Partial<Parameters<typeof TaskComments>[0]> = {}) {
+function renderComments(
+    props: Partial<Parameters<typeof TaskComments>[0]> = {},
+) {
     const handlers = {
         onAdd: vi.fn(),
         onEdit: vi.fn(),
@@ -79,9 +81,7 @@ describe('TaskComments', () => {
 
     it('offers no controls for somebody else’s comment', () => {
         renderComments({
-            comments: [
-                makeComment({ can: { update: false, delete: false } }),
-            ],
+            comments: [makeComment({ can: { update: false, delete: false } })],
         });
 
         // The flags are the policy's answer: editing is the author's alone,

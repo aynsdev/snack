@@ -18,6 +18,7 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { AssetSidebar } from '@/components/snack/assets/asset-sidebar';
 import { ChannelListItem } from '@/components/snack/channel-list-item';
 import {
     ChannelListMenu,
@@ -136,6 +137,7 @@ export function WorkspaceSidebar({
     const section = useSidebarSection();
     const isDirectMessages = section === 'direct-messages';
     const isProjects = section === 'projects';
+    const isAssets = section === 'assets';
 
     const [composing, setComposing] = useState(false);
     const [dmFilter, setDmFilter] = useState('');
@@ -146,6 +148,38 @@ export function WorkspaceSidebar({
      * wherever you are in the workspace, which is the only reason it exists.
      */
     useSearchShortcut(searchIndex.url(workspace.slug));
+
+    if (isAssets) {
+        /*
+         * Inside the library the sidebar is its shelves, for the reason it is
+         * the project list inside Projects: the rail has already said which part
+         * of the workspace you are in, and a channel list beside a gallery is a
+         * list of rooms none of this is filed in.
+         */
+        return (
+            <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+                <SidebarHeader
+                    onCompose={() => setComposing(true)}
+                    inDrawer={inDrawer}
+                />
+
+                <NewMessageDialog
+                    workspaceSlug={workspace.slug}
+                    open={composing}
+                    onOpenChange={setComposing}
+                />
+
+                <nav
+                    aria-label="Asset library"
+                    className="snack-scroll flex-1 space-y-1 overflow-y-auto px-3 pt-1 pb-4"
+                >
+                    <AssetSidebar onNavigate={onNavigate} />
+                </nav>
+
+                <NotificationPermissionPrompt />
+            </div>
+        );
+    }
 
     if (isProjects) {
         /*

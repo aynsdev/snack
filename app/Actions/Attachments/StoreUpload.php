@@ -3,6 +3,7 @@
 namespace App\Actions\Attachments;
 
 use App\Jobs\ProcessAttachment;
+use App\Models\Asset;
 use App\Models\MessageAttachment;
 use App\Models\Task;
 use App\Models\User;
@@ -39,13 +40,22 @@ class StoreUpload
      *                           file is chosen, so there is nothing to claim
      *                           later and the row is never orphaned — which is
      *                           the whole difference from the composer's path.
+     * @param  Asset|null  $asset  The library entry these bytes are the file
+     *                             behind. Like a card, it exists before the
+     *                             upload does, so the row is owned from the
+     *                             moment it is written.
      */
-    public function handle(Workspace $workspace, User $uploader, UploadedFile $file, ?Task $task = null): MessageAttachment
-    {
+    public function handle(
+        Workspace $workspace,
+        User $uploader,
+        UploadedFile $file,
+        ?Task $task = null,
+        ?Asset $asset = null,
+    ): MessageAttachment {
         $disk = (string) config('snack.uploads.disk', 'local');
 
         $path = Storage::disk($disk)->putFileAs(
-            $this->directory($workspace),
+            $this->directory($workspace, $asset !== null),
             $file,
             Str::ulid()->toBase32().$this->extension($file),
         );
@@ -54,6 +64,7 @@ class StoreUpload
             'workspace_id' => $workspace->id,
             'message_id' => null,
             'task_id' => $task?->id,
+            'asset_id' => $asset?->id,
             'uploaded_by' => $uploader->id,
             'disk' => $disk,
             'path' => (string) $path,
@@ -81,10 +92,22 @@ class StoreUpload
      * Sharded by month so no single directory accumulates every file a busy
      * workspace has ever sent — some filesystems degrade badly past a few tens
      * of thousands of entries in one directory.
+     *
+     * Library assets get their own tree. Not for authorization — nothing is ever
+     * served by path, and access is decided by the row — but because the two
+     * have completely different lifetimes: chat attachments are swept, expire
+     * with their messages, and dominate the byte count, while the library is a
+     * small set of things somebody is expected to be able to restore from backup
+     * a year later. Keeping them apart is what makes that separable.
      */
-    private function directory(Workspace $workspace): string
+    private function directory(Workspace $workspace, bool $isAsset = false): string
     {
-        return sprintf('workspaces/%d/attachments/%s', $workspace->id, now()->format('Y/m'));
+        return sprintf(
+            'workspaces/%d/%s/%s',
+            $workspace->id,
+            $isAsset ? 'assets' : 'attachments',
+            now()->format('Y/m'),
+        );
     }
 
     /**

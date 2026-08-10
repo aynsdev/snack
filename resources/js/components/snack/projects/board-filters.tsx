@@ -19,8 +19,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {  hasBoardFilters } from '@/hooks/use-board';
-import type {BoardFilters} from '@/hooks/use-board';
+import { hasBoardFilters } from '@/hooks/use-board';
+import type { BoardFilters } from '@/hooks/use-board';
 import { cn } from '@/lib/utils';
 import type { ProjectMembership, ReleaseOption, TaskType } from '@/types';
 
@@ -174,7 +174,12 @@ export function BoardFiltersBar({
 
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="outline" size="sm" className="h-9">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9"
+                    >
                         <SlidersHorizontal aria-hidden="true" />
                         Quick filters
                     </Button>

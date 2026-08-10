@@ -189,10 +189,7 @@ export function useTaskDetail({
 
                     return index === -1
                         ? names
-                        : [
-                              ...names.slice(0, index),
-                              ...names.slice(index + 1),
-                          ];
+                        : [...names.slice(0, index), ...names.slice(index + 1)];
                 });
             }
         },

@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\Activity\ActivityController;
+use App\Http\Controllers\Assets\AssetController;
+use App\Http\Controllers\Assets\AssetFolderController;
+use App\Http\Controllers\Assets\AssetLibraryController;
 use App\Http\Controllers\Channels\ChannelArchiveController;
 use App\Http\Controllers\Channels\ChannelController;
 use App\Http\Controllers\Channels\ChannelGroupController;
@@ -430,6 +433,47 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::get('files', [FileBrowserController::class, 'index'])
             ->middleware('throttle:message-reads')
             ->name('files.index');
+
+        /*
+         * The asset library: brand kits, company information, the documents
+         * people keep asking for a link to.
+         *
+         * Deliberately a different section from `files` above rather than a mode
+         * of it. That one lists what was *said* — every attachment on every
+         * message the viewer can read — and this lists what was *put somewhere*
+         * on purpose. See App\Http\Controllers\Assets\AssetLibraryController.
+         *
+         * The folder is a path segment rather than a query parameter because a
+         * shelf is a place: people link to it, bookmark it, and expect the back
+         * button to walk back up the tree.
+         */
+        Route::get('assets', [AssetLibraryController::class, 'index'])->name('assets.index');
+
+        /*
+         * {assetFolder} rather than {folder} so scopeBindings() resolves it
+         * through Workspace::assetFolders() — a folder id from another tenant
+         * then 404s at the router instead of reaching a policy that would have
+         * to catch it. Same reason {channelGroup} is not {group}.
+         */
+        Route::get('assets/folders/{assetFolder}', [AssetLibraryController::class, 'show'])
+            ->name('assets.folders.show');
+
+        Route::post('assets/folders', [AssetFolderController::class, 'store'])
+            ->name('assets.folders.store');
+        Route::patch('assets/folders/{assetFolder}', [AssetFolderController::class, 'update'])
+            ->name('assets.folders.update');
+        Route::delete('assets/folders/{assetFolder}', [AssetFolderController::class, 'destroy'])
+            ->name('assets.folders.destroy');
+
+        /*
+         * Adding to the library is throttled with the composer's uploads and for
+         * the same reason: each request costs disk rather than a row.
+         */
+        Route::post('assets', [AssetController::class, 'store'])
+            ->middleware('throttle:uploads')
+            ->name('assets.store');
+        Route::patch('assets/{asset}', [AssetController::class, 'update'])->name('assets.update');
+        Route::delete('assets/{asset}', [AssetController::class, 'destroy'])->name('assets.destroy');
 
         /*
          * The composer's attachment tray. A file is uploaded while the composer

@@ -470,7 +470,8 @@ function ProjectCard({
      * every project in the workspace, while the sidebar counts the ones you are
      * on. Without this the difference had no explanation and no remedy.
      */
-    const hasMenu = canMove || project.abilities.join || project.abilities.leave;
+    const hasMenu =
+        canMove || project.abilities.join || project.abilities.leave;
 
     return (
         <div className="relative h-full">
@@ -613,38 +614,38 @@ function ProjectCardMenu({
                 )}
 
                 {canMove && (
-                <DropdownMenuRadioGroup
-                    value={current}
-                    onValueChange={(value) => {
-                        if (value === current) {
-                            return;
-                        }
+                    <DropdownMenuRadioGroup
+                        value={current}
+                        onValueChange={(value) => {
+                            if (value === current) {
+                                return;
+                            }
 
-                        router.patch(
-                            assignGroup.url([workspaceSlug, project.slug]),
-                            {
-                                project_group_id:
-                                    value === 'none' ? null : Number(value),
-                            },
-                            { preserveScroll: true },
-                        );
-                    }}
-                >
-                    {groups.map((group) => (
-                        <DropdownMenuRadioItem
-                            key={group.id}
-                            value={String(group.id)}
-                        >
-                            {group.name}
+                            router.patch(
+                                assignGroup.url([workspaceSlug, project.slug]),
+                                {
+                                    project_group_id:
+                                        value === 'none' ? null : Number(value),
+                                },
+                                { preserveScroll: true },
+                            );
+                        }}
+                    >
+                        {groups.map((group) => (
+                            <DropdownMenuRadioItem
+                                key={group.id}
+                                value={String(group.id)}
+                            >
+                                {group.name}
+                            </DropdownMenuRadioItem>
+                        ))}
+
+                        <DropdownMenuSeparator />
+
+                        <DropdownMenuRadioItem value="none">
+                            Ungrouped
                         </DropdownMenuRadioItem>
-                    ))}
-
-                    <DropdownMenuSeparator />
-
-                    <DropdownMenuRadioItem value="none">
-                        Ungrouped
-                    </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
+                    </DropdownMenuRadioGroup>
                 )}
             </DropdownMenuContent>
         </DropdownMenu>

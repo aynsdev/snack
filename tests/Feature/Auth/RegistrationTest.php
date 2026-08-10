@@ -152,7 +152,15 @@ test('registration derives a unique username', function () {
         auth()->logout();
     }
 
+    /*
+     * Ordered explicitly. Postgres makes no promise about the order of an
+     * unordered select, and the assertion below is specifically that the *first*
+     * registration got the undecorated name — so without this the test passes or
+     * fails depending on how the table happens to be laid out, which changes as
+     * unrelated tests are added ahead of it.
+     */
     $usernames = User::whereIn('email', ['first@snack.test', 'second@snack.test'])
+        ->orderBy('id')
         ->pluck('username');
 
     expect($usernames)->toHaveCount(2)

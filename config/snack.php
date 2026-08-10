@@ -439,6 +439,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Asset library
+    |--------------------------------------------------------------------------
+    |
+    | Brand kits, company information, contracts — the things a workspace files
+    | on purpose, as opposed to the things it happens to have attached to a
+    | message. The bytes are ordinary attachments on the same private disk and
+    | obey every limit under "uploads" above; what is configured here is the
+    | shape of the library around them.
+    |
+    | The nesting bound lives on App\Models\AssetFolder as MAX_DEPTH rather than
+    | here, for the reason SearchQuery::MIN_TERM_LENGTH does: the model's own
+    | tree walks are written against it, and a value they had to reach into the
+    | container for could not be unit-tested.
+    |
+    */
+
+    'assets' => [
+        /*
+         * Assets per page of one shelf. Larger than a list would need because
+         * the default view is a gallery of thumbnails — a screen holds far more
+         * tiles than rows, and a "load more" button two scrolls down reads as
+         * the library being smaller than it is.
+         */
+        'page_size' => 60,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Avatars
     |--------------------------------------------------------------------------
     |
@@ -454,7 +482,18 @@ return [
     */
 
     'avatars' => [
-        'disk' => 'public',
+        /*
+         * Configurable so a deployment can move faces onto object storage and a
+         * CDN — `spaces_public` in production, the local `public` disk in
+         * development. Read through this key on *both* sides: the actions that
+         * write an avatar and the accessors that build its URL
+         * ({@see App\Models\User::avatarUrl()},
+         * {@see App\Models\Workspace::logoUrl()}). They used to disagree — the
+         * write honoured this setting and the read hardcoded `public` — which
+         * meant changing it silently pointed every avatar in the product at a
+         * disk the bytes were not on.
+         */
+        'disk' => env('SNACK_AVATAR_DISK', 'public'),
         'max_size_kb' => 4096,
         'dimension' => 512,
     ],

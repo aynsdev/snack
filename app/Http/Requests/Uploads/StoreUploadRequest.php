@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Uploads;
 
-use Closure;
+use App\Http\Requests\Concerns\RefusesExecutableUploads;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
 
@@ -17,16 +17,13 @@ use Illuminate\Http\UploadedFile;
  *
  * # What is refused
  *
- * A deny list rather than an allow list. "Documents people share at work" is a
- * list nobody can finish, and every omission reads to the user as a broken
- * product. What has to be refused is the much shorter list of things a browser
- * or an operating system will *execute* — so that is what is enumerated, and it
- * is checked against the extension *and* the detected MIME type, because either
- * alone is trivially wrong: a client sends whatever MIME type it likes, and an
- * extension is just the tail of a string.
+ * A deny list rather than an allow list — see {@see RefusesExecutableUploads},
+ * which is shared with the asset library so the rule exists once.
  */
 class StoreUploadRequest extends FormRequest
 {
+    use RefusesExecutableUploads;
+
     /**
      * @return array<string, mixed>
      */
@@ -66,26 +63,5 @@ class StoreUploadRequest extends FormRequest
         $file = $this->file('file');
 
         return $file instanceof UploadedFile ? $file : null;
-    }
-
-    private function notExecutable(): Closure
-    {
-        return function (string $attribute, mixed $value, Closure $fail): void {
-            if (! $value instanceof UploadedFile) {
-                return;
-            }
-
-            $extension = strtolower($value->getClientOriginalExtension());
-            $mimeType = strtolower($value->getMimeType() ?? '');
-
-            /** @var array<int, string> $extensions */
-            $extensions = config('snack.uploads.blocked_extensions', []);
-            /** @var array<int, string> $mimeTypes */
-            $mimeTypes = config('snack.uploads.blocked_mime_types', []);
-
-            if (in_array($extension, $extensions, true) || in_array($mimeType, $mimeTypes, true)) {
-                $fail('That kind of file cannot be shared here.');
-            }
-        };
     }
 }

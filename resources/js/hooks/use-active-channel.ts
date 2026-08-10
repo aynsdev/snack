@@ -160,6 +160,32 @@ export function useActiveProjectSlug(): string | null {
 }
 
 /**
+ * Whether the current page is anywhere in the asset library — the top of it, or
+ * a folder inside it.
+ */
+export function useIsAssetsView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/assets(?:[/?#]|$)/.test(currentUrl);
+}
+
+/**
+ * The folder id in the current URL, or null at the top of the library.
+ *
+ * Derived from the URL for the reason every other "where am I" answer is: the
+ * sidebar sits above the page in the tree, and threading it down would mean
+ * every page declaring which folder it is.
+ */
+export function useActiveAssetFolderId(): number | null {
+    const { currentUrl } = useCurrentUrl();
+
+    // /w/{workspace}/assets/folders/{id}
+    const match = currentUrl.match(/^\/w\/[^/]+\/assets\/folders\/(\d+)/);
+
+    return match?.[1] ? Number(match[1]) : null;
+}
+
+/**
  * Whether the current page is anywhere in Projects — the list, or a board.
  */
 export function useIsProjectsView(): boolean {

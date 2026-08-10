@@ -157,6 +157,31 @@ class Workspace extends Model
     }
 
     /**
+     * The shelves of this workspace's asset library.
+     *
+     * Also what `assets/folders/{assetFolder}` scopes through, so a folder id
+     * from another tenant 404s at the router rather than reaching a policy that
+     * would have to catch it — the same job {@see self::tasks()} does.
+     *
+     * @return HasMany<AssetFolder, $this>
+     */
+    public function assetFolders(): HasMany
+    {
+        return $this->hasMany(AssetFolder::class);
+    }
+
+    /**
+     * Everything on those shelves, including the things at the top of the
+     * library that are on no shelf at all.
+     *
+     * @return HasMany<Asset, $this>
+     */
+    public function assets(): HasMany
+    {
+        return $this->hasMany(Asset::class);
+    }
+
+    /**
      * The recurring standups the bot runs in this workspace.
      *
      * @return HasMany<Standup, $this>
@@ -338,7 +363,11 @@ class Workspace extends Model
             return null;
         }
 
-        return Storage::disk('public')->url($this->logo_path);
+        // The configured disk, for the reason {@see User::avatarUrl()} reads it:
+        // the write side already did, and the two disagreeing meant a logo on
+        // object storage was requested from the local public disk.
+        return Storage::disk((string) config('snack.avatars.disk', 'public'))
+            ->url($this->logo_path);
     }
 
     /**
