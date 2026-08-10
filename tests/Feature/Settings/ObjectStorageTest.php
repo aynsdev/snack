@@ -69,13 +69,6 @@ it('keeps both spaces disks on one s3 driver with opposite visibility', function
         ->and($private['use_path_style_endpoint'])->toBeFalse();
 });
 
-it('falls back to the private bucket when no public bucket is named', function () {
-    // The single-bucket deployment: public avatars sit in the private bucket
-    // under per-object ACLs rather than in a second bucket of their own.
-    expect(config('filesystems.disks.spaces_public.bucket'))
-        ->toBe(config('filesystems.disks.spaces.bucket'));
-});
-
 /**
  * The bug this covers reached production.
  *
@@ -85,19 +78,50 @@ it('falls back to the private bucket when no public bucket is named', function (
  * public disk was therefore configured with a bucket named empty string, and
  * because these disks used to have `throw => false`, every avatar write returned
  * a quiet `false` and looked exactly like a success.
+ *
+ * Evaluated against a controlled environment rather than against whatever is in
+ * the runner's `.env` — the suite pins the Spaces keys to blank precisely so it
+ * can never reach a real bucket, so asserting on the ambient config would be
+ * asserting on nothing.
  */
-it('treats an empty public bucket as unset rather than as a bucket named ""', function () {
-    $resolve = fn (?string $public, string $private): string => $public === null || $public === ''
-        ? $private
-        : $public;
+it('treats an empty public bucket as unset rather than as a bucket named ""', function (
+    ?string $publicBucket,
+    string $expected,
+) {
+    $restore = [
+        'SPACES_BUCKET' => $_SERVER['SPACES_BUCKET'] ?? null,
+        'SPACES_PUBLIC_BUCKET' => $_SERVER['SPACES_PUBLIC_BUCKET'] ?? null,
+    ];
 
-    expect($resolve('', 'private-bucket'))->toBe('private-bucket')
-        ->and($resolve(null, 'private-bucket'))->toBe('private-bucket')
-        ->and($resolve('public-bucket', 'private-bucket'))->toBe('public-bucket');
+    $set = function (string $key, ?string $value): void {
+        if ($value === null) {
+            unset($_ENV[$key], $_SERVER[$key]);
+            putenv($key);
 
-    // And the config itself never yields an empty bucket, whatever the env says.
-    expect(config('filesystems.disks.spaces_public.bucket'))->not->toBe('');
-});
+            return;
+        }
+
+        $_ENV[$key] = $_SERVER[$key] = $value;
+        putenv("$key=$value");
+    };
+
+    $set('SPACES_BUCKET', 'private-bucket');
+    $set('SPACES_PUBLIC_BUCKET', $publicBucket);
+
+    // Re-evaluate the config file itself, so this exercises the real expression
+    // rather than a re-implementation of it that could drift.
+    $disks = require base_path('config/filesystems.php');
+
+    foreach ($restore as $key => $value) {
+        $set($key, $value);
+    }
+
+    expect($disks['disks']['spaces_public']['bucket'])->toBe($expected);
+})->with([
+    'empty string falls back' => ['', 'private-bucket'],
+    'absent falls back' => [null, 'private-bucket'],
+    'a real value wins' => ['public-bucket', 'public-bucket'],
+]);
 
 /**
  * A remote disk that swallows its failures is worse than one that has none: the

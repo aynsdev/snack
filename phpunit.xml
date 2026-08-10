@@ -56,6 +56,26 @@
         <env name="DB_DATABASE" value="snack_testing"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
+        <!--
+         | Storage is pinned to the local disks for the same reason the mailer is
+         | pinned to "array": the suite must not be able to reach anything real.
+         |
+         | These are not decoration. The tests fake "local" and "public" by name,
+         | so with SNACK_UPLOAD_DISK=spaces in a developer's .env the application
+         | wrote past the fake and straight into the live DigitalOcean bucket —
+         | one `pest` run put eleven objects in it, including files named .env,
+         | while the assertions failed against the empty fake. Whatever a
+         | developer or a CI box has configured, the suite writes to disk here.
+        -->
+        <env name="FILESYSTEM_DISK" value="local"/>
+        <env name="SNACK_UPLOAD_DISK" value="local"/>
+        <env name="SNACK_AVATAR_DISK" value="public"/>
+        <!-- Blank, so a misconfigured "spaces" disk cannot authenticate even if
+             something reaches for it by name. -->
+        <env name="SPACES_KEY" value=""/>
+        <env name="SPACES_SECRET" value=""/>
+        <env name="SPACES_BUCKET" value=""/>
+        <env name="SPACES_ENDPOINT" value=""/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
