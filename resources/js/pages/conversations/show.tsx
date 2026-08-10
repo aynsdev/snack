@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AddPeopleDialog } from '@/components/snack/add-people-dialog';
+import { ContainerCanvasTabs } from '@/components/snack/container-canvas-tabs';
 import { HuddleBar } from '@/components/snack/huddle/huddle-bar';
 import { HuddleButton } from '@/components/snack/huddle/huddle-button';
 import type { MentionSource } from '@/components/snack/mention-picker';
@@ -37,11 +38,13 @@ import { useTyping } from '@/hooks/use-typing';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
 import { channels } from '@/lib/echo';
 import { show as showConversation } from '@/routes/conversations';
+import { store as storeConversationCanvas } from '@/routes/conversations/canvases';
 import { store as conversationMessageStore } from '@/routes/conversations/messages';
 import { destroy as leaveConversation } from '@/routes/conversations/participants';
 import { update as updatePreferences } from '@/routes/conversations/preferences';
 import type {
     Conversation,
+    CanvasDocument,
     Huddle as HuddleType,
     Message,
     MessagePage,
@@ -51,6 +54,8 @@ import type {
 type Props = {
     conversation: Conversation;
     canPost: boolean;
+    canCreateCanvas: boolean;
+    canvases: CanvasDocument[];
     canManage: boolean;
     canAddPeople: boolean;
     canLeave: boolean;
@@ -68,6 +73,8 @@ type Props = {
 export default function ConversationShow({
     conversation,
     canPost,
+    canCreateCanvas,
+    canvases,
     canManage,
     canAddPeople,
     canLeave,
@@ -137,6 +144,16 @@ export default function ConversationShow({
                                 : { kind: 'details' },
                         )
                     }
+                />
+
+                <ContainerCanvasTabs
+                    canvases={canvases}
+                    canCreate={canCreateCanvas}
+                    menuLabel="Add to this conversation"
+                    createUrl={storeConversationCanvas.url({
+                        workspace: workspace.slug,
+                        conversation: conversation.id,
+                    })}
                 />
 
                 <HuddleBar

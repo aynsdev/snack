@@ -1,3 +1,5 @@
+import type { JSONContent } from '@tiptap/core';
+
 /**
  * Snack domain types.
  *
@@ -615,6 +617,31 @@ export type LibraryAsset = {
     creator: SnackUser | null;
     created_at: string | null;
     can_manage: boolean;
+};
+
+// -- Canvases ---------------------------------------------------------------
+
+/** A shared workspace document. Mirrors App\Http\Resources\CanvasResource. */
+export type CanvasDocument = {
+    id: string;
+    title: string;
+    /** Present on the document page, omitted from the browse payload. */
+    body?: string;
+    content?: JSONContent | null;
+    /** Present on the document page, omitted from the browse payload. */
+    cover_url?: string | null;
+    excerpt: string;
+    creator: SnackUser | null;
+    editor: SnackUser | null;
+    created_at: string | null;
+    updated_at: string | null;
+    can_update: boolean;
+    can_delete: boolean;
+    container?: {
+        type: 'channel' | 'conversation';
+        label: string;
+        url: string;
+    } | null;
 };
 
 // -- Search ------------------------------------------------------------------

@@ -655,6 +655,130 @@
     .snack-typing-dot:nth-child(3) {
         animation-delay: -0.8s;
     }
+
+    .canvas-tiptap {
+        @apply text-base leading-7 text-foreground;
+    }
+
+    .canvas-tiptap > * + * {
+        @apply mt-3;
+    }
+
+    .canvas-tiptap h1 {
+        @apply mt-8 text-3xl font-bold tracking-tight text-balance;
+    }
+
+    .canvas-tiptap h2 {
+        @apply mt-7 text-2xl font-bold tracking-tight text-balance;
+    }
+
+    .canvas-tiptap h3 {
+        @apply mt-6 text-xl font-semibold text-balance;
+    }
+
+    .canvas-tiptap ul:not([data-type='taskList']) {
+        @apply list-disc pl-6;
+    }
+
+    .canvas-tiptap ol {
+        @apply list-decimal pl-6;
+    }
+
+    .canvas-tiptap li > p {
+        @apply my-1;
+    }
+
+    .canvas-tiptap ul[data-type='taskList'] {
+        @apply list-none pl-0;
+    }
+
+    .canvas-tiptap ul[data-type='taskList'] li {
+        @apply flex items-start gap-2;
+    }
+
+    .canvas-tiptap ul[data-type='taskList'] li > label {
+        @apply mt-1.5 shrink-0;
+    }
+
+    .canvas-tiptap ul[data-type='taskList'] li > div {
+        @apply min-w-0 flex-1;
+    }
+
+    .canvas-tiptap blockquote {
+        @apply border-l-4 border-brand/50 pl-4 text-muted-foreground italic;
+    }
+
+    .canvas-tiptap code {
+        @apply rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em];
+    }
+
+    .canvas-tiptap pre {
+        @apply overflow-x-auto rounded-xl border border-border bg-muted p-4 text-sm;
+    }
+
+    .canvas-tiptap pre code {
+        @apply bg-transparent p-0;
+    }
+
+    .canvas-tiptap a {
+        @apply text-brand underline decoration-brand/40 underline-offset-4;
+    }
+
+    .canvas-tiptap hr {
+        @apply my-8 border-border;
+    }
+
+    .canvas-tiptap img {
+        @apply h-auto max-w-full rounded-xl border border-border;
+    }
+
+    .canvas-tiptap iframe {
+        @apply aspect-video h-auto w-full rounded-xl border border-border;
+    }
+
+    .canvas-tiptap details {
+        @apply rounded-lg border border-border bg-card px-4 py-3;
+    }
+
+    .canvas-tiptap details summary {
+        @apply cursor-pointer font-semibold;
+    }
+
+    .canvas-tiptap .tableWrapper {
+        @apply my-5 overflow-x-auto;
+    }
+
+    .canvas-tiptap table {
+        @apply w-full table-fixed border-collapse;
+    }
+
+    .canvas-tiptap th,
+    .canvas-tiptap td {
+        @apply relative min-w-24 border border-border px-3 py-2 align-top;
+    }
+
+    .canvas-tiptap th {
+        @apply bg-muted text-left font-semibold;
+    }
+
+    .canvas-tiptap .selectedCell::after {
+        @apply pointer-events-none absolute inset-0 bg-brand/10;
+        content: '';
+    }
+
+    .canvas-tiptap .column-resize-handle {
+        @apply pointer-events-none absolute top-0 right-[-2px] bottom-0 w-1 bg-brand;
+    }
+
+    .canvas-tiptap .ProseMirror-selectednode {
+        @apply ring-2 ring-brand ring-offset-2 ring-offset-background;
+    }
+
+    .canvas-tiptap p.is-editor-empty:first-child::before,
+    .canvas-tiptap .is-empty::before {
+        @apply pointer-events-none float-left h-0 text-muted-foreground;
+        content: attr(data-placeholder);
+    }
 }
 
 /*

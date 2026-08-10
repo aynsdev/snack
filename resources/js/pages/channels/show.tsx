@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { AddChannelMembersDialog } from '@/components/snack/add-channel-members-dialog';
 import { ChannelIcon } from '@/components/snack/channel-icon';
 import { ChannelSettingsDialog } from '@/components/snack/channel-settings-dialog';
+import { ContainerCanvasTabs } from '@/components/snack/container-canvas-tabs';
 import { HuddleBar } from '@/components/snack/huddle/huddle-bar';
 import { HuddleButton } from '@/components/snack/huddle/huddle-button';
 import type { MentionSource } from '@/components/snack/mention-picker';
@@ -24,11 +25,13 @@ import { useTyping } from '@/hooks/use-typing';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
 import { channels } from '@/lib/echo';
 import { show as showChannel } from '@/routes/channels';
+import { store as storeChannelCanvas } from '@/routes/channels/canvases';
 import { store as joinChannel } from '@/routes/channels/membership';
 import { index as mentionable } from '@/routes/channels/mentionable';
 import { store as messageStore } from '@/routes/channels/messages';
 import type {
     Channel,
+    CanvasDocument,
     Huddle as HuddleType,
     Message,
     MessagePage,
@@ -38,6 +41,8 @@ import type {
 type Props = {
     channel: Channel;
     canPost: boolean;
+    canCreateCanvas: boolean;
+    canvases: CanvasDocument[];
     canManage: boolean;
     canPin: boolean;
     /**
@@ -59,6 +64,8 @@ type Props = {
 export default function ChannelShow({
     channel,
     canPost,
+    canCreateCanvas,
+    canvases,
     canManage,
     canPin,
     canHuddle,
@@ -128,6 +135,16 @@ export default function ChannelShow({
                         )
                     }
                     onEdit={() => setEditing(true)}
+                />
+
+                <ContainerCanvasTabs
+                    canvases={canvases}
+                    canCreate={canCreateCanvas}
+                    menuLabel="Add to this channel"
+                    createUrl={storeChannelCanvas.url({
+                        workspace: workspace.slug,
+                        channel: channel.slug,
+                    })}
                 />
 
                 {/*

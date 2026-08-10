@@ -85,6 +85,13 @@ export function useIsFilesView(): boolean {
     return /^\/w\/[^/]+\/files(?:[/?#]|$)/.test(currentUrl);
 }
 
+/** Whether the current page is the canvas browser or a canvas document. */
+export function useIsCanvasesView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/canvases(?:[/?#]|$)/.test(currentUrl);
+}
+
 /**
  * Whether the current page belongs to Activity.
  *

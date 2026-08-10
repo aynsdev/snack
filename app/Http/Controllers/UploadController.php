@@ -68,6 +68,8 @@ class UploadController extends Controller
                 // with its id, and the library would be left holding a row with
                 // no bytes behind it.
                 && $attachment->asset_id === null
+                // Canvas covers are document state, removed from the Canvas.
+                && $attachment->canvas_id === null
                 && $attachment->uploaded_by === $request->user()->id,
             404,
         );

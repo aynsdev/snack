@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $message_id
  * @property int|null $task_id
  * @property int|null $asset_id
+ * @property int|null $canvas_id
  * @property int $uploaded_by
  * @property string $disk
  * @property string $path
@@ -36,9 +37,10 @@ use Illuminate\Support\Carbon;
  * @property-read Message|null $message
  * @property-read Task|null $task
  * @property-read Asset|null $asset
+ * @property-read Canvas|null $canvas
  */
 #[Fillable([
-    'workspace_id', 'message_id', 'task_id', 'asset_id', 'uploaded_by', 'disk', 'path',
+    'workspace_id', 'message_id', 'task_id', 'asset_id', 'canvas_id', 'uploaded_by', 'disk', 'path',
     'thumbnail_path', 'original_name', 'mime_type', 'size', 'metadata',
 ])]
 #[Hidden(['disk', 'path', 'thumbnail_path'])]
@@ -90,7 +92,7 @@ class MessageAttachment extends Model
     /**
      * The library entry these bytes are the file behind.
      *
-     * The third and last owner an attachment can have. Unlike the other two it
+     * The asset-library owner. Unlike messages and tasks it
      * is written at the same moment the row is created — a library upload names
      * its destination up front, so there is no window in which the file is
      * unclaimed and nothing for the orphan sweep to race with.
@@ -100,6 +102,17 @@ class MessageAttachment extends Model
     public function asset(): BelongsTo
     {
         return $this->belongsTo(Asset::class);
+    }
+
+    /**
+     * The Canvas this image covers. It remains on the private attachment disk
+     * and is authorized through the same Canvas policy as the document.
+     *
+     * @return BelongsTo<Canvas, $this>
+     */
+    public function canvas(): BelongsTo
+    {
+        return $this->belongsTo(Canvas::class);
     }
 
     /**
@@ -125,7 +138,11 @@ class MessageAttachment extends Model
      */
     public function scopeOrphaned(Builder $query): void
     {
-        $query->whereNull('message_id')->whereNull('task_id')->whereNull('asset_id');
+        $query
+            ->whereNull('message_id')
+            ->whereNull('task_id')
+            ->whereNull('asset_id')
+            ->whereNull('canvas_id');
     }
 
     /**

@@ -30,6 +30,7 @@ use Illuminate\Support\Str;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Workspace $workspace
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Canvas> $canvases
  */
 #[Fillable(['workspace_id', 'created_by', 'public_id', 'type', 'name', 'participants_hash', 'last_message_at'])]
 class Conversation extends Model
@@ -156,6 +157,12 @@ class Conversation extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(Message::class);
+    }
+
+    /** @return HasMany<Canvas, $this> */
+    public function canvases(): HasMany
+    {
+        return $this->hasMany(Canvas::class)->orderBy('id');
     }
 
     /**

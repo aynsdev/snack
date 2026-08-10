@@ -4,6 +4,8 @@ use App\Http\Controllers\Activity\ActivityController;
 use App\Http\Controllers\Assets\AssetController;
 use App\Http\Controllers\Assets\AssetFolderController;
 use App\Http\Controllers\Assets\AssetLibraryController;
+use App\Http\Controllers\CanvasController;
+use App\Http\Controllers\CanvasCoverController;
 use App\Http\Controllers\Channels\ChannelArchiveController;
 use App\Http\Controllers\Channels\ChannelController;
 use App\Http\Controllers\Channels\ChannelGroupController;
@@ -433,6 +435,21 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::get('files', [FileBrowserController::class, 'index'])
             ->middleware('throttle:message-reads')
             ->name('files.index');
+
+        /*
+         * Canvases: durable workspace documents for plans, notes, and shared
+         * reference material. `{canvas}` resolves through Workspace::canvases()
+         * because this route group uses scoped bindings.
+         */
+        Route::get('canvases', [CanvasController::class, 'index'])->name('canvases.index');
+        Route::post('canvases', [CanvasController::class, 'store'])->name('canvases.store');
+        Route::post('channels/{channel}/canvases', [CanvasController::class, 'storeForChannel'])->name('channels.canvases.store');
+        Route::post('dms/{conversation}/canvases', [CanvasController::class, 'storeForConversation'])->name('conversations.canvases.store');
+        Route::get('canvases/{canvas}', [CanvasController::class, 'show'])->name('canvases.show');
+        Route::patch('canvases/{canvas}', [CanvasController::class, 'update'])->name('canvases.update');
+        Route::delete('canvases/{canvas}', [CanvasController::class, 'destroy'])->name('canvases.destroy');
+        Route::post('canvases/{canvas}/cover', [CanvasCoverController::class, 'store'])->name('canvases.cover.store');
+        Route::delete('canvases/{canvas}/cover', [CanvasCoverController::class, 'destroy'])->name('canvases.cover.destroy');
 
         /*
          * The asset library: brand kits, company information, the documents

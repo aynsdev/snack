@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     Bookmark,
+    FileText,
     Folder,
     House,
     Images,
@@ -26,6 +27,7 @@ import {
     useActiveConversationId,
     useIsActivityView,
     useIsAssetsView,
+    useIsCanvasesView,
     useIsFilesView,
     useIsHomeView,
     useIsProjectsView,
@@ -41,6 +43,7 @@ import {
 import { cn } from '@/lib/utils';
 import { index as activityIndex } from '@/routes/activity';
 import { index as assetsIndex } from '@/routes/assets';
+import { index as canvasesIndex } from '@/routes/canvases';
 import { index as dmsIndex } from '@/routes/conversations';
 import { index as filesIndex } from '@/routes/files';
 import { index as projectsIndex } from '@/routes/projects';
@@ -90,6 +93,7 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
     const isActivity = useIsActivityView();
     const isSaved = useIsSavedView();
     const isFiles = useIsFilesView();
+    const isCanvases = useIsCanvasesView();
     const isProjects = useIsProjectsView();
     const isAssets = useIsAssetsView();
 
@@ -173,6 +177,14 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
                     label="Files"
                     href={filesIndex(workspace.slug)}
                     isActive={isFiles}
+                    onNavigate={onNavigate}
+                />
+
+                <NavRailItem
+                    icon={FileText}
+                    label="Canvases"
+                    href={canvasesIndex(workspace.slug)}
+                    isActive={isCanvases}
                     onNavigate={onNavigate}
                 />
 

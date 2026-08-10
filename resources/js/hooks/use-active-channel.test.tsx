@@ -2,6 +2,7 @@ import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     useIsActivityView,
+    useIsCanvasesView,
     useIsDirectMessagesView,
     useIsHomeView,
 } from '@/hooks/use-active-channel';
@@ -73,5 +74,18 @@ describe('useIsActivityView', () => {
         expect(
             at('/w/snack-hq/notification-preferences', useIsActivityView),
         ).toBe(false);
+    });
+});
+
+describe('useIsCanvasesView', () => {
+    it('covers the canvas browser and documents inside it', () => {
+        expect(at('/w/snack-hq/canvases', useIsCanvasesView)).toBe(true);
+        expect(at('/w/snack-hq/canvases/01K2CANVAS', useIsCanvasesView)).toBe(
+            true,
+        );
+    });
+
+    it('does not spill onto a path that merely starts the same', () => {
+        expect(at('/w/snack-hq/canvases-old', useIsCanvasesView)).toBe(false);
     });
 });

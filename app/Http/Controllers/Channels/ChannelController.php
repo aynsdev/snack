@@ -8,10 +8,12 @@ use App\Actions\Messages\TogglePin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Channels\StoreChannelRequest;
 use App\Http\Requests\Channels\UpdateChannelRequest;
+use App\Http\Resources\CanvasResource;
 use App\Http\Resources\ChannelResource;
 use App\Http\Resources\LiveHuddle;
 use App\Http\Resources\MessageResource;
 use App\Http\Resources\UserResource;
+use App\Models\Canvas;
 use App\Models\Channel;
 use App\Models\Huddle;
 use App\Models\Message;
@@ -114,8 +116,18 @@ class ChannelController extends Controller
         // pointer and mute flag without a second query.
         $channel->load(['members' => fn ($query) => $query->where('user_id', $user->id)]);
 
+        $canvases = $channel->canvases()
+            ->with(['creator', 'editor'])
+            ->get()
+            ->each(fn ($canvas) => $canvas
+                ->setRelation('workspace', $workspace)
+                ->setRelation('channel', $channel));
+
         return Inertia::render('channels/show', [
             'channel' => (new ChannelResource($channel))->resolve($request),
+            'canvases' => CanvasResource::collection($canvases)->resolve($request),
+            'canCreateCanvas' => $user->can('create', [Canvas::class, $workspace])
+                && $user->can('post', $channel),
             'canPost' => $user->can('post', $channel),
             'canManage' => $user->can('update', $channel),
             'canPin' => $user->can('pinMessages', $channel),

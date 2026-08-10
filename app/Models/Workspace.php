@@ -182,6 +182,19 @@ class Workspace extends Model
     }
 
     /**
+     * The shared documents in this workspace.
+     *
+     * Also scopes `{canvas}` route binding so a document from another tenant is
+     * rejected by the router before its policy is reached.
+     *
+     * @return HasMany<Canvas, $this>
+     */
+    public function canvases(): HasMany
+    {
+        return $this->hasMany(Canvas::class);
+    }
+
+    /**
      * The recurring standups the bot runs in this workspace.
      *
      * @return HasMany<Standup, $this>

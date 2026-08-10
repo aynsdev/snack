@@ -4,6 +4,7 @@ namespace App\Actions\Attachments;
 
 use App\Jobs\ProcessAttachment;
 use App\Models\Asset;
+use App\Models\Canvas;
 use App\Models\MessageAttachment;
 use App\Models\Task;
 use App\Models\User;
@@ -44,6 +45,8 @@ class StoreUpload
      *                             behind. Like a card, it exists before the
      *                             upload does, so the row is owned from the
      *                             moment it is written.
+     * @param  Canvas|null  $canvas  The document this image covers. A Canvas
+     *                               has at most one cover attachment.
      */
     public function handle(
         Workspace $workspace,
@@ -51,11 +54,12 @@ class StoreUpload
         UploadedFile $file,
         ?Task $task = null,
         ?Asset $asset = null,
+        ?Canvas $canvas = null,
     ): MessageAttachment {
         $disk = (string) config('snack.uploads.disk', 'local');
 
         $path = Storage::disk($disk)->putFileAs(
-            $this->directory($workspace, $asset !== null),
+            $this->directory($workspace, $asset, $canvas),
             $file,
             Str::ulid()->toBase32().$this->extension($file),
         );
@@ -65,6 +69,7 @@ class StoreUpload
             'message_id' => null,
             'task_id' => $task?->id,
             'asset_id' => $asset?->id,
+            'canvas_id' => $canvas?->id,
             'uploaded_by' => $uploader->id,
             'disk' => $disk,
             'path' => (string) $path,
@@ -100,12 +105,21 @@ class StoreUpload
      * small set of things somebody is expected to be able to restore from backup
      * a year later. Keeping them apart is what makes that separable.
      */
-    private function directory(Workspace $workspace, bool $isAsset = false): string
-    {
+    private function directory(
+        Workspace $workspace,
+        ?Asset $asset = null,
+        ?Canvas $canvas = null,
+    ): string {
+        $owner = match (true) {
+            $asset !== null => 'assets',
+            $canvas !== null => 'canvases',
+            default => 'attachments',
+        };
+
         return sprintf(
             'workspaces/%d/%s/%s',
             $workspace->id,
-            $isAsset ? 'assets' : 'attachments',
+            $owner,
             now()->format('Y/m'),
         );
     }

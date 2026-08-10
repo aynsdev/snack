@@ -130,6 +130,16 @@ class DownloadController extends Controller
             return;
         }
 
+        if ($attachment->canvas_id !== null) {
+            $canvas = $attachment->canvas;
+
+            abort_if($canvas === null, 404);
+
+            Gate::authorize('view', $canvas);
+
+            return;
+        }
+
         if ($attachment->message_id === null) {
             abort_unless($attachment->uploaded_by === $user->id, 404);
 

@@ -8,9 +8,11 @@ use App\Actions\Messages\TogglePin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Conversations\StoreConversationRequest;
 use App\Http\Requests\Conversations\UpdateConversationRequest;
+use App\Http\Resources\CanvasResource;
 use App\Http\Resources\ConversationResource;
 use App\Http\Resources\LiveHuddle;
 use App\Http\Resources\MessageResource;
+use App\Models\Canvas;
 use App\Models\Conversation;
 use App\Models\Huddle;
 use App\Models\Message;
@@ -121,8 +123,18 @@ class ConversationController extends Controller
             'participants' => fn ($query) => $query->where('user_id', $user->id),
         ]);
 
+        $canvases = $conversation->canvases()
+            ->with(['creator', 'editor'])
+            ->get()
+            ->each(fn ($canvas) => $canvas
+                ->setRelation('workspace', $workspace)
+                ->setRelation('conversation', $conversation));
+
         return Inertia::render('conversations/show', [
             'conversation' => (new ConversationResource($conversation))->resolve($request),
+            'canvases' => CanvasResource::collection($canvases)->resolve($request),
+            'canCreateCanvas' => $user->can('create', [Canvas::class, $workspace])
+                && $user->can('post', $conversation),
             'canPost' => $user->can('post', $conversation),
             'canManage' => $user->can('rename', $conversation),
             'canAddPeople' => $user->can('addParticipants', $conversation),

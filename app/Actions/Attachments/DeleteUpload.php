@@ -10,9 +10,10 @@ use Throwable;
 /**
  * Removes an attachment and the bytes behind it.
  *
- * Used for three things: an author changing their mind in the composer, the
+ * Used for an author changing their mind in the composer, the
  * scheduled sweep of uploads that were never sent, and taking something off a
- * shelf in the asset library. All three delete the row *and* the file — an
+ * shelf in the asset library, a task, or a Canvas. Every path deletes the row
+ * *and* the file — an
  * orphaned object on the disk is invisible to every query in the application and
  * would never be found again.
  *

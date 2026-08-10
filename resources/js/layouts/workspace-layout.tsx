@@ -10,7 +10,10 @@ import { NavRail } from '@/components/snack/nav-rail';
 import { WorkspaceRail } from '@/components/snack/workspace-rail';
 import { WorkspaceSidebar } from '@/components/snack/workspace-sidebar';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { useIsActivityView } from '@/hooks/use-active-channel';
+import {
+    useIsActivityView,
+    useIsCanvasesView,
+} from '@/hooks/use-active-channel';
 import { HuddleProvider } from '@/hooks/use-huddle';
 import { LivePresenceProvider } from '@/hooks/use-live-presence';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -43,6 +46,7 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     const currentUser = useCurrentUser();
     const isMobile = useIsMobile();
     const isActivityView = useIsActivityView();
+    const isCanvasesView = useIsCanvasesView();
     const enteredWorkspace = usePage().props.flash.entered_workspace;
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -145,7 +149,7 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
                      * of rooms beside it is a list of places none of those rows
                      * are in — the rail on the left is enough to leave by.
                      */}
-                    {!isActivityView && (
+                    {!isActivityView && !isCanvasesView && (
                         <aside className="hidden w-64 shrink-0 border-r border-sidebar-border md:block lg:w-72">
                             <WorkspaceSidebar />
                         </aside>
