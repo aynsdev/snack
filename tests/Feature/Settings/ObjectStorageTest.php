@@ -75,3 +75,37 @@ it('falls back to the private bucket when no public bucket is named', function (
     expect(config('filesystems.disks.spaces_public.bucket'))
         ->toBe(config('filesystems.disks.spaces.bucket'));
 });
+
+/**
+ * The bug this covers reached production.
+ *
+ * `SPACES_PUBLIC_BUCKET=` is the natural way to write "I am not using a second
+ * bucket", and it is what .env.example ships — but it is a *present, empty* key,
+ * and `env('X', $default)` only applies its default when the key is absent. The
+ * public disk was therefore configured with a bucket named empty string, and
+ * because these disks used to have `throw => false`, every avatar write returned
+ * a quiet `false` and looked exactly like a success.
+ */
+it('treats an empty public bucket as unset rather than as a bucket named ""', function () {
+    $resolve = fn (?string $public, string $private): string => $public === null || $public === ''
+        ? $private
+        : $public;
+
+    expect($resolve('', 'private-bucket'))->toBe('private-bucket')
+        ->and($resolve(null, 'private-bucket'))->toBe('private-bucket')
+        ->and($resolve('public-bucket', 'private-bucket'))->toBe('public-bucket');
+
+    // And the config itself never yields an empty bucket, whatever the env says.
+    expect(config('filesystems.disks.spaces_public.bucket'))->not->toBe('');
+});
+
+/**
+ * A remote disk that swallows its failures is worse than one that has none: the
+ * row is written, the UI says the file is there, and the bytes are nowhere. This
+ * is the setting that turns a wrong endpoint into a failed request instead of a
+ * silent no-op.
+ */
+it('makes both spaces disks throw rather than return false', function () {
+    expect(config('filesystems.disks.spaces.throw'))->toBeTrue()
+        ->and(config('filesystems.disks.spaces_public.throw'))->toBeTrue();
+});
