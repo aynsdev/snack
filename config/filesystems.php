@@ -96,6 +96,15 @@ return [
             'secret' => env('SPACES_SECRET'),
             'region' => env('SPACES_REGION', 'sgp1'),
             'bucket' => env('SPACES_BUCKET'),
+            /*
+             * The *region* endpoint — https://sgp1.digitaloceanspaces.com — and
+             * never the bucket's own URL, which is what DigitalOcean's control
+             * panel shows you and is therefore what gets pasted in here.
+             *
+             * The SDK prepends the bucket to this host, so a bucket-qualified
+             * endpoint produces bucket.bucket.sgp1.digitaloceanspaces.com. That
+             * fails TLS: the wildcard certificate matches one label, not two.
+             */
             'endpoint' => env('SPACES_ENDPOINT'),
             /*
              * Spaces uses virtual-host style addressing
@@ -105,7 +114,20 @@ return [
              */
             'use_path_style_endpoint' => false,
             'visibility' => 'private',
-            'throw' => false,
+            /*
+             * Unlike the local disks, these throw.
+             *
+             * Flysystem's default is to return `false` from a failed write, and
+             * for a local disk that is survivable — the failure modes are a full
+             * volume or a permission bug, both of which are loud elsewhere. A
+             * remote disk fails for a dozen ordinary reasons (a wrong endpoint,
+             * an expired key, a bucket in another region) and `false` makes
+             * every one of them look like a successful upload: the row is
+             * written, the UI says the file is there, and the bytes are nowhere.
+             * That is exactly how a misconfigured endpoint reached production
+             * unnoticed. An exception reaches the log and fails the request.
+             */
+            'throw' => true,
             'report' => false,
         ],
 
@@ -122,15 +144,22 @@ return [
              * to reach for, because it lets the private bucket be locked down at
              * the bucket level rather than relying on every write remembering to
              * ask for the right visibility.
+             *
+             * `?:` rather than env()'s own default argument, which only applies
+             * when the key is *absent*. `SPACES_PUBLIC_BUCKET=` — the natural way
+             * to write "I am not using a second bucket", and what .env.example
+             * ships — is present and empty, so the default never fired and every
+             * avatar was written to a bucket named empty string.
              */
-            'bucket' => env('SPACES_PUBLIC_BUCKET', env('SPACES_BUCKET')),
+            'bucket' => env('SPACES_PUBLIC_BUCKET') ?: env('SPACES_BUCKET'),
             'endpoint' => env('SPACES_ENDPOINT'),
             // Where the client is told to fetch from: the CDN edge, not the
             // origin the application writes to.
             'url' => env('SPACES_PUBLIC_URL'),
             'use_path_style_endpoint' => false,
             'visibility' => 'public',
-            'throw' => false,
+            // Throws, for the reason the private disk does.
+            'throw' => true,
             'report' => false,
         ],
 
