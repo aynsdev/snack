@@ -81,6 +81,29 @@ it('leaves out a suspended member', function () {
     expect(sidebarPersonNames($workspace))->not->toContain('Suspended Sam');
 });
 
+it('identifies bot accounts used by apps in the roster', function () {
+    [$workspace] = makeWorkspaceWithOwner();
+    $ada = joinWorkspace($workspace, User::factory()->create(['name' => 'Ada']));
+    joinWorkspace($workspace, User::factory()->create(['name' => 'Bo']));
+    joinWorkspace($workspace, User::factory()->create([
+        'name' => 'Build alerts',
+        'is_bot' => true,
+    ]));
+
+    $this->actingAs($ada);
+
+    $people = collect(sidebarPeople($workspace))
+        ->mapWithKeys(fn (array $person): array => [
+            $person['user']['name'] => $person['is_bot'],
+        ]);
+
+    expect($people)
+        ->toMatchArray([
+            'Bo' => false,
+            'Build alerts' => true,
+        ]);
+});
+
 it('leaves out a member of another workspace', function () {
     [$workspace] = makeWorkspaceWithOwner();
     $ada = joinWorkspace($workspace, User::factory()->create(['name' => 'Ada']));

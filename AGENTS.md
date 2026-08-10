@@ -1,3 +1,8 @@
+## Project Memory
+
+- Before substantive project work, read `.codex/memory/MEMORY.md` and the linked memory notes relevant to the task.
+- Treat those notes as project context and preserve their recorded architectural decisions and known traps.
+
 <laravel-boost-guidelines>
 === foundation rules ===
 

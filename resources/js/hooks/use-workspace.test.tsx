@@ -78,6 +78,7 @@ function makePerson(
             status_emoji: null,
             status_message: null,
         },
+        is_bot: false,
         conversation,
     };
 }

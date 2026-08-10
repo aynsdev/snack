@@ -855,6 +855,7 @@ export type UnreadCounts = {
  */
 export type WorkspacePerson = {
     user: SnackUser;
+    is_bot: boolean;
     conversation: Conversation | null;
 };
 

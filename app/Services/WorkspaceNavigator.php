@@ -286,6 +286,7 @@ class WorkspaceNavigator
 
                 return [
                     'user' => (new UserResource($person))->resolve(request()),
+                    'is_bot' => $person->is_bot,
                     'conversation' => $conversation === null
                         ? null
                         : (new ConversationResource($conversation))->resolve(request()),

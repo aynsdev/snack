@@ -69,8 +69,8 @@ function makeUser(id: number, name: string): SnackUser {
     };
 }
 
-function makePerson(id: number, name: string): WorkspacePerson {
-    return { user: makeUser(id, name), conversation: null };
+function makePerson(id: number, name: string, isBot = false): WorkspacePerson {
+    return { user: makeUser(id, name), is_bot: isBot, conversation: null };
 }
 
 const group: Conversation = {
@@ -240,6 +240,51 @@ describe('WorkspaceSidebar inside direct messages', () => {
 
         expect(screen.getByText('Launch crew')).toBeInTheDocument();
         expect(screen.queryByText('Ada Lovelace')).toBeNull();
+    });
+
+    it('separates people from app and webhook identities', () => {
+        mockWorkspace({
+            conversations: [],
+            people: [
+                makePerson(2, 'Ada Lovelace'),
+                makePerson(3, 'Build alerts', true),
+                makePerson(4, 'Standup bot', true),
+            ],
+        });
+
+        render(<WorkspaceSidebar />);
+
+        const people = screen.getByRole('list', { name: 'People' });
+        const apps = screen.getByRole('list', { name: 'Apps' });
+        const directMessagesSection = screen.getByRole('button', {
+            name: 'Direct messages',
+        });
+        const appsSection = screen.getByRole('button', { name: 'Apps' });
+
+        expect(people).toHaveTextContent('Ada Lovelace');
+        expect(people).not.toHaveTextContent('Build alerts');
+        expect(apps).toHaveTextContent('Build alerts');
+        expect(apps).toHaveTextContent('Standup bot');
+        expect(apps).not.toHaveTextContent('Ada Lovelace');
+        expect(directMessagesSection.querySelectorAll('svg')).toHaveLength(2);
+        expect(appsSection.querySelectorAll('svg')).toHaveLength(2);
+        expect(
+            directMessagesSection.querySelector('.lucide-chevron-down'),
+        ).toHaveClass(
+            'opacity-0',
+            'group-hover/section:opacity-100',
+            'group-focus-visible/section:opacity-100',
+        );
+        expect(
+            directMessagesSection.querySelector('.lucide-message-circle'),
+        ).toHaveClass(
+            'group-hover/section:opacity-0',
+            'group-focus-visible/section:opacity-0',
+        );
+        expect(
+            directMessagesSection.querySelector('.lucide-message-circle')
+                ?.parentElement,
+        ).toHaveClass('relative', 'size-4');
     });
 
     it('points at message search when no name matches', async () => {

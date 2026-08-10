@@ -76,7 +76,7 @@ function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
 }
 
 function makePerson(conversation: Conversation | null): WorkspacePerson {
-    return { user: bo, conversation };
+    return { user: bo, is_bot: false, conversation };
 }
 
 describe('PersonListItem', () => {

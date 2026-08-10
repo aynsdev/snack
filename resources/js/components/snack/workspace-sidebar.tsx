@@ -2,10 +2,15 @@ import { Link, router } from '@inertiajs/react';
 import type { LucideIcon } from 'lucide-react';
 import {
     Bell,
+    BellOff,
+    Blocks,
     ChevronDown,
     ClipboardList,
     Compass,
+    FolderKanban,
+    Hash,
     Headphones,
+    MessageCircle,
     MessagesSquare,
     Plug,
     Plus,
@@ -305,6 +310,7 @@ export function WorkspaceSidebar({
 
                 <SidebarSection
                     title="Channels"
+                    icon={Hash}
                     action={
                         <ChannelListMenu
                             workspaceSlug={workspace.slug}
@@ -343,7 +349,11 @@ export function WorkspaceSidebar({
                 <DirectMessageSection onNavigate={onNavigate} />
 
                 {(muted.length > 0 || mutedGroups.length > 0) && (
-                    <SidebarSection title="Muted" defaultOpen={false}>
+                    <SidebarSection
+                        title="Muted"
+                        icon={BellOff}
+                        defaultOpen={false}
+                    >
                         <ul className="space-y-0.5">
                             {muted.map((channel) => (
                                 <li key={`channel-${channel.id}`}>
@@ -414,6 +424,7 @@ function ProjectSection({ onNavigate }: { onNavigate?: () => void }) {
     return (
         <SidebarSection
             title="Projects"
+            icon={FolderKanban}
             action={
                 workspace.abilities.create_projects ? (
                     <Link
@@ -564,20 +575,25 @@ function DirectMessageSection({
      */
     const term = filter.trim().toLocaleLowerCase();
 
-    const { groups, people } = useMemo(() => {
-        if (term === '') {
-            return { groups: allGroups, people: allPeople };
-        }
-
+    const { groups, people, apps } = useMemo(() => {
         const matches = (text: string | null | undefined) =>
             (text ?? '').toLocaleLowerCase().includes(term);
+        const visiblePeople =
+            term === ''
+                ? allPeople
+                : allPeople.filter(
+                      (person) =>
+                          matches(person.user.name) ||
+                          matches(person.user.username),
+                  );
 
         return {
-            groups: allGroups.filter((group) => matches(group.display_name)),
-            people: allPeople.filter(
-                (person) =>
-                    matches(person.user.name) || matches(person.user.username),
-            ),
+            groups:
+                term === ''
+                    ? allGroups
+                    : allGroups.filter((group) => matches(group.display_name)),
+            people: visiblePeople.filter((person) => !person.is_bot),
+            apps: visiblePeople.filter((person) => person.is_bot),
         };
     }, [allGroups, allPeople, term]);
 
@@ -591,6 +607,7 @@ function DirectMessageSection({
 
             <SidebarSection
                 title="Direct messages"
+                icon={MessageCircle}
                 action={
                     workspace.abilities.start_conversations ? (
                         <button
@@ -604,8 +621,10 @@ function DirectMessageSection({
                     ) : null
                 }
             >
-                {groups.length === 0 && people.length === 0 ? (
-                    term === '' ? (
+                {groups.length === 0 &&
+                    people.length === 0 &&
+                    apps.length === 0 &&
+                    (term === '' ? (
                         <p className="px-2 py-1.5 text-xs text-muted-foreground">
                             {workspace.abilities.start_conversations
                                 ? 'Nobody else is in this workspace yet.'
@@ -635,47 +654,109 @@ function DirectMessageSection({
                                 Search messages instead
                             </Link>
                         </div>
-                    )
-                ) : (
-                    <ul className="space-y-0.5">
+                    ))}
+
+                {(groups.length > 0 || people.length > 0) && (
+                    <div className="space-y-2">
                         {/*
                          * Groups above people. A group is a room somebody
                          * deliberately made, so it belongs with the other
                          * things you navigate to; the roster underneath is
                          * a directory you scan, and it is the longer list.
                          */}
-                        {groups.map((conversation) => (
-                            <li key={conversation.id}>
-                                <ConversationRow
-                                    conversation={conversation}
-                                    workspaceSlug={workspace.slug}
-                                    viewerId={currentUser?.id ?? null}
-                                    isActive={
-                                        conversation.id === activeConversationId
-                                    }
-                                    onNavigate={onNavigate}
-                                />
-                            </li>
-                        ))}
+                        {groups.length > 0 && (
+                            <ul
+                                className="space-y-0.5"
+                                aria-label="Group messages"
+                            >
+                                {groups.map((conversation) => (
+                                    <li key={conversation.id}>
+                                        <ConversationRow
+                                            conversation={conversation}
+                                            workspaceSlug={workspace.slug}
+                                            viewerId={currentUser?.id ?? null}
+                                            isActive={
+                                                conversation.id ===
+                                                activeConversationId
+                                            }
+                                            onNavigate={onNavigate}
+                                        />
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
 
-                        {people.map((person) => (
-                            <li key={person.user.id}>
-                                <PersonRow
-                                    person={person}
-                                    workspaceSlug={workspace.slug}
-                                    isActive={
-                                        person.conversation !== null &&
-                                        person.conversation.id ===
-                                            activeConversationId
-                                    }
-                                    onNavigate={onNavigate}
-                                />
-                            </li>
-                        ))}
-                    </ul>
+                        <DirectMessageRosterGroup
+                            title="People"
+                            people={people}
+                            showTitle={false}
+                            workspaceSlug={workspace.slug}
+                            activeConversationId={activeConversationId}
+                            onNavigate={onNavigate}
+                        />
+                    </div>
                 )}
             </SidebarSection>
+
+            {apps.length > 0 && (
+                <SidebarSection title="Apps" icon={Blocks}>
+                    <DirectMessageRosterGroup
+                        title="Apps"
+                        people={apps}
+                        showTitle={false}
+                        workspaceSlug={workspace.slug}
+                        activeConversationId={activeConversationId}
+                        onNavigate={onNavigate}
+                    />
+                </SidebarSection>
+            )}
         </>
+    );
+}
+
+function DirectMessageRosterGroup({
+    title,
+    people,
+    showTitle,
+    workspaceSlug,
+    activeConversationId,
+    onNavigate,
+}: {
+    title: string;
+    people: WorkspacePerson[];
+    showTitle: boolean;
+    workspaceSlug: string;
+    activeConversationId: string | null;
+    onNavigate?: () => void;
+}) {
+    if (people.length === 0) {
+        return null;
+    }
+
+    return (
+        <div>
+            {showTitle && (
+                <p className="px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground/70">
+                    {title}
+                </p>
+            )}
+
+            <ul className="space-y-0.5" aria-label={title}>
+                {people.map((person) => (
+                    <li key={person.user.id}>
+                        <PersonRow
+                            person={person}
+                            workspaceSlug={workspaceSlug}
+                            isActive={
+                                person.conversation !== null &&
+                                person.conversation.id === activeConversationId
+                            }
+                            onNavigate={onNavigate}
+                        />
+                    </li>
+                ))}
+            </ul>
+        </div>
     );
 }
 
@@ -1256,11 +1337,13 @@ function useSearchShortcut(href: string) {
 
 function SidebarSection({
     title,
+    icon: Icon,
     action,
     defaultOpen = true,
     children,
 }: {
     title: string;
+    icon?: LucideIcon;
     action?: React.ReactNode;
     defaultOpen?: boolean;
     children: React.ReactNode;
@@ -1270,14 +1353,24 @@ function SidebarSection({
     return (
         <Collapsible open={open} onOpenChange={setOpen}>
             <div className="flex items-center justify-between gap-1 pr-1">
-                <CollapsibleTrigger className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground">
-                    <ChevronDown
-                        aria-hidden="true"
-                        className={cn(
-                            'size-3.5 transition-transform',
-                            !open && '-rotate-90',
+                <CollapsibleTrigger className="group/section flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+                    <span className="relative size-4 shrink-0">
+                        {Icon !== undefined && (
+                            <Icon
+                                aria-hidden="true"
+                                className="absolute inset-0 size-4 group-hover/section:opacity-0 group-focus-visible/section:opacity-0"
+                            />
                         )}
-                    />
+                        <ChevronDown
+                            aria-hidden="true"
+                            className={cn(
+                                'absolute inset-0 size-4 transition-transform',
+                                Icon !== undefined &&
+                                    'opacity-0 group-hover/section:opacity-100 group-focus-visible/section:opacity-100',
+                                !open && '-rotate-90',
+                            )}
+                        />
+                    </span>
                     {title}
                 </CollapsibleTrigger>
 
