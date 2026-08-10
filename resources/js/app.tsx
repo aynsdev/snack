@@ -7,6 +7,7 @@ import { initializeColorTheme } from '@/hooks/use-color-theme';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import WorkspaceLayout from '@/layouts/workspace-layout';
+import { usesSettingsLayout } from '@/lib/page-layout';
 import { queryClient } from '@/lib/query-client';
 
 // Configures the Reverb/Echo connection as a side effect, before any component
@@ -46,7 +47,7 @@ createInertiaApp({
              * workspace shell rather than replacing it — walking into settings
              * should not feel like leaving the workspace.
              */
-            case name.startsWith('settings/'):
+            case usesSettingsLayout(name):
                 return [WorkspaceLayout, SettingsLayout];
             default:
                 return WorkspaceLayout;

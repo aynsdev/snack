@@ -1,10 +1,12 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NavRail } from '@/components/snack/nav-rail';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { UnreadState } from '@/types';
 
 const usePage = vi.hoisted(() => vi.fn());
+const routerPatch = vi.hoisted(() => vi.fn());
 const currentUrl = vi.hoisted(() => ({
     value: '/w/snack-hq/channels/general',
 }));
@@ -15,25 +17,43 @@ vi.mock('@inertiajs/react', () => ({
         children,
         href,
         onClick,
+        prefetch,
         ...props
     }: {
         children: React.ReactNode;
         href: string | { url: string };
         onClick?: (event: React.MouseEvent<HTMLElement>) => void;
-    }) => (
-        <a
-            href={typeof href === 'string' ? href : href.url}
-            // The real Link intercepts the click and visits over XHR; without
-            // this jsdom tries to navigate the document instead.
-            onClick={(event) => {
-                event.preventDefault();
-                onClick?.(event);
-            }}
-            {...props}
-        >
-            {children}
-        </a>
-    ),
+        prefetch?: boolean;
+    }) => {
+        void prefetch;
+
+        return (
+            <a
+                href={typeof href === 'string' ? href : href.url}
+                // The real Link intercepts the click and visits over XHR;
+                // without this jsdom tries to navigate the document instead.
+                onClick={(event) => {
+                    event.preventDefault();
+                    onClick?.(event);
+                }}
+                {...props}
+            >
+                {children}
+            </a>
+        );
+    },
+    Form: ({
+        children,
+    }: {
+        children: (props: {
+            errors: Record<string, string>;
+            processing: boolean;
+        }) => React.ReactNode;
+    }) => <form>{children({ errors: {}, processing: false })}</form>,
+    router: {
+        flushAll: vi.fn(),
+        patch: routerPatch,
+    },
 }));
 
 // The rail reads the URL to decide what is current; the real hook subscribes to
@@ -44,7 +64,15 @@ vi.mock('@/hooks/use-current-url', () => ({
 
 function mockWorkspace(
     unread: Partial<UnreadState> = {},
-    { signedIn = false }: { signedIn?: boolean } = {},
+    {
+        signedIn = false,
+        statusMessage = null,
+        statusEmoji = null,
+    }: {
+        signedIn?: boolean;
+        statusMessage?: string | null;
+        statusEmoji?: string | null;
+    } = {},
 ) {
     const user = {
         id: 1,
@@ -53,6 +81,8 @@ function mockWorkspace(
         initials: 'AL',
         avatar_url: null,
         presence_status: 'online',
+        status_message: statusMessage,
+        status_emoji: statusEmoji,
         email_verified_at: '2026-08-10T00:00:00.000000Z',
         created_at: '2026-08-10T00:00:00.000000Z',
         updated_at: '2026-08-10T00:00:00.000000Z',
@@ -61,7 +91,15 @@ function mockWorkspace(
     usePage.mockReturnValue({
         props: {
             snack: {
-                workspaces: [],
+                workspaces: [
+                    {
+                        id: 1,
+                        name: 'Snack HQ',
+                        slug: 'snack-hq',
+                        initials: 'SH',
+                        logo_url: null,
+                    },
+                ],
                 current: {
                     workspace: {
                         id: 1,
@@ -120,6 +158,7 @@ function renderRail() {
 
 beforeEach(() => {
     usePage.mockReset();
+    routerPatch.mockReset();
     // The rail's section outlives its components on purpose — see
     // use-sidebar-section.ts — so it has to be cleared between tests.
     sessionStorage.clear();
@@ -184,6 +223,114 @@ describe('NavRail', () => {
         expect(
             screen.getByRole('button', { name: 'Your account and status' }),
         ).toBeInTheDocument();
+    });
+
+    it('shows the single workspace identity above Home', () => {
+        mockWorkspace();
+
+        renderRail();
+
+        const workspace = screen.getByRole('link', { name: 'Snack HQ' });
+
+        expect(workspace).toHaveAttribute('href', '/w/snack-hq');
+        expect(within(workspace).getByText('SH')).toBeInTheDocument();
+    });
+
+    it('opens account actions for status, notifications, and preferences', async () => {
+        const user = userEvent.setup();
+        mockWorkspace({}, { signedIn: true });
+
+        renderRail();
+        await user.click(
+            screen.getByRole('button', { name: 'Your account and status' }),
+        );
+
+        expect(
+            screen.getByRole('menuitem', { name: 'Set a status' }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole('menuitem', { name: 'Notifications' }),
+        ).toHaveAttribute('href', '/w/snack-hq/notification-preferences');
+        expect(
+            screen.getByRole('menuitem', { name: 'Profile' }),
+        ).toHaveAttribute('href', '/settings/profile');
+        expect(
+            screen.getByRole('menuitem', { name: 'Preferences' }),
+        ).toHaveAttribute('href', '/settings/appearance');
+        expect(
+            within(screen.getByRole('menu')).getAllByText('Active'),
+        ).toHaveLength(1);
+
+        await user.click(
+            screen.getByRole('menuitem', { name: 'Set a status' }),
+        );
+
+        const dialog = screen.getByRole('dialog', { name: 'Set your status' });
+
+        expect(dialog).toBeInTheDocument();
+
+        await user.click(
+            within(dialog).getByRole('button', { name: /In a meeting/ }),
+        );
+
+        expect(within(dialog).getByLabelText('Status')).toHaveValue(
+            'In a meeting',
+        );
+        expect(within(dialog).getByLabelText('Clear status')).toHaveValue(
+            'one_hour',
+        );
+        expect(
+            within(dialog).getByRole('button', {
+                name: 'Choose status emoji. Current emoji: 🗓️',
+            }),
+        ).toBeInTheDocument();
+
+        await user.click(
+            within(dialog).getByRole('button', {
+                name: 'Choose status emoji. Current emoji: 🗓️',
+            }),
+        );
+        await user.click(screen.getByRole('button', { name: 'Airplane' }));
+
+        expect(
+            within(dialog).getByRole('button', {
+                name: 'Choose status emoji. Current emoji: ✈️',
+            }),
+        ).toBeInTheDocument();
+    });
+
+    it('shows an existing status once and offers a separate clear action', async () => {
+        const user = userEvent.setup();
+        mockWorkspace(
+            {},
+            {
+                signedIn: true,
+                statusMessage: 'In a meeting',
+                statusEmoji: '🗓️',
+            },
+        );
+
+        renderRail();
+        await user.click(
+            screen.getByRole('button', { name: 'Your account and status' }),
+        );
+
+        const menu = screen.getByRole('menu');
+
+        expect(within(menu).getAllByText('In a meeting')).toHaveLength(1);
+        expect(
+            within(menu).getByRole('menuitem', { name: /In a meeting/ }),
+        ).toBeInTheDocument();
+
+        await user.click(
+            within(menu).getByRole('menuitem', { name: 'Clear status' }),
+        );
+
+        expect(routerPatch).toHaveBeenCalledWith(
+            '/settings/status',
+            { clear: true },
+            { preserveScroll: true },
+        );
     });
 
     it('marks a folder inside the library as Assets', () => {

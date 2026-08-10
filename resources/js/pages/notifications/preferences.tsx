@@ -65,254 +65,237 @@ export default function NotificationPreferencesPage({
         <>
             <Head title={`Notifications · ${workspace.name}`} />
 
-            <div className="snack-scroll min-w-0 flex-1 overflow-y-auto">
-                <div className="mx-auto max-w-2xl space-y-8 px-6 py-8">
-                    <header>
-                        <h1 className="text-2xl font-bold tracking-tight">
-                            Notifications
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            How {workspace.name} reaches you. These settings are
-                            yours alone and apply only to this workspace.
-                        </p>
-                    </header>
+            <h1 className="sr-only">Notification settings</h1>
 
-                    <Form
-                        {...updatePreferences.form(workspace.slug)}
-                        options={{ preserveScroll: true }}
-                        className="space-y-6"
-                    >
-                        {({ processing, errors }) => (
-                            <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="default_level">
-                                        Notify me about
-                                    </Label>
+            <div className="space-y-8">
+                <Heading
+                    variant="small"
+                    title="Notifications"
+                    description={`How ${workspace.name} reaches you. These settings are yours alone and apply only to this workspace.`}
+                />
 
-                                    <Select
-                                        name="default_level"
-                                        defaultValue={preferences.default_level}
-                                    >
-                                        <SelectTrigger id="default_level">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {levels.map((level) => (
-                                                <SelectItem
-                                                    key={level.value}
-                                                    value={level.value}
-                                                >
-                                                    {level.label}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                <Form
+                    {...updatePreferences.form(workspace.slug)}
+                    options={{ preserveScroll: true }}
+                    className="space-y-6"
+                >
+                    {({ processing, errors }) => (
+                        <>
+                            <div className="grid gap-2">
+                                <Label htmlFor="default_level">
+                                    Notify me about
+                                </Label>
 
-                                    <p className="text-xs text-muted-foreground">
-                                        The starting point for channels you join
-                                        from now on. Channels you have already
-                                        set individually keep their own setting.
-                                    </p>
+                                <Select
+                                    name="default_level"
+                                    defaultValue={preferences.default_level}
+                                >
+                                    <SelectTrigger id="default_level">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {levels.map((level) => (
+                                            <SelectItem
+                                                key={level.value}
+                                                value={level.value}
+                                            >
+                                                {level.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
 
-                                    <InputError
-                                        message={errors.default_level}
+                                <p className="text-xs text-muted-foreground">
+                                    The starting point for channels you join
+                                    from now on. Channels you have already set
+                                    individually keep their own setting.
+                                </p>
+
+                                <InputError message={errors.default_level} />
+                            </div>
+
+                            <fieldset className="space-y-3">
+                                <legend className="text-sm font-medium">
+                                    Email
+                                </legend>
+
+                                <CheckboxField
+                                    name="email_enabled"
+                                    label="Email me when I am away"
+                                    description="Only for things aimed at you — a mention, a direct message, or a reply in a thread you follow — and only when you are not already reading."
+                                    defaultChecked={preferences.email_enabled}
+                                />
+
+                                <CheckboxField
+                                    name="digest_enabled"
+                                    label="Send a daily summary"
+                                    description="One email a morning listing what is still unread. Off by default."
+                                    defaultChecked={preferences.digest_enabled}
+                                />
+                            </fieldset>
+
+                            <fieldset className="space-y-3">
+                                <legend className="text-sm font-medium">
+                                    Quiet hours
+                                </legend>
+
+                                <div className="flex items-start gap-3">
+                                    <Checkbox
+                                        id="quiet_hours"
+                                        checked={quietHours}
+                                        onCheckedChange={(checked) =>
+                                            setQuietHours(checked === true)
+                                        }
                                     />
+                                    <div className="grid gap-1">
+                                        <Label
+                                            htmlFor="quiet_hours"
+                                            className="font-normal"
+                                        >
+                                            Hold emails overnight
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            In your own timezone. Nothing is
+                                            withheld from the notification
+                                            centre — this only stops the email.
+                                        </p>
+                                    </div>
                                 </div>
 
-                                <fieldset className="space-y-3">
-                                    <legend className="text-sm font-medium">
-                                        Email
-                                    </legend>
-
-                                    <CheckboxField
-                                        name="email_enabled"
-                                        label="Email me when I am away"
-                                        description="Only for things aimed at you — a mention, a direct message, or a reply in a thread you follow — and only when you are not already reading."
-                                        defaultChecked={
-                                            preferences.email_enabled
-                                        }
-                                    />
-
-                                    <CheckboxField
-                                        name="digest_enabled"
-                                        label="Send a daily summary"
-                                        description="One email a morning listing what is still unread. Off by default."
-                                        defaultChecked={
-                                            preferences.digest_enabled
-                                        }
-                                    />
-                                </fieldset>
-
-                                <fieldset className="space-y-3">
-                                    <legend className="text-sm font-medium">
-                                        Quiet hours
-                                    </legend>
-
-                                    <div className="flex items-start gap-3">
-                                        <Checkbox
-                                            id="quiet_hours"
-                                            checked={quietHours}
-                                            onCheckedChange={(checked) =>
-                                                setQuietHours(checked === true)
-                                            }
-                                        />
-                                        <div className="grid gap-1">
-                                            <Label
-                                                htmlFor="quiet_hours"
-                                                className="font-normal"
-                                            >
-                                                Hold emails overnight
+                                {quietHours && (
+                                    <div className="flex flex-wrap items-end gap-3 pl-7">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="dnd_start">
+                                                From
                                             </Label>
-                                            <p className="text-xs text-muted-foreground">
-                                                In your own timezone. Nothing is
-                                                withheld from the notification
-                                                centre — this only stops the
-                                                email.
-                                            </p>
+                                            <Input
+                                                id="dnd_start"
+                                                name="do_not_disturb[start]"
+                                                type="time"
+                                                className="w-32"
+                                                defaultValue={
+                                                    preferences.do_not_disturb
+                                                        ?.start ?? '22:00'
+                                                }
+                                            />
+                                        </div>
+
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="dnd_end">
+                                                Until
+                                            </Label>
+                                            <Input
+                                                id="dnd_end"
+                                                name="do_not_disturb[end]"
+                                                type="time"
+                                                className="w-32"
+                                                defaultValue={
+                                                    preferences.do_not_disturb
+                                                        ?.end ?? '07:00'
+                                                }
+                                            />
                                         </div>
                                     </div>
+                                )}
 
-                                    {quietHours && (
-                                        <div className="flex flex-wrap items-end gap-3 pl-7">
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="dnd_start">
-                                                    From
-                                                </Label>
-                                                <Input
-                                                    id="dnd_start"
-                                                    name="do_not_disturb[start]"
-                                                    type="time"
-                                                    className="w-32"
-                                                    defaultValue={
-                                                        preferences
-                                                            .do_not_disturb
-                                                            ?.start ?? '22:00'
-                                                    }
-                                                />
-                                            </div>
+                                <InputError
+                                    message={
+                                        errors['do_not_disturb.start'] ??
+                                        errors['do_not_disturb.end']
+                                    }
+                                />
+                            </fieldset>
 
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="dnd_end">
-                                                    Until
-                                                </Label>
-                                                <Input
-                                                    id="dnd_end"
-                                                    name="do_not_disturb[end]"
-                                                    type="time"
-                                                    className="w-32"
-                                                    defaultValue={
-                                                        preferences
-                                                            .do_not_disturb
-                                                            ?.end ?? '07:00'
-                                                    }
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
+                            <Button type="submit" disabled={processing}>
+                                Save preferences
+                            </Button>
+                        </>
+                    )}
+                </Form>
 
-                                    <InputError
-                                        message={
-                                            errors['do_not_disturb.start'] ??
-                                            errors['do_not_disturb.end']
-                                        }
-                                    />
-                                </fieldset>
+                <section className="space-y-4 border-t border-border pt-8">
+                    <Heading
+                        variant="small"
+                        title="Channels you have changed"
+                        description="Everything else follows the setting above."
+                    />
 
-                                <Button type="submit" disabled={processing}>
-                                    Save preferences
-                                </Button>
-                            </>
-                        )}
-                    </Form>
+                    {channels.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                            No channel overrides.
+                        </p>
+                    ) : (
+                        <ul className="divide-y divide-border rounded-lg border border-border">
+                            {channels.map((channel) => (
+                                <OverrideRow
+                                    key={channel.id}
+                                    title={`#${channel.slug}`}
+                                    icon={
+                                        <ChannelIcon
+                                            type={channel.type}
+                                            className="size-4 shrink-0 text-muted-foreground"
+                                        />
+                                    }
+                                    isMuted={channel.is_muted}
+                                    level={channel.notification_level}
+                                    levels={levels}
+                                    onChange={(payload) =>
+                                        router.patch(
+                                            updateChannelPreferences.url({
+                                                workspace: workspace.slug,
+                                                channel: channel.slug,
+                                            }),
+                                            payload,
+                                            { preserveScroll: true },
+                                        )
+                                    }
+                                />
+                            ))}
+                        </ul>
+                    )}
+                </section>
 
-                    <section className="space-y-4">
-                        <Heading
-                            variant="small"
-                            title="Channels you have changed"
-                            description="Everything else follows the setting above."
-                        />
+                <section className="space-y-4 border-t border-border pt-8">
+                    <Heading
+                        variant="small"
+                        title="Conversations you have changed"
+                        description="Direct messages start at everything, so anything listed here you turned down yourself."
+                    />
 
-                        {channels.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                                No channel overrides.
-                            </p>
-                        ) : (
-                            <ul className="divide-y divide-border rounded-lg border border-border">
-                                {channels.map((channel) => (
-                                    <OverrideRow
-                                        key={channel.id}
-                                        title={`#${channel.slug}`}
-                                        icon={
-                                            <ChannelIcon
-                                                type={channel.type}
-                                                className="size-4 shrink-0 text-muted-foreground"
-                                            />
-                                        }
-                                        isMuted={channel.is_muted}
-                                        level={channel.notification_level}
-                                        levels={levels}
-                                        onChange={(payload) =>
-                                            router.patch(
-                                                updateChannelPreferences.url({
-                                                    workspace: workspace.slug,
-                                                    channel: channel.slug,
-                                                }),
-                                                payload,
-                                                { preserveScroll: true },
-                                            )
-                                        }
-                                    />
-                                ))}
-                            </ul>
-                        )}
-                    </section>
-
-                    <section className="space-y-4">
-                        <Heading
-                            variant="small"
-                            title="Conversations you have changed"
-                            description="Direct messages start at everything, so anything listed here you turned down yourself."
-                        />
-
-                        {conversations.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                                No conversation overrides.
-                            </p>
-                        ) : (
-                            <ul className="divide-y divide-border rounded-lg border border-border">
-                                {conversations.map((conversation) => (
-                                    <OverrideRow
-                                        key={conversation.id}
-                                        title={conversation.display_name}
-                                        icon={
-                                            <MessageSquare
-                                                aria-hidden="true"
-                                                className="size-4 shrink-0 text-muted-foreground"
-                                            />
-                                        }
-                                        isMuted={conversation.is_muted}
-                                        level={conversation.notification_level}
-                                        levels={levels}
-                                        onChange={(payload) =>
-                                            router.patch(
-                                                updateConversationPreferences.url(
-                                                    {
-                                                        workspace:
-                                                            workspace.slug,
-                                                        conversation:
-                                                            conversation.id,
-                                                    },
-                                                ),
-                                                payload,
-                                                { preserveScroll: true },
-                                            )
-                                        }
-                                    />
-                                ))}
-                            </ul>
-                        )}
-                    </section>
-                </div>
+                    {conversations.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                            No conversation overrides.
+                        </p>
+                    ) : (
+                        <ul className="divide-y divide-border rounded-lg border border-border">
+                            {conversations.map((conversation) => (
+                                <OverrideRow
+                                    key={conversation.id}
+                                    title={conversation.display_name}
+                                    icon={
+                                        <MessageSquare
+                                            aria-hidden="true"
+                                            className="size-4 shrink-0 text-muted-foreground"
+                                        />
+                                    }
+                                    isMuted={conversation.is_muted}
+                                    level={conversation.notification_level}
+                                    levels={levels}
+                                    onChange={(payload) =>
+                                        router.patch(
+                                            updateConversationPreferences.url({
+                                                workspace: workspace.slug,
+                                                conversation: conversation.id,
+                                            }),
+                                            payload,
+                                            { preserveScroll: true },
+                                        )
+                                    }
+                                />
+                            ))}
+                        </ul>
+                    )}
+                </section>
             </div>
         </>
     );

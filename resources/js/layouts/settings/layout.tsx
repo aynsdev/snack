@@ -8,6 +8,7 @@ import { useCurrentUrl } from '@/hooks/use-current-url';
 import { useCurrentWorkspace } from '@/hooks/use-workspace';
 import { cn, toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
+import { edit as editNotifications } from '@/routes/notification-preferences';
 import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
 import { create as createWorkspace } from '@/routes/workspaces';
@@ -34,16 +35,23 @@ const sidebarNavItems: NavItem[] = [
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
     const currentWorkspace = useCurrentWorkspace();
-    const navItems = currentWorkspace?.workspace.abilities.administer
-        ? [
-              ...sidebarNavItems,
-              {
-                  title: 'Create workspace',
-                  href: createWorkspace(),
-                  icon: Plus,
-              },
-          ]
-        : sidebarNavItems;
+    const navItems: NavItem[] = [...sidebarNavItems];
+
+    if (currentWorkspace) {
+        navItems.splice(1, 0, {
+            title: 'Notifications',
+            href: editNotifications(currentWorkspace.workspace.slug),
+            icon: null,
+        });
+
+        if (currentWorkspace.workspace.abilities.administer) {
+            navItems.push({
+                title: 'Create workspace',
+                href: createWorkspace(),
+                icon: Plus,
+            });
+        }
+    }
 
     return (
         /*

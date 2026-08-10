@@ -8,6 +8,7 @@ import {
     KanbanSquare,
     MessageSquare,
 } from 'lucide-react';
+import { useState } from 'react';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import {
@@ -20,7 +21,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { UserMenuContent } from '@/components/user-menu-content';
+import { StatusDialog, UserMenuContent } from '@/components/user-menu-content';
 import {
     useActiveConversationId,
     useIsActivityView,
@@ -35,6 +36,7 @@ import {
     useCurrentUser,
     useUnreadState,
     useWorkspace,
+    useWorkspaceRail,
 } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import { index as activityIndex } from '@/routes/activity';
@@ -66,6 +68,7 @@ import { show as showWorkspace } from '@/routes/workspaces';
  */
 export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
     const workspace = useWorkspace();
+    const workspaces = useWorkspaceRail();
     const unread = useUnreadState();
 
     /*
@@ -104,6 +107,13 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
             className="flex w-[4.75rem] shrink-0 flex-col items-center gap-1 border-x border-rail-foreground/10 bg-nav py-3 text-rail-foreground"
         >
             <ul className="flex flex-1 flex-col items-center gap-1">
+                {workspaces.length === 1 && (
+                    <SingleWorkspaceMark
+                        workspace={workspaces[0]}
+                        href={showWorkspace(workspace.slug)}
+                    />
+                )}
+
                 <NavRailItem
                     icon={House}
                     label="Home"
@@ -210,32 +220,82 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
     );
 }
 
+function SingleWorkspaceMark({
+    workspace,
+    href,
+}: {
+    workspace: ReturnType<typeof useWorkspaceRail>[number];
+    href: ReturnType<typeof showWorkspace>;
+}) {
+    return (
+        <li className="mb-2 border-b border-rail-foreground/10 pb-3">
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <Link
+                        href={href}
+                        aria-label={workspace.name}
+                        className="flex size-11 items-center justify-center overflow-hidden rounded-xl bg-brand-subtle text-sm font-semibold text-foreground ring-1 ring-rail-foreground/10"
+                    >
+                        {workspace.logo_url ? (
+                            <img
+                                src={workspace.logo_url}
+                                alt=""
+                                className="size-full object-cover"
+                            />
+                        ) : (
+                            workspace.initials
+                        )}
+                    </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">{workspace.name}</TooltipContent>
+            </Tooltip>
+        </li>
+    );
+}
+
 function RailUserMenu() {
     const user = useCurrentUser();
     const page = usePage();
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [statusOpen, setStatusOpen] = useState(false);
 
     if (!user) {
         return null;
     }
 
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger
-                aria-label="Your account and status"
-                className="rounded-lg"
-            >
-                <UserAvatar
-                    user={user}
-                    size="lg"
-                    showPresence
-                    ringClassName="ring-nav"
-                />
-            </DropdownMenuTrigger>
+        <>
+            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+                <DropdownMenuTrigger
+                    aria-label="Your account and status"
+                    className="rounded-lg"
+                >
+                    <UserAvatar
+                        user={user}
+                        size="lg"
+                        showPresence
+                        ringClassName="ring-nav"
+                    />
+                </DropdownMenuTrigger>
 
-            <DropdownMenuContent side="right" align="end" className="w-60">
-                <UserMenuContent user={page.props.auth.user} />
-            </DropdownMenuContent>
-        </DropdownMenu>
+                <DropdownMenuContent side="right" align="end" className="w-72">
+                    <UserMenuContent
+                        user={page.props.auth.user}
+                        onEditStatus={() => {
+                            setMenuOpen(false);
+                            setStatusOpen(true);
+                        }}
+                    />
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <StatusDialog
+                open={statusOpen}
+                onOpenChange={setStatusOpen}
+                emoji={user.status_emoji ?? ''}
+                message={user.status_message ?? ''}
+            />
+        </>
     );
 }
 

@@ -28,6 +28,7 @@ vi.mock('@/hooks/use-workspace', () => ({ useCurrentWorkspace }));
 function currentWorkspace(administer: boolean) {
     return {
         workspace: {
+            slug: 'snack-hq',
             abilities: { administer },
         },
     };
@@ -48,6 +49,9 @@ describe('SettingsLayout', () => {
         expect(
             screen.getByRole('link', { name: 'Create workspace' }),
         ).toHaveAttribute('href', '/workspaces/create');
+        expect(
+            screen.getByRole('link', { name: 'Notifications' }),
+        ).toHaveAttribute('href', '/w/snack-hq/notification-preferences');
     });
 
     it('does not offer workspace creation to a regular member', () => {

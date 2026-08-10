@@ -3,7 +3,7 @@
 use App\Http\Controllers\Settings\AvatarController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
-use Illuminate\Auth\Middleware\RequirePassword;
+use App\Http\Controllers\Settings\StatusController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {
@@ -23,14 +23,14 @@ Route::middleware(['auth'])->group(function () {
         ->name('profile.avatar.store');
     Route::delete('settings/profile/avatar', [AvatarController::class, 'destroy'])
         ->name('profile.avatar.destroy');
+
+    Route::patch('settings/status', StatusController::class)->name('status.update');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    Route::get('settings/security', [SecurityController::class, 'edit'])
-        ->middleware(RequirePassword::class)
-        ->name('security.edit');
+    Route::get('settings/security', [SecurityController::class, 'edit'])->name('security.edit');
 
     Route::put('settings/password', [SecurityController::class, 'update'])
         ->middleware('throttle:6,1')
