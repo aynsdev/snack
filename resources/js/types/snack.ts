@@ -637,11 +637,26 @@ export type CanvasDocument = {
     updated_at: string | null;
     can_update: boolean;
     can_delete: boolean;
+    is_starred: boolean;
     container?: {
         type: 'channel' | 'conversation';
         label: string;
         url: string;
     } | null;
+};
+
+export type FileCanvasSidebarItem = {
+    id: string;
+    target_id: string | number;
+    type: 'file' | 'canvas';
+    label: string;
+    url: string;
+    is_starred: boolean;
+};
+
+export type FileCanvasSidebarContent = {
+    recent: FileCanvasSidebarItem[];
+    starred: FileCanvasSidebarItem[];
 };
 
 // -- Search ------------------------------------------------------------------

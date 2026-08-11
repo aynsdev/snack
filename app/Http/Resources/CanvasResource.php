@@ -43,8 +43,9 @@ class CanvasResource extends JsonResource
             'updated_at' => $canvas->updated_at?->toIso8601String(),
             'can_update' => $user?->can('update', $canvas) ?? false,
             'can_delete' => $user?->can('delete', $canvas) ?? false,
+            'is_starred' => (bool) $canvas->getAttribute('is_starred'),
             'container' => $this->when(
-                $request->routeIs('canvases.show'),
+                $request->routeIs('canvases.index', 'canvases.show'),
                 function () use ($canvas, $user): ?array {
                     if ($canvas->channel !== null) {
                         return [

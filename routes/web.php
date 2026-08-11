@@ -23,6 +23,7 @@ use App\Http\Controllers\Conversations\DirectoryController;
 use App\Http\Controllers\Conversations\HuddleController as ConversationHuddleController;
 use App\Http\Controllers\Conversations\MessageController as ConversationMessageController;
 use App\Http\Controllers\Conversations\ParticipantController;
+use App\Http\Controllers\FileCanvasStarController;
 use App\Http\Controllers\Files\DownloadController;
 use App\Http\Controllers\Files\FileBrowserController;
 use App\Http\Controllers\Huddles\HuddleHistoryController;
@@ -446,10 +447,14 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::post('channels/{channel}/canvases', [CanvasController::class, 'storeForChannel'])->name('channels.canvases.store');
         Route::post('dms/{conversation}/canvases', [CanvasController::class, 'storeForConversation'])->name('conversations.canvases.store');
         Route::get('canvases/{canvas}', [CanvasController::class, 'show'])->name('canvases.show');
+        Route::post('canvases/{canvas}/star', [FileCanvasStarController::class, 'storeCanvas'])->name('canvases.star.store');
+        Route::delete('canvases/{canvas}/star', [FileCanvasStarController::class, 'destroyCanvas'])->name('canvases.star.destroy');
         Route::patch('canvases/{canvas}', [CanvasController::class, 'update'])->name('canvases.update');
         Route::delete('canvases/{canvas}', [CanvasController::class, 'destroy'])->name('canvases.destroy');
         Route::post('canvases/{canvas}/cover', [CanvasCoverController::class, 'store'])->name('canvases.cover.store');
         Route::delete('canvases/{canvas}/cover', [CanvasCoverController::class, 'destroy'])->name('canvases.cover.destroy');
+        Route::post('files/{attachment}/star', [FileCanvasStarController::class, 'storeFile'])->name('files.star.store');
+        Route::delete('files/{attachment}/star', [FileCanvasStarController::class, 'destroyFile'])->name('files.star.destroy');
 
         /*
          * The asset library: brand kits, company information, the documents

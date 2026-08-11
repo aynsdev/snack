@@ -191,10 +191,7 @@ describe('NavRail', () => {
             'href',
             '/w/snack-hq/files',
         );
-        expect(screen.getByRole('link', { name: /Canvases/ })).toHaveAttribute(
-            'href',
-            '/w/snack-hq/canvases',
-        );
+        expect(screen.queryByRole('link', { name: /Canvases/ })).toBeNull();
         expect(screen.getByRole('link', { name: /Projects/ })).toHaveAttribute(
             'href',
             '/w/snack-hq/projects',
@@ -352,13 +349,13 @@ describe('NavRail', () => {
         );
     });
 
-    it('marks a document as Canvases', () => {
+    it('keeps Files active while viewing a canvas document', () => {
         currentUrl.value = '/w/snack-hq/canvases/01K2CANVAS';
         mockWorkspace();
 
         renderRail();
 
-        expect(screen.getByRole('link', { name: /Canvases/ })).toHaveAttribute(
+        expect(screen.getByRole('link', { name: /Files/ })).toHaveAttribute(
             'aria-current',
             'page',
         );

@@ -1,3 +1,5 @@
+import type { Editor } from '@tiptap/core';
+import { useEditorState } from '@tiptap/react';
 import {
     Bold,
     Code,
@@ -10,31 +12,26 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useSyncExternalStore } from 'react';
-import type { FormatCommand } from '@/lib/composer-format';
+import { runMessageFormatCommand } from '@/lib/message-composer-commands';
+import type { FormatCommand } from '@/lib/message-composer-commands';
 import { cn } from '@/lib/utils';
 
-/**
- * The composer's formatting row.
- *
- * Every button writes the marker a person could have typed themselves — see
- * {@see applyCommand} — so the toolbar is a shortcut for the syntax rather than
- * a second way of authoring a message. That is also why the row stops where the
- * grammar does: there is no underline button, because a message body has no
- * underline, and a control that writes characters which render as themselves is
- * worse than an absent one.
- *
- * Pressing a button must not take the caret out of the textarea, so each one
- * cancels its own mousedown. The click still fires, and the composer puts the
- * selection back where the edit left it.
- */
-export function FormattingToolbar({
-    onCommand,
-}: {
-    onCommand: (command: FormatCommand) => void;
-}) {
-    // Subscribed once here and passed down, rather than eight buttons each
-    // subscribing to a store that never fires.
+/** Tiptap controls for exactly the formatting Snack messages can render. */
+export function FormattingToolbar({ editor }: { editor: Editor }) {
     const modifier = useModifierLabel();
+    const active = useEditorState({
+        editor,
+        selector: ({ editor: current }) => ({
+            bold: current?.isActive('bold') ?? false,
+            italic: current?.isActive('italic') ?? false,
+            strike: current?.isActive('strike') ?? false,
+            ordered: current?.isActive('orderedList') ?? false,
+            bullet: current?.isActive('bulletList') ?? false,
+            quote: current?.isActive('blockquote') ?? false,
+            code: current?.isActive('code') ?? false,
+            codeblock: current?.isActive('codeBlock') ?? false,
+        }),
+    });
 
     return (
         <div
@@ -57,7 +54,10 @@ export function FormattingToolbar({
                             key={button.command}
                             button={button}
                             modifier={modifier}
-                            onCommand={onCommand}
+                            pressed={active?.[button.command] ?? false}
+                            onCommand={(command) =>
+                                runMessageFormatCommand(editor, command)
+                            }
                         />
                     ))}
                 </div>
@@ -70,14 +70,9 @@ type FormatButtonSpec = {
     command: FormatCommand;
     label: string;
     icon: LucideIcon;
-    /** The key part of the shortcut, written the way the hint reads it. */
     shortcut?: string;
 };
 
-/**
- * The buttons, in three groups: what a run of text looks like, how lines are
- * arranged, and code.
- */
 const GROUPS: FormatButtonSpec[][] = [
     [
         { command: 'bold', label: 'Bold', icon: Bold, shortcut: 'B' },
@@ -128,11 +123,12 @@ const GROUPS: FormatButtonSpec[][] = [
 function FormatButton({
     button,
     modifier,
+    pressed,
     onCommand,
 }: {
     button: FormatButtonSpec;
-    /** How this machine writes the modifier — see {@see useModifierLabel}. */
     modifier: string;
+    pressed: boolean;
     onCommand: (command: FormatCommand) => void;
 }) {
     const Icon = button.icon;
@@ -141,18 +137,19 @@ function FormatButton({
         <button
             type="button"
             aria-label={button.label}
+            aria-pressed={pressed}
             title={
                 button.shortcut === undefined
                     ? button.label
                     : `${button.label} (${modifier}${button.shortcut})`
             }
-            // Keeps the selection in the textarea; see the note on the toolbar.
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onCommand(button.command)}
             className={cn(
                 'rounded-md p-1.5 text-muted-foreground transition-colors',
                 'hover:bg-accent hover:text-foreground',
                 'focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none',
+                pressed && 'bg-accent text-foreground',
             )}
         >
             <Icon aria-hidden="true" className="size-4" />
@@ -160,36 +157,12 @@ function FormatButton({
     );
 }
 
-/**
- * How this machine writes the shortcut modifier.
- *
- * # Why this is a store and not a function call
- *
- * Reading `navigator` during render is the obvious version and it is a hydration
- * error: the server has no keyboard to describe so it renders "Ctrl", the client
- * renders "⌘", and React finds a tree whose attributes do not match the HTML it
- * was given. It warns, gives up on patching that subtree, and every title in the
- * toolbar is then whatever the server guessed.
- *
- * `useSyncExternalStore` is the mechanism for exactly this: the third argument is
- * the server snapshot, so the first client render *also* says "Ctrl" — matching
- * the HTML — and the real value arrives in the commit straight after. The
- * titles are correct by the time anyone can hover one.
- *
- * `subscribe` is a no-op because the answer cannot change: the machine does not
- * become a Mac. It still has to be a stable reference, or React resubscribes on
- * every render.
- */
 const NEVER_CHANGES = () => () => {};
 
 function useModifierLabel(): string {
     return useSyncExternalStore(NEVER_CHANGES, clientModifier, serverModifier);
 }
 
-/*
- * Both return string literals, which is what keeps this safe: React compares
- * snapshots with Object.is and would loop forever on a fresh object each call.
- */
 function clientModifier(): string {
     return /mac|iphone|ipad/i.test(navigator.userAgent) ? '⌘ ' : 'Ctrl ';
 }

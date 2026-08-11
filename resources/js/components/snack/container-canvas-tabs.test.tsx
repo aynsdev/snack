@@ -31,6 +31,7 @@ const canvas: CanvasDocument = {
     updated_at: null,
     can_update: true,
     can_delete: true,
+    is_starred: false,
 };
 
 describe('ContainerCanvasTabs', () => {

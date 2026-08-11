@@ -35,6 +35,52 @@ class CanvasDocument
         ];
     }
 
+    /**
+     * @return array{title: string, content: array<string, mixed>}
+     */
+    public function template(string $template): array
+    {
+        return match ($template) {
+            'employee-onboarding' => [
+                'title' => 'Employee onboarding',
+                'content' => $this->document([
+                    $this->heading('Welcome to the team', 1),
+                    $this->paragraph('Everything you need for a confident first week.'),
+                    $this->heading('Your first week', 2),
+                    $this->task('Meet your manager and teammates'),
+                    $this->task('Review the team handbook'),
+                    $this->task('Set up your tools and accounts'),
+                ]),
+            ],
+            'meeting-notes' => [
+                'title' => 'Meeting notes',
+                'content' => $this->document([
+                    $this->heading('Meeting notes', 1),
+                    $this->paragraph('Date · Attendees · Facilitator'),
+                    $this->heading('Agenda', 2),
+                    $this->paragraph('Add the topics you want to cover.'),
+                    $this->heading('Decisions', 2),
+                    $this->paragraph('Capture what the team agreed to.'),
+                    $this->heading('Action items', 2),
+                    $this->task('Add an owner and due date'),
+                ]),
+            ],
+            'project-brief' => [
+                'title' => 'Project brief',
+                'content' => $this->document([
+                    $this->heading('Project brief', 1),
+                    $this->heading('Overview', 2),
+                    $this->paragraph('Describe the problem and the outcome this project should create.'),
+                    $this->heading('Goals', 2),
+                    $this->paragraph('Define the measurable results.'),
+                    $this->heading('Scope and milestones', 2),
+                    $this->task('Add the first milestone'),
+                ]),
+            ],
+            default => throw new \InvalidArgumentException('Unknown Canvas template.'),
+        };
+    }
+
     /** @param array<string, mixed> $document */
     public function isValid(array $document): bool
     {
@@ -169,6 +215,47 @@ class CanvasDocument
         $scheme = strtolower((string) parse_url($value, PHP_URL_SCHEME));
 
         return in_array($scheme, ['http', 'https', 'mailto', 'tel'], true);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $content
+     * @return array{type: string, content: array<int, array<string, mixed>>}
+     */
+    private function document(array $content): array
+    {
+        return ['type' => 'doc', 'content' => $content];
+    }
+
+    /** @return array<string, mixed> */
+    private function heading(string $text, int $level): array
+    {
+        return [
+            'type' => 'heading',
+            'attrs' => ['level' => $level],
+            'content' => [['type' => 'text', 'text' => $text]],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function paragraph(string $text): array
+    {
+        return [
+            'type' => 'paragraph',
+            'content' => [['type' => 'text', 'text' => $text]],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function task(string $text): array
+    {
+        return [
+            'type' => 'taskList',
+            'content' => [[
+                'type' => 'taskItem',
+                'attrs' => ['checked' => false],
+                'content' => [$this->paragraph($text)],
+            ]],
+        ];
     }
 
     /**

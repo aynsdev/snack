@@ -62,7 +62,8 @@ import {
     Undo2,
     YoutubeIcon,
 } from 'lucide-react';
-import { useState } from 'react';
+import { forwardRef, useRef, useState } from 'react';
+import type { ComponentPropsWithoutRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -387,37 +388,55 @@ function MarkButton({
     );
 }
 
-function ToolbarButton({
-    label,
-    pressed,
-    disabled,
-    onClick,
-    children,
-}: {
+type ToolbarButtonProps = Omit<
+    ComponentPropsWithoutRef<'button'>,
+    'children'
+> & {
     label: string;
     pressed?: boolean;
-    disabled?: boolean;
-    onClick: () => void;
+    preserveEditorFocus?: boolean;
     children: React.ReactNode;
-}) {
-    return (
-        <button
-            type="button"
-            title={label}
-            aria-label={label}
-            aria-pressed={pressed}
-            disabled={disabled}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={onClick}
-            className={cn(
-                'flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40 [&>svg]:size-4',
-                pressed && 'bg-accent text-foreground',
-            )}
-        >
-            {children}
-        </button>
-    );
-}
+};
+
+const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
+    function ToolbarButton(
+        {
+            label,
+            pressed,
+            preserveEditorFocus = true,
+            onMouseDown,
+            className,
+            children,
+            ...buttonProps
+        },
+        ref,
+    ) {
+        return (
+            <button
+                {...buttonProps}
+                ref={ref}
+                type="button"
+                title={label}
+                aria-label={label}
+                aria-pressed={pressed}
+                onMouseDown={(event) => {
+                    onMouseDown?.(event);
+
+                    if (preserveEditorFocus && !event.defaultPrevented) {
+                        event.preventDefault();
+                    }
+                }}
+                className={cn(
+                    'flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40 [&>svg]:size-4',
+                    pressed && 'bg-accent text-foreground',
+                    className,
+                )}
+            >
+                {children}
+            </button>
+        );
+    },
+);
 
 function InsertMenu({
     editor,
@@ -625,7 +644,11 @@ function AlignmentMenu({ editor }: { editor: Editor }) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <ToolbarButton label="Text alignment" onClick={() => undefined}>
+                <ToolbarButton
+                    label="Text alignment"
+                    preserveEditorFocus={false}
+                    onClick={() => undefined}
+                >
                     <AlignLeft />
                 </ToolbarButton>
             </DropdownMenuTrigger>
@@ -657,24 +680,48 @@ function AlignmentMenu({ editor }: { editor: Editor }) {
 }
 
 function EmojiMenu({ editor }: { editor: Editor }) {
+    const selection = useRef({
+        from: editor.state.selection.from,
+        to: editor.state.selection.to,
+    });
+
     return (
-        <DropdownMenu>
+        <DropdownMenu
+            onOpenChange={(open) => {
+                if (open) {
+                    selection.current = {
+                        from: editor.state.selection.from,
+                        to: editor.state.selection.to,
+                    };
+                }
+            }}
+        >
             <DropdownMenuTrigger asChild>
-                <ToolbarButton label="Insert emoji" onClick={() => undefined}>
+                <ToolbarButton
+                    label="Insert emoji"
+                    preserveEditorFocus={false}
+                    onClick={() => undefined}
+                >
                     <Smile />
                 </ToolbarButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent
                 side="top"
                 className="grid grid-cols-4 gap-1 p-2"
+                onCloseAutoFocus={(event) => event.preventDefault()}
             >
                 {EMOJIS.map((emoji) => (
                     <DropdownMenuItem
                         key={emoji}
                         aria-label={`Insert ${emoji}`}
-                        onSelect={() =>
-                            editor.chain().focus().insertContent(emoji).run()
-                        }
+                        onSelect={() => {
+                            editor
+                                .chain()
+                                .focus()
+                                .setTextSelection(selection.current)
+                                .insertContent(emoji)
+                                .run();
+                        }}
                         className="flex size-9 justify-center p-0 text-lg"
                     >
                         {emoji}
@@ -689,7 +736,11 @@ function TableMenu({ editor }: { editor: Editor }) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <ToolbarButton label="Table tools" onClick={() => undefined}>
+                <ToolbarButton
+                    label="Table tools"
+                    preserveEditorFocus={false}
+                    onClick={() => undefined}
+                >
                     <Table2 />
                 </ToolbarButton>
             </DropdownMenuTrigger>

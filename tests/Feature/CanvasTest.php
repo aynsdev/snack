@@ -11,8 +11,9 @@ use Illuminate\Support\Facades\Storage;
 
 use function Pest\Laravel\actingAs;
 
-it('lists canvases in the current workspace newest first', function () {
+it('lists accessible workspace channel and conversation canvases newest first', function () {
     [$workspace, $owner] = makeWorkspaceWithOwner();
+    $participant = joinWorkspace($workspace);
     $older = Canvas::factory()->forWorkspace($workspace, $owner)->create([
         'title' => 'Team handbook',
         'updated_at' => now()->subDay(),
@@ -23,9 +24,21 @@ it('lists canvases in the current workspace newest first', function () {
     ]);
     Canvas::factory()->create(['title' => 'Another workspace']);
     $channel = makeChannel($workspace);
-    Canvas::factory()->forWorkspace($workspace, $owner)->create([
+    $channelCanvas = Canvas::factory()->forWorkspace($workspace, $owner)->create([
         'title' => 'Channel notes',
         'channel_id' => $channel->id,
+        'updated_at' => now()->subHours(2),
+    ]);
+    $conversation = makeConversation($workspace, [$owner, $participant]);
+    $conversationCanvas = Canvas::factory()->forWorkspace($workspace, $owner)->create([
+        'title' => 'DM notes',
+        'conversation_id' => $conversation->id,
+        'updated_at' => now()->subHour(),
+    ]);
+    $privateChannel = makeChannel($workspace, ChannelType::Private);
+    Canvas::factory()->forWorkspace($workspace, $participant)->create([
+        'title' => 'Private notes',
+        'channel_id' => $privateChannel->id,
     ]);
 
     actingAs($owner)
@@ -33,13 +46,63 @@ it('lists canvases in the current workspace newest first', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('canvases/index')
-            ->has('canvases', 2)
+            ->has('canvases', 4)
             ->where('canvases.0.id', $newer->public_id)
             ->where('canvases.0.title', 'Launch plan')
-            ->where('canvases.1.id', $older->public_id)
+            ->where('canvases.0.is_starred', false)
+            ->where('canvases.1.id', $conversationCanvas->public_id)
+            ->where('canvases.1.container.type', 'conversation')
+            ->where('canvases.1.container.label', $participant->name)
+            ->where('canvases.2.id', $channelCanvas->public_id)
+            ->where('canvases.2.container.type', 'channel')
+            ->where('canvases.2.container.label', '#'.$channel->name)
+            ->where('canvases.3.id', $older->public_id)
+            ->where('canvases.3.container', null)
             ->missing('canvases.0.body')
+            ->has('file_canvas_sidebar.recent', 4)
+            ->has('file_canvas_sidebar.starred', 0)
+            ->where('file_canvas_sidebar.recent.0.id', 'canvas:'.$newer->public_id)
+            ->where('file_canvas_sidebar.recent.1.id', 'canvas:'.$conversationCanvas->public_id)
             ->where('abilities.create', true),
         );
+});
+
+it('filters canvases by creator and sorts by title', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $member = joinWorkspace($workspace);
+    Canvas::factory()->forWorkspace($workspace, $owner)->create(['title' => 'Zulu']);
+    Canvas::factory()->forWorkspace($workspace, $member)->create(['title' => 'Alpha']);
+
+    actingAs($owner)
+        ->get(route('canvases.index', [
+            $workspace,
+            'scope' => 'shared',
+            'sort' => 'title',
+        ]))
+        ->assertInertia(fn ($page) => $page
+            ->has('canvases', 1)
+            ->where('canvases.0.title', 'Alpha')
+            ->where('filters.scope', 'shared')
+            ->where('filters.sort', 'title'),
+        );
+});
+
+it('creates a prefilled Canvas from a template', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+
+    actingAs($owner)
+        ->post(route('canvases.store', $workspace), [
+            'template' => 'meeting-notes',
+        ])
+        ->assertRedirect();
+
+    $canvas = Canvas::query()->sole();
+
+    expect($canvas->title)->toBe('Meeting notes')
+        ->and($canvas->body)->toContain('Meeting notes', 'Action items')
+        ->and($canvas->content['type'])->toBe('doc')
+        ->and(collect($canvas->content['content'])->pluck('type'))
+        ->toContain('heading', 'taskList');
 });
 
 it('searches canvas titles and bodies case-insensitively', function () {

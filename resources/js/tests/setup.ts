@@ -57,3 +57,33 @@ Object.defineProperty(window, 'ResizeObserver', {
 });
 
 Object.defineProperty(window, 'scrollTo', { writable: true, value: vi.fn() });
+
+/**
+ * ProseMirror asks the browser to translate selections into screen geometry.
+ * jsdom has a DOM selection model but no layout engine, so these methods need
+ * inert geometry for Tiptap interaction tests.
+ */
+const emptyRect = {
+    bottom: 0,
+    height: 0,
+    left: 0,
+    right: 0,
+    top: 0,
+    width: 0,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+};
+
+Object.defineProperty(document, 'elementFromPoint', {
+    writable: true,
+    value: vi.fn(() => null),
+});
+Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+    writable: true,
+    value: vi.fn(() => emptyRect),
+});
+Object.defineProperty(Range.prototype, 'getClientRects', {
+    writable: true,
+    value: vi.fn(() => []),
+});

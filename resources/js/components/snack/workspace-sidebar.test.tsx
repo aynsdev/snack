@@ -10,7 +10,13 @@ const currentUrl = vi.hoisted(() => ({ value: '/w/snack-hq/dms' }));
 
 vi.mock('@inertiajs/react', () => ({
     usePage,
-    router: { on: () => () => {}, visit: vi.fn(), patch: vi.fn() },
+    router: {
+        on: () => () => {},
+        visit: vi.fn(),
+        patch: vi.fn(),
+        post: vi.fn(),
+        delete: vi.fn(),
+    },
     // The section dialogs are mounted (closed) alongside every menu that can
     // open one, so the module's form component has to exist even when no
     // dialog in the test is ever opened.
@@ -133,7 +139,10 @@ function makeProject(id: number, name: string, groupId: number | null) {
 }
 
 /** Anything here is merged over the default navigation payload. */
-function mockWorkspace(overrides: Record<string, unknown> = {}) {
+function mockWorkspace(
+    overrides: Record<string, unknown> = {},
+    pageProps: Record<string, unknown> = {},
+) {
     usePage.mockReturnValue({
         props: {
             snack: {
@@ -180,6 +189,7 @@ function mockWorkspace(overrides: Record<string, unknown> = {}) {
                 },
             },
             auth: { user: null, profile: makeUser(1, 'Viewer') },
+            ...pageProps,
         },
     });
 }
@@ -187,6 +197,8 @@ function mockWorkspace(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
     usePage.mockReset();
     vi.mocked(router.patch).mockClear();
+    vi.mocked(router.post).mockClear();
+    vi.mocked(router.delete).mockClear();
     // Which shape the sidebar takes is remembered across navigations on purpose
     // — see use-sidebar-section.ts — so it has to be cleared between tests.
     sessionStorage.clear();
@@ -330,6 +342,99 @@ describe('WorkspaceSidebar inside direct messages', () => {
 });
 
 describe('WorkspaceSidebar outside direct messages', () => {
+    it('shows Files and Canvases navigation throughout the Files section', async () => {
+        const user = userEvent.setup();
+        currentUrl.value = '/w/snack-hq/canvases/01K2CANVAS';
+        mockWorkspace(
+            {},
+            {
+                file_canvas_sidebar: {
+                    recent: [
+                        {
+                            id: 'file:4',
+                            target_id: 4,
+                            type: 'file',
+                            label: 'launch-brief.pdf',
+                            url: '/files/4?signature=signed',
+                            is_starred: false,
+                        },
+                        {
+                            id: 'canvas:01K2CANVAS',
+                            target_id: '01K2CANVAS',
+                            type: 'canvas',
+                            label: 'Launch notes',
+                            url: '/w/snack-hq/canvases/01K2CANVAS',
+                            is_starred: true,
+                        },
+                    ],
+                    starred: [
+                        {
+                            id: 'canvas:01K2CANVAS',
+                            target_id: '01K2CANVAS',
+                            type: 'canvas',
+                            label: 'Launch notes',
+                            url: '/w/snack-hq/canvases/01K2CANVAS',
+                            is_starred: true,
+                        },
+                    ],
+                },
+            },
+        );
+
+        render(<WorkspaceSidebar />);
+
+        expect(
+            screen.getByRole('navigation', { name: 'Files and canvases' }),
+        ).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'All files' })).toHaveAttribute(
+            'href',
+            '/w/snack-hq/files',
+        );
+        expect(screen.getByRole('link', { name: 'Canvases' })).toHaveAttribute(
+            'href',
+            '/w/snack-hq/canvases',
+        );
+        expect(screen.getByRole('link', { name: 'Canvases' })).toHaveAttribute(
+            'aria-current',
+            'page',
+        );
+        expect(screen.getByText('Recent')).toBeInTheDocument();
+        expect(screen.getByText('Starred')).toBeInTheDocument();
+        expect(
+            screen.getByRole('link', { name: 'launch-brief.pdf' }),
+        ).toHaveAttribute('href', '/files/4?signature=signed');
+        expect(
+            screen.getAllByRole('link', { name: 'Launch notes' }),
+        ).toHaveLength(2);
+
+        await user.click(
+            screen.getByRole('button', { name: 'Star launch-brief.pdf' }),
+        );
+
+        expect(router.post).toHaveBeenCalledWith(
+            '/w/snack-hq/files/4/star',
+            {},
+            expect.objectContaining({ preserveScroll: true }),
+        );
+
+        await user.click(
+            screen.getAllByRole('button', { name: 'Unstar Launch notes' })[0],
+        );
+
+        expect(router.delete).toHaveBeenCalledWith(
+            '/w/snack-hq/canvases/01K2CANVAS/star',
+            expect.objectContaining({ preserveScroll: true }),
+        );
+
+        await user.click(screen.getByRole('button', { name: 'Create canvas' }));
+
+        expect(router.post).toHaveBeenCalledWith(
+            '/w/snack-hq/canvases',
+            {},
+            expect.objectContaining({ onFinish: expect.any(Function) }),
+        );
+    });
+
     it('keeps the global search button', () => {
         currentUrl.value = '/w/snack-hq/channels/general';
 

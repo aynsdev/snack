@@ -11,6 +11,7 @@ use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\FileCanvasSidebarContent;
 use App\Services\MessageVisibility;
 use App\Support\WorkspaceContext;
 use Illuminate\Database\Eloquent\Builder;
@@ -44,6 +45,7 @@ class FileBrowserController extends Controller
     public function __construct(
         private readonly MessageVisibility $visibility,
         private readonly WorkspaceContext $context,
+        private readonly FileCanvasSidebarContent $sidebarContent,
     ) {}
 
     public function index(Workspace $workspace, Request $request): InertiaResponse
@@ -84,6 +86,7 @@ class FileBrowserController extends Controller
             'channels' => $this->channelOptions($workspace, $user),
 
             'next_cursor' => $hasMore ? $page->last()?->id : null,
+            'file_canvas_sidebar' => $this->sidebarContent->for($workspace, $user),
         ]);
     }
 

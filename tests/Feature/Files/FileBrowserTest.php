@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ChannelType;
+use App\Models\Canvas;
 use App\Models\Channel;
 use App\Models\MessageAttachment;
 use App\Models\User;
@@ -32,7 +33,11 @@ it('lists files from channels the viewer can read', function () {
     $channel = makeChannel($workspace);
     addToChannel($channel, $owner);
 
-    shareFile($channel, $owner, 'quarterly.pdf');
+    $canvas = Canvas::factory()->forWorkspace($workspace, $owner)->create([
+        'title' => 'Quarterly plan',
+        'updated_at' => now()->subMinute(),
+    ]);
+    $file = shareFile($channel, $owner, 'quarterly.pdf');
 
     actingAs($owner)
         ->get(route('files.index', $workspace))
@@ -40,7 +45,11 @@ it('lists files from channels the viewer can read', function () {
         ->assertInertia(fn ($page) => $page
             ->component('files/index')
             ->has('files', 1)
-            ->where('files.0.name', 'quarterly.pdf'),
+            ->where('files.0.name', 'quarterly.pdf')
+            ->has('file_canvas_sidebar.recent', 2)
+            ->has('file_canvas_sidebar.starred', 0)
+            ->where('file_canvas_sidebar.recent.0.id', 'file:'.$file->id)
+            ->where('file_canvas_sidebar.recent.1.id', 'canvas:'.$canvas->public_id),
         );
 });
 
@@ -55,7 +64,11 @@ it('hides files shared in a private channel the viewer is not in', function () {
 
     actingAs($outsider)
         ->get(route('files.index', $workspace))
-        ->assertInertia(fn ($page) => $page->has('files', 0));
+        ->assertInertia(fn ($page) => $page
+            ->has('files', 0)
+            ->has('file_canvas_sidebar.recent', 0)
+            ->has('file_canvas_sidebar.starred', 0),
+        );
 });
 
 it('hides files from a conversation the viewer is not part of', function () {

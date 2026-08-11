@@ -1,7 +1,21 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { MessageComposer } from '@/components/snack/message-composer';
+import type { SnackUser } from '@/types';
+
+const bo: SnackUser = {
+    id: 2,
+    name: 'Bo Peep',
+    username: 'bo',
+    initials: 'BP',
+    avatar_url: null,
+    title: null,
+    department: null,
+    presence_status: 'online',
+    status_emoji: null,
+    status_message: null,
+};
 
 /**
  * The composer.
@@ -31,7 +45,8 @@ describe('MessageComposer', () => {
         await user.type(box, 'first{Shift>}{Enter}{/Shift}second');
 
         expect(onSend).not.toHaveBeenCalled();
-        expect(box).toHaveValue('first\nsecond');
+        expect(box).toHaveTextContent('firstsecond');
+        expect(box.innerHTML).toContain('<br');
     });
 
     it('clears after sending', async () => {
@@ -42,7 +57,7 @@ describe('MessageComposer', () => {
         const box = screen.getByRole('textbox');
         await user.type(box, 'Hello{Enter}');
 
-        expect(box).toHaveValue('');
+        expect(box).toHaveTextContent('');
     });
 
     it('refuses to send a whitespace-only message', async () => {
@@ -114,27 +129,21 @@ describe('MessageComposer', () => {
         ).toBeInTheDocument();
     });
 
-    /**
-     * The formatting row.
-     *
-     * It writes the same markers a person could type, into the same textarea,
-     * so the tests assert on the text in the box — that is the whole contract.
-     * Anything else would mean the composer had grown a second representation
-     * of a message body.
-     */
+    /** The formatting row renders rich text and sends Snack-compatible source. */
     describe('formatting', () => {
-        it('wraps the selected text in the marker the button promises', async () => {
+        it('renders selected text with the formatting the button promises', async () => {
             const user = userEvent.setup();
 
             render(<MessageComposer channelName="#general" onSend={vi.fn()} />);
 
-            const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+            const box = screen.getByRole('textbox');
             await user.type(box, 'make me bold');
-            box.setSelectionRange(8, 12);
+            selectText(box, 8, 12);
 
             await user.click(screen.getByRole('button', { name: 'Bold' }));
 
-            expect(box).toHaveValue('make me **bold**');
+            expect(box).toHaveTextContent('make me bold');
+            expect(box.querySelector('strong')).toHaveTextContent('bold');
         });
 
         it('keeps the selection so a second press undoes the first', async () => {
@@ -142,14 +151,15 @@ describe('MessageComposer', () => {
 
             render(<MessageComposer channelName="#general" onSend={vi.fn()} />);
 
-            const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+            const box = screen.getByRole('textbox');
             await user.type(box, 'word');
-            box.setSelectionRange(0, 4);
+            selectText(box, 0, 4);
 
             await user.click(screen.getByRole('button', { name: 'Italic' }));
             await user.click(screen.getByRole('button', { name: 'Italic' }));
 
-            expect(box).toHaveValue('word');
+            expect(box).toHaveTextContent('word');
+            expect(box.querySelector('em')).not.toBeInTheDocument();
         });
 
         it('marks the line the caret is on for a list', async () => {
@@ -163,7 +173,26 @@ describe('MessageComposer', () => {
                 screen.getByRole('button', { name: 'Bulleted list' }),
             );
 
-            expect(box).toHaveValue('- milk');
+            expect(within(box).getByRole('list')).toHaveTextContent('milk');
+        });
+
+        it('uses Shift+Enter to add another rich list item', async () => {
+            const onSend = vi.fn();
+            const user = userEvent.setup();
+
+            render(<MessageComposer channelName="#general" onSend={onSend} />);
+
+            const box = screen.getByRole('textbox');
+            await user.type(box, 'milk');
+            await user.click(
+                screen.getByRole('button', { name: 'Bulleted list' }),
+            );
+            await user.keyboard('{Shift>}{Enter}{/Shift}bread');
+            await user.click(
+                screen.getByRole('button', { name: 'Send message' }),
+            );
+
+            expect(onSend).toHaveBeenCalledWith('- milk\n- bread', []);
         });
 
         it('sends the markers as part of the body', async () => {
@@ -172,9 +201,9 @@ describe('MessageComposer', () => {
 
             render(<MessageComposer channelName="#general" onSend={onSend} />);
 
-            const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+            const box = screen.getByRole('textbox');
             await user.type(box, 'shipped');
-            box.setSelectionRange(0, 7);
+            selectText(box, 0, 7);
 
             await user.click(screen.getByRole('button', { name: 'Bold' }));
             await user.type(box, '{Enter}');
@@ -187,13 +216,13 @@ describe('MessageComposer', () => {
 
             render(<MessageComposer channelName="#general" onSend={vi.fn()} />);
 
-            const box = screen.getByRole('textbox') as HTMLTextAreaElement;
+            const box = screen.getByRole('textbox');
             await user.type(box, 'word');
-            box.setSelectionRange(0, 4);
+            selectText(box, 0, 4);
 
             await user.keyboard('{Control>}b{/Control}');
 
-            expect(box).toHaveValue('**word**');
+            expect(box.querySelector('strong')).toHaveTextContent('word');
         });
 
         it('offers no button for syntax the grammar does not have', () => {
@@ -246,7 +275,27 @@ describe('MessageComposer', () => {
             );
 
             // The space matters: "ask@ada" is not a mention to the tokenizer.
-            expect(box).toHaveValue('ask @');
+            expect(box).toHaveTextContent('ask @');
+        });
+
+        it('replaces a typed mention query and sends the selected handle', async () => {
+            const onSend = vi.fn();
+            const user = userEvent.setup();
+
+            render(
+                <MessageComposer
+                    channelName="#general"
+                    mentionSource={{ kind: 'local', people: [bo] }}
+                    onSend={onSend}
+                />,
+            );
+
+            const box = screen.getByRole('textbox');
+            await user.type(box, 'ask @b');
+            await user.click(screen.getByRole('option', { name: /Bo Peep/ }));
+            await user.type(box, 'today{Enter}');
+
+            expect(onSend).toHaveBeenCalledWith('ask @bo today', []);
         });
 
         it('offers no mention button where there is nobody to mention', () => {
@@ -329,3 +378,20 @@ describe('MessageComposer', () => {
         });
     });
 });
+
+function selectText(element: HTMLElement, start: number, end: number): void {
+    const node = element.querySelector('p')?.firstChild;
+
+    if (!(node instanceof Text)) {
+        throw new Error('Expected a plain paragraph text node in the editor.');
+    }
+
+    const range = document.createRange();
+    range.setStart(node, start);
+    range.setEnd(node, end);
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    fireEvent(document, new Event('selectionchange'));
+}

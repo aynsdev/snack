@@ -93,6 +93,7 @@ const canvas: CanvasDocument = {
     updated_at: '2026-08-10T00:00:00Z',
     can_update: true,
     can_delete: true,
+    is_starred: false,
 };
 
 describe('CanvasShow', () => {

@@ -11,6 +11,8 @@ use App\Models\Channel;
 use App\Models\Conversation;
 use App\Models\Workspace;
 use App\Services\CanvasDocument;
+use App\Services\CanvasVisibility;
+use App\Services\FileCanvasSidebarContent;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,27 +26,40 @@ use Inertia\Response as InertiaResponse;
  */
 class CanvasController extends Controller
 {
+    public function __construct(
+        private readonly CanvasVisibility $visibility,
+        private readonly FileCanvasSidebarContent $sidebarContent,
+    ) {}
+
     public function index(Workspace $workspace, Request $request): InertiaResponse
     {
         $this->authorize('viewAny', [Canvas::class, $workspace]);
 
         $user = $request->user();
         $user->loadMissing('workspaceMemberships');
-
         $term = $request->string('q')->squish()->limit(120, '')->toString();
+        $scope = $request->string('scope')->toString();
+        $scope = in_array($scope, ['created', 'shared'], true) ? $scope : 'all';
+        $sort = $request->string('sort')->toString();
+        $sort = in_array($sort, ['updated', 'created', 'title'], true) ? $sort : 'updated';
 
-        $canvases = Canvas::query()
-            ->where('workspace_id', $workspace->id)
-            ->whereNull('channel_id')
-            ->whereNull('conversation_id')
+        $canvases = $this->visibility
+            ->query($workspace, $user)
             ->when($term !== '', function (Builder $query) use ($term): void {
                 $query->where(function (Builder $search) use ($term): void {
                     $search->where('title', 'ilike', "%{$term}%")
                         ->orWhere('body', 'ilike', "%{$term}%");
                 });
             })
-            ->with(['creator', 'editor'])
-            ->orderByDesc('updated_at')
+            ->when($scope === 'created', fn (Builder $query) => $query->where('created_by', $user->id))
+            ->when($scope === 'shared', fn (Builder $query) => $query->where('created_by', '!=', $user->id))
+            ->with(['creator', 'editor', 'channel', 'conversation.activeUsers'])
+            ->withExists([
+                'stars as is_starred' => fn (Builder $query) => $query->where('user_id', $user->id),
+            ])
+            ->when($sort === 'updated', fn (Builder $query) => $query->orderByDesc('updated_at'))
+            ->when($sort === 'created', fn (Builder $query) => $query->orderByDesc('created_at'))
+            ->when($sort === 'title', fn (Builder $query) => $query->orderBy('title'))
             ->simplePaginate(30)
             ->withQueryString();
 
@@ -54,7 +69,11 @@ class CanvasController extends Controller
 
         return Inertia::render('canvases/index', [
             'canvases' => CanvasResource::collection($canvases->getCollection())->resolve($request),
-            'filters' => ['q' => $term === '' ? null : $term],
+            'filters' => [
+                'q' => $term === '' ? null : $term,
+                'scope' => $scope,
+                'sort' => $sort,
+            ],
             'pagination' => [
                 'next' => $canvases->nextPageUrl(),
                 'previous' => $canvases->previousPageUrl(),
@@ -62,6 +81,7 @@ class CanvasController extends Controller
             'abilities' => [
                 'create' => $user->can('create', [Canvas::class, $workspace]),
             ],
+            'file_canvas_sidebar' => $this->sidebarContent->for($workspace, $user),
         ]);
     }
 
@@ -70,10 +90,16 @@ class CanvasController extends Controller
         StoreCanvasRequest $request,
         CanvasDocument $documents,
     ): RedirectResponse {
+        $validated = $request->validated();
+        $preset = isset($validated['template'])
+            ? $documents->template($validated['template'])
+            : ['title' => 'Untitled', 'content' => $documents->empty()];
         $canvas = $this->createCanvas(
             workspace: $workspace,
             creatorId: $request->user()->id,
-            content: $documents->empty(),
+            content: $preset['content'],
+            title: $preset['title'],
+            body: $documents->text($preset['content']),
         );
 
         return to_route('canvases.show', [$workspace, $canvas])
@@ -125,6 +151,8 @@ class CanvasController extends Controller
         Workspace $workspace,
         int $creatorId,
         array $content,
+        string $title = 'Untitled',
+        string $body = '',
         ?Channel $channel = null,
         ?Conversation $conversation = null,
     ): Canvas {
@@ -134,8 +162,8 @@ class CanvasController extends Controller
             'conversation_id' => $conversation?->id,
             'created_by' => $creatorId,
             'updated_by' => $creatorId,
-            'title' => 'Untitled',
-            'body' => '',
+            'title' => $title,
+            'body' => $body,
             'content' => $content,
         ]);
     }
@@ -154,10 +182,13 @@ class CanvasController extends Controller
             'cover',
             'channel',
             'conversation.activeUsers',
+        ])->loadExists([
+            'stars as is_starred' => fn (Builder $query) => $query->where('user_id', $request->user()->id),
         ])->setRelation('workspace', $workspace);
 
         return Inertia::render('canvases/show', [
             'canvas' => (new CanvasResource($canvas))->resolve($request),
+            'file_canvas_sidebar' => $this->sidebarContent->for($workspace, $request->user()),
         ]);
     }
 

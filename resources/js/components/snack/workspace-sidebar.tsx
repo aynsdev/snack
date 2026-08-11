@@ -33,6 +33,7 @@ import {
     ChannelSectionToggle,
 } from '@/components/snack/channel-sections';
 import { ConversationListItem } from '@/components/snack/conversation-list-item';
+import { FileCanvasSidebar } from '@/components/snack/file-canvas-sidebar';
 import { NewMessageDialog } from '@/components/snack/new-message-dialog';
 import { NotificationPermissionPrompt } from '@/components/snack/notification-permission-prompt';
 import { PersonListItem } from '@/components/snack/person-list-item';
@@ -53,6 +54,8 @@ import {
     useActiveChannelSlug,
     useActiveConversationId,
     useActiveProjectSlug,
+    useIsCanvasesView,
+    useIsFilesView,
     useIsHuddlesView,
     useIsThreadsView,
 } from '@/hooks/use-active-channel';
@@ -128,6 +131,8 @@ export function WorkspaceSidebar({
     const activeConversationId = useActiveConversationId();
     const isThreadsView = useIsThreadsView();
     const isHuddlesView = useIsHuddlesView();
+    const isFilesView = useIsFilesView();
+    const isCanvasesView = useIsCanvasesView();
 
     /*
      * Inside direct messages the sidebar is the DM list and nothing else.
@@ -153,6 +158,10 @@ export function WorkspaceSidebar({
      * wherever you are in the workspace, which is the only reason it exists.
      */
     useSearchShortcut(searchIndex.url(workspace.slug));
+
+    if (isFilesView || isCanvasesView) {
+        return <FileCanvasSidebar onNavigate={onNavigate} />;
+    }
 
     if (isAssets) {
         /*

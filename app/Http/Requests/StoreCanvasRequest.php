@@ -7,6 +7,7 @@ use Illuminate\Auth\Access\Response;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 class StoreCanvasRequest extends FormRequest
 {
@@ -25,6 +26,12 @@ class StoreCanvasRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [];
+        return [
+            'template' => ['nullable', 'string', Rule::in([
+                'employee-onboarding',
+                'meeting-notes',
+                'project-brief',
+            ])],
+        ];
     }
 }
