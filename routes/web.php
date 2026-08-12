@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Activity\ActivityController;
+use App\Http\Controllers\Ai\BiteApprovalController;
 use App\Http\Controllers\Assets\AssetController;
 use App\Http\Controllers\Assets\AssetFolderController;
 use App\Http\Controllers\Assets\AssetLibraryController;
@@ -535,6 +536,17 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->name('pins.store');
         Route::delete('messages/{message}/pin', [PinController::class, 'destroy'])
             ->name('pins.destroy');
+
+        /*
+         * The button on Bite's approval card. A POST rather than a PATCH on the
+         * message: what it changes is a paused tool call in the AI SDK's tables,
+         * and rewriting the card is a side effect of that rather than the point.
+         * Throttled with the message limiter because each press is a chain of
+         * provider round trips billed to this installation.
+         */
+        Route::post('messages/{message}/bite', [BiteApprovalController::class, 'store'])
+            ->middleware('throttle:messages')
+            ->name('bite.approvals.store');
 
         Route::post('messages/{message}/save', [SaveController::class, 'store'])
             ->name('saves.store');

@@ -7,6 +7,7 @@ use App\Enums\MessageType;
 use App\Events\ChannelActivity;
 use App\Events\MessageSent;
 use App\Events\ThreadActivity;
+use App\Jobs\AnswerWithBite;
 use App\Jobs\DeliverMessageNotifications;
 use App\Jobs\IndexMessage;
 use App\Models\Channel;
@@ -15,6 +16,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Services\BiteSummons;
 use App\Services\MessageBody;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -187,6 +189,19 @@ class SendMessage
          * before would race the rows it depends on and silently notify nobody.
          */
         DeliverMessageNotifications::dispatch($message->id);
+
+        /*
+         * And Bite, if it was the one being spoken to.
+         *
+         * Decided here rather than inside the job so that the overwhelming
+         * majority of messages — every one that does not name it — cost a
+         * config read and a regex instead of a queued job that wakes a worker
+         * to discover it has nothing to do. {@see BiteSummons} asks again on
+         * the other side anyway, because the answer can change in between.
+         */
+        if (app(BiteSummons::class)->summonedBy($message) !== null) {
+            AnswerWithBite::dispatch($message->id);
+        }
 
         /*
          * The reply itself goes to the thread's own channel, which only people

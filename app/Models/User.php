@@ -88,12 +88,21 @@ class User extends Authenticatable implements PasskeyUser
      * Whether this account is software.
      *
      * Deliberately absent from the fillable list above: nothing a person submits
-     * should be able to turn an account into a bot, and the only writer is
-     * {@see App\Services\StandupBot}, which sets it explicitly.
+     * should be able to turn an account into a bot, and the only writers are
+     * {@see App\Services\BotAccount} and {@see App\Services\WebhookBot}, which
+     * set it explicitly.
      */
     public function isBot(): bool
     {
-        return $this->is_bot;
+        /*
+         * Cast rather than returned bare. The column defaults to false in the
+         * database, so a model that was just inserted without naming it has no
+         * such attribute in memory until it is refreshed — and the boolean cast
+         * of a missing attribute is null, not false. Every caller here is asking
+         * a yes-or-no question about a sender it was handed rather than one it
+         * re-read, so this has to answer one.
+         */
+        return (bool) $this->is_bot;
     }
 
     /**

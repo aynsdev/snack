@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { AttachmentList } from '@/components/snack/attachment-list';
+import { BiteCard } from '@/components/snack/bite-card';
 import { MessageText } from '@/components/snack/message-text';
 import { StandupCard } from '@/components/snack/standup-card';
 import { UserAvatar } from '@/components/snack/user-avatar';
@@ -242,6 +243,23 @@ export function MessageItem({
                         {message.webhook != null && (
                             <WebhookAttachments
                                 attachments={message.webhook.attachments}
+                            />
+                        )}
+
+                        {/*
+                         * Bite's approval card, on the one kind of message that
+                         * carries it — `bite` is null on every other message,
+                         * including all of Bite's ordinary answers.
+                         *
+                         * Below the body like the two above: the body says what
+                         * it wants to do in words, which is what search indexes
+                         * and what a notification reads out to somebody who is
+                         * not going to see this card at all.
+                         */}
+                        {message.bite != null && (
+                            <BiteCard
+                                card={message.bite}
+                                messageId={message.id}
                             />
                         )}
 

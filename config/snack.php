@@ -678,4 +678,81 @@ return [
         'max_answer_length' => 2000,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Bite
+    |--------------------------------------------------------------------------
+    |
+    | The workspace assistant. Bite is addressed the way a colleague is — by
+    | name in a channel, or in a direct message — and answers using the same
+    | data the person asking could have found by navigating. Everything it can
+    | reach is bounded by that: see App\Ai\BiteContext.
+    |
+    */
+
+    'bite' => [
+        /*
+         * The master switch.
+         *
+         * Off by default, because Bite talks to a third party. An installation
+         * that has not deliberately turned it on must not start posting its
+         * members' messages to an AI provider because a dependency happened to
+         * be installed.
+         */
+        'enabled' => (bool) env('SNACK_BITE_ENABLED', false),
+
+        /*
+         * The handle people address it by, in addition to the account's real
+         * username.
+         *
+         * `users.username` is unique across the installation, so only the
+         * first workspace's account can actually hold "bite" — the rest are
+         * "bite-{workspace_id}". Summoning does not go through that column
+         * (see App\Services\BiteSummons), so every workspace answers to the
+         * same word regardless of which one got the short name.
+         */
+        'handle' => 'bite',
+
+        /*
+         * How many turns of the surrounding conversation Bite is given.
+         *
+         * It reads the thread or DM it was addressed in so that "what about
+         * the other one?" means something. Deep enough to carry a real
+         * exchange, shallow enough that a year-old DM does not become a
+         * five-figure token bill on every "thanks".
+         */
+        'context_messages' => 20,
+
+        /*
+         * The ceiling on one answer's tool-calling loop.
+         *
+         * Each step is a provider round trip, so this is the difference
+         * between an answer that takes four seconds and one that takes a
+         * minute. Eight is enough to search, narrow, read a file, and reply.
+         */
+        'max_steps' => 8,
+
+        'files' => [
+            /*
+             * The most text Bite will inline from one file.
+             *
+             * Files are read into the prompt whole; a 40MB CSV would blow the
+             * context window and the budget in a single tool call. Past this
+             * the content is truncated and said to be truncated, which is
+             * recoverable — silently sending half a file is not.
+             */
+            'max_bytes' => (int) env('SNACK_BITE_FILE_MAX_BYTES', 200_000),
+
+            /*
+             * How long a document URL handed to the provider stays valid.
+             *
+             * PDFs cannot be inlined — the provider fetches them itself — so
+             * reading one means minting a temporary URL to a private object.
+             * Long enough for that fetch, short enough that the URL is worth
+             * nothing by the time it reaches a log.
+             */
+            'url_ttl_minutes' => 5,
+        ],
+    ],
+
 ];

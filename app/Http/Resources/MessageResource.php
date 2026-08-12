@@ -136,6 +136,22 @@ class MessageResource extends JsonResource
             'webhook' => is_array($message->metadata['webhook'] ?? null)
                 ? $message->metadata['webhook']
                 : null,
+
+            /*
+             * Bite's approval card, on the one kind of message that carries it:
+             * a reply where the assistant has paused before writing something
+             * and is waiting to be told to go ahead.
+             *
+             * Rides on the row like the two above, and for the third instance
+             * of the same reason — but with an extra one of its own. The pending
+             * tool call it refers to lives in the AI SDK's own tables, and
+             * resolving it per message would mean a query into those tables for
+             * every message in the timeline, including the overwhelming majority
+             * that have nothing to do with Bite. See {@see App\Support\BiteCard}.
+             */
+            'bite' => is_array($message->metadata['bite'] ?? null)
+                ? $message->metadata['bite']
+                : null,
         ];
     }
 

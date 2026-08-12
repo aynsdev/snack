@@ -13,14 +13,8 @@ import {
     store as starCanvas,
 } from '@/routes/canvases/star';
 import { index as filesIndex } from '@/routes/files';
-import {
-    destroy as unstarFile,
-    store as starFile,
-} from '@/routes/files/star';
-import type {
-    FileCanvasSidebarContent,
-    FileCanvasSidebarItem,
-} from '@/types';
+import { destroy as unstarFile, store as starFile } from '@/routes/files/star';
+import type { FileCanvasSidebarContent, FileCanvasSidebarItem } from '@/types';
 
 export function FileCanvasSidebar({ onNavigate }: { onNavigate?: () => void }) {
     const workspace = useWorkspace();

@@ -255,6 +255,16 @@ export type Message = {
      */
     webhook?: WebhookMessage | null;
     /**
+     * Present only on a Bite reply that is waiting to be approved — null on
+     * everything else, including all of Bite's ordinary answers.
+     *
+     * Carried by the message for the reason `standup` is, plus one of its own:
+     * the paused tool call it refers to lives in the AI SDK's own tables, and
+     * resolving it per message would mean querying those for every row in the
+     * timeline. Rewritten in place when the decision is made.
+     */
+    bite?: BiteCard | null;
+    /**
      * Absent on messages that arrived over the WebSocket: one broadcast reaches
      * every subscriber, so it cannot carry per-viewer permissions. The timeline
      * fills in a local hint for those; the server re-authorizes regardless.
@@ -1453,6 +1463,46 @@ export type StandupCard = {
 export type StandupAnswer = {
     question: string;
     answer: string;
+};
+
+/** Waiting on a decision, or decided one way or the other. */
+export type BiteCardState = 'pending' | 'approved' | 'rejected';
+
+/**
+ * The block one of Bite's messages carries when it has paused — mirrors
+ * App\Support\BiteCard.
+ *
+ * Bite reads freely but asks before it writes, so this appears on exactly one
+ * kind of message: a reply where it wants to create something and is waiting to
+ * be told to go ahead.
+ *
+ * `approvals` is emptied once decided. The ids in it address paused tool calls
+ * that the server has since consumed, and leaving them would invite a second
+ * POST that can only be an error.
+ */
+export type BiteCard = {
+    /** The stored agent conversation to resume into. */
+    conversation_id: string;
+    state: BiteCardState;
+    approvals: BiteApproval[];
+    /** Present once decided, when there was anything to report. */
+    outcome?: string | null;
+};
+
+/**
+ * One thing Bite is asking permission for.
+ *
+ * `summary` is the sentence to show. It is written by the tool itself — see
+ * App\Ai\Tools\CreateTask — precisely so the person can check the model got the
+ * details right before agreeing, which is the entire point of the pause. The
+ * raw arguments are deliberately not sent: nothing the browser returns can
+ * change what actually runs.
+ */
+export type BiteApproval = {
+    id: string;
+    tool: string;
+    reason: string | null;
+    summary: string;
 };
 
 /**

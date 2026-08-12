@@ -23,8 +23,19 @@ body,
 body *:not(html):not(style):not(br):not(tr):not(code) {
     box-sizing: border-box;
     /* Mirrors --font-sans, minus Geist: a webfont cannot be relied on in mail. */
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-        Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+    font-family:
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        Roboto,
+        Helvetica,
+        Arial,
+        sans-serif,
+        'Apple Color Emoji',
+        'Segoe UI Emoji',
+        'Segoe UI Symbol';
     position: relative;
 }
 
@@ -186,7 +197,9 @@ img {
     /* Mirrors --radius (0.625rem) rather than the framework's 4px. */
     border-radius: 10px;
     border-width: 1px;
-    box-shadow: 0 1px 3px 0 rgba(23, 23, 23, 0.06), 0 1px 2px -1px rgba(23, 23, 23, 0.08);
+    box-shadow:
+        0 1px 3px 0 rgba(23, 23, 23, 0.06),
+        0 1px 2px -1px rgba(23, 23, 23, 0.08);
     margin: 0 auto;
     padding: 0;
     width: 570px;

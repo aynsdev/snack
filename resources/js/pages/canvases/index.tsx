@@ -54,10 +54,7 @@ import type { CanvasDocument } from '@/types';
 
 type CanvasScope = 'all' | 'created' | 'shared';
 type CanvasSort = 'updated' | 'created' | 'title';
-type CanvasTemplate =
-    | 'employee-onboarding'
-    | 'meeting-notes'
-    | 'project-brief';
+type CanvasTemplate = 'employee-onboarding' | 'meeting-notes' | 'project-brief';
 
 type Props = {
     canvases: CanvasDocument[];
@@ -117,7 +114,11 @@ export default function CanvasIndex({
     };
 
     const visit = (
-        changes: Partial<{ q: string | null; scope: CanvasScope; sort: CanvasSort }>,
+        changes: Partial<{
+            q: string | null;
+            scope: CanvasScope;
+            sort: CanvasSort;
+        }>,
     ) => {
         const next = { ...filters, q: term.trim() || null, ...changes };
         const query = Object.fromEntries(
@@ -143,7 +144,8 @@ export default function CanvasIndex({
                                     Canvases
                                 </h1>
                                 <p className="mt-1 text-sm text-pretty text-muted-foreground">
-                                    Plans, notes, and shared knowledge for {workspace.name}.
+                                    Plans, notes, and shared knowledge for{' '}
+                                    {workspace.name}.
                                 </p>
                             </div>
 
@@ -172,7 +174,9 @@ export default function CanvasIndex({
                             />
                             <Input
                                 value={term}
-                                onChange={(event) => setTerm(event.target.value)}
+                                onChange={(event) =>
+                                    setTerm(event.target.value)
+                                }
                                 placeholder="Search canvases"
                                 aria-label="Search canvases"
                                 className="h-11 pl-10"
@@ -185,7 +189,9 @@ export default function CanvasIndex({
                             <button
                                 type="button"
                                 aria-expanded={templatesOpen}
-                                onClick={() => setTemplatesOpen((open) => !open)}
+                                onClick={() =>
+                                    setTemplatesOpen((open) => !open)
+                                }
                                 className="flex items-center gap-1.5 rounded-md text-sm font-semibold focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                             >
                                 <ChevronDown
@@ -195,7 +201,9 @@ export default function CanvasIndex({
                                         !templatesOpen && '-rotate-90',
                                     )}
                                 />
-                                <span id="canvas-templates-heading">Templates</span>
+                                <span id="canvas-templates-heading">
+                                    Templates
+                                </span>
                             </button>
 
                             {templatesOpen && (
@@ -205,7 +213,9 @@ export default function CanvasIndex({
                                             key={template.id}
                                             template={template}
                                             disabled={creating}
-                                            onUse={() => createCanvas(template.id)}
+                                            onUse={() =>
+                                                createCanvas(template.id)
+                                            }
                                         />
                                     ))}
                                 </div>
@@ -213,18 +223,23 @@ export default function CanvasIndex({
                         </section>
                     )}
 
-                    <section aria-label="Canvas library" className="flex flex-col gap-3">
+                    <section
+                        aria-label="Canvas library"
+                        className="flex flex-col gap-3"
+                    >
                         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                             <div
                                 role="group"
                                 aria-label="Filter canvases"
                                 className="flex flex-wrap gap-2"
                             >
-                                {([
-                                    ['all', 'All canvases'],
-                                    ['created', 'Created by you'],
-                                    ['shared', 'Shared with you'],
-                                ] as const).map(([value, label]) => (
+                                {(
+                                    [
+                                        ['all', 'All canvases'],
+                                        ['created', 'Created by you'],
+                                        ['shared', 'Shared with you'],
+                                    ] as const
+                                ).map(([value, label]) => (
                                     <Button
                                         key={value}
                                         type="button"
@@ -248,12 +263,19 @@ export default function CanvasIndex({
                                     visit({ sort: value })
                                 }
                             >
-                                <SelectTrigger size="sm" aria-label="Sort canvases">
+                                <SelectTrigger
+                                    size="sm"
+                                    aria-label="Sort canvases"
+                                >
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent align="end">
-                                    <SelectItem value="updated">Recently updated</SelectItem>
-                                    <SelectItem value="created">Recently created</SelectItem>
+                                    <SelectItem value="updated">
+                                        Recently updated
+                                    </SelectItem>
+                                    <SelectItem value="created">
+                                        Recently created
+                                    </SelectItem>
                                     <SelectItem value="title">Title</SelectItem>
                                 </SelectContent>
                             </Select>
@@ -313,7 +335,9 @@ export default function CanvasIndex({
                             >
                                 {pagination.previous && (
                                     <Button asChild variant="outline" size="sm">
-                                        <Link href={pagination.previous}>Previous</Link>
+                                        <Link href={pagination.previous}>
+                                            Previous
+                                        </Link>
                                     </Button>
                                 )}
                                 {pagination.next && (
@@ -419,13 +443,19 @@ function CanvasRow({
                             </span>
                         )}
                         <span className="truncate">
-                            {canvas.editor?.name ?? canvas.creator?.name ?? 'Former member'}
+                            {canvas.editor?.name ??
+                                canvas.creator?.name ??
+                                'Former member'}
                         </span>
                         {canvas.updated_at && (
                             <>
                                 <span aria-hidden="true">·</span>
-                                <time dateTime={canvas.updated_at} className="truncate">
-                                    Updated {formatRelativeDate(canvas.updated_at)}
+                                <time
+                                    dateTime={canvas.updated_at}
+                                    className="truncate"
+                                >
+                                    Updated{' '}
+                                    {formatRelativeDate(canvas.updated_at)}
                                 </time>
                             </>
                         )}
@@ -499,8 +529,10 @@ function CanvasActions({
 
                 return;
             } catch (error) {
-                if (error instanceof DOMException && error.name === 'AbortError') {
-
+                if (
+                    error instanceof DOMException &&
+                    error.name === 'AbortError'
+                ) {
                     return;
                 }
             }
@@ -552,7 +584,9 @@ function CanvasActions({
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                        onSelect={() => window.open(url, '_blank', 'noopener,noreferrer')}
+                        onSelect={() =>
+                            window.open(url, '_blank', 'noopener,noreferrer')
+                        }
                     >
                         <ExternalLink aria-hidden="true" />
                         Open in new window
@@ -586,9 +620,17 @@ function CanvasActions({
                         <dt className="text-muted-foreground">Location</dt>
                         <dd>{canvas.container?.label ?? 'Workspace'}</dd>
                         <dt className="text-muted-foreground">Created</dt>
-                        <dd>{canvas.created_at ? formatDate(canvas.created_at) : 'Unknown'}</dd>
+                        <dd>
+                            {canvas.created_at
+                                ? formatDate(canvas.created_at)
+                                : 'Unknown'}
+                        </dd>
                         <dt className="text-muted-foreground">Updated</dt>
-                        <dd>{canvas.updated_at ? formatDate(canvas.updated_at) : 'Unknown'}</dd>
+                        <dd>
+                            {canvas.updated_at
+                                ? formatDate(canvas.updated_at)
+                                : 'Unknown'}
+                        </dd>
                     </dl>
                 </DialogContent>
             </Dialog>
@@ -598,7 +640,8 @@ function CanvasActions({
                     <DialogHeader>
                         <DialogTitle>Delete “{canvas.title}”?</DialogTitle>
                         <DialogDescription>
-                            This permanently deletes the Canvas and its cover image. This action cannot be undone.
+                            This permanently deletes the Canvas and its cover
+                            image. This action cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

@@ -77,7 +77,7 @@ class NotificationRecipients
         unset($recipients[(int) $message->sender_id]);
 
         /*
-         * Nor is a bot. The standup app is a participant in a conversation with
+         * Nor is a bot. A bot such as the standup app is a participant in a conversation with
          * everybody it asks, so every answered standup would otherwise write it
          * an inbox row and — once the idle window elapsed — queue an email to an
          * address that exists only because the column is not nullable.
@@ -85,7 +85,7 @@ class NotificationRecipients
          * Removed here rather than in `accepts()` because it is not a
          * preference: a bot has no inbox to read and no preference to express.
          */
-        foreach (array_diff(array_keys($recipients), StandupBot::withoutBots(array_keys($recipients))) as $botId) {
+        foreach (array_diff(array_keys($recipients), BotAccount::withoutBots(array_keys($recipients))) as $botId) {
             unset($recipients[$botId]);
         }
 
