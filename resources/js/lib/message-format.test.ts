@@ -176,6 +176,62 @@ describe('parseInline', () => {
         ]);
     });
 
+    it('draws a known shortcode as its glyph', () => {
+        expect(parseInline('ship it :rocket:')).toEqual([
+            { type: 'text', value: 'ship it ' },
+            { type: 'emoji', shortcode: 'rocket', glyph: '🚀' },
+        ]);
+    });
+
+    /*
+     * The bug this rule was written for. A GitHub webhook posts
+     * ":twisted_rightwards_arrows: PR merged", and before the shortcode token
+     * existed the italic rule claimed `_rightwards_`, so the message reached the
+     * timeline as "twistedrightwardsarrows" with a word in italics and no icon
+     * anywhere.
+     */
+    it('does not let the italic rule eat the underscores in a shortcode', () => {
+        expect(parseInline(':twisted_rightwards_arrows: merged')).toEqual([
+            {
+                type: 'emoji',
+                shortcode: 'twisted_rightwards_arrows',
+                glyph: '🔀',
+            },
+            { type: 'text', value: ' merged' },
+        ]);
+    });
+
+    it('leaves an unknown shortcode as the text the author wrote', () => {
+        // A name this build has never heard of is more useful spelled out than
+        // swallowed.
+        expect(parseInline(':not_an_emoji_here:')).toEqual([
+            { type: 'text', value: ':not' },
+            { type: 'italic', children: [{ type: 'text', value: 'an' }] },
+            { type: 'text', value: 'emoji_here:' },
+        ]);
+    });
+
+    it('handles a shortcode whose name is regex punctuation', () => {
+        // `+1` reaches the pattern as a literal, not as a quantifier.
+        expect(parseInline(':+1:')).toEqual([
+            { type: 'emoji', shortcode: '+1', glyph: '👍' },
+        ]);
+    });
+
+    it('does not read a shortcode out of ordinary punctuation', () => {
+        // Times and ratios are full of colons and none of them are emoji.
+        expect(parseInline('standup at 10:30, ratio 3:4:5')).toEqual([
+            { type: 'text', value: 'standup at 10:30, ratio 3:4:5' },
+        ]);
+    });
+
+    it('does not resolve a shortcode inside inline code', () => {
+        // The only way to write about the shortcode is for code to win.
+        expect(parseInline('`:rocket:`')).toEqual([
+            { type: 'code', value: ':rocket:' },
+        ]);
+    });
+
     it('does not format inside inline code', () => {
         // The only way to write about the syntax is for code to win.
         expect(parseInline('`**not bold**`')).toEqual([

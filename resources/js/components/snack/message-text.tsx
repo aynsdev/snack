@@ -106,6 +106,23 @@ function InlineLeaf({ node }: { node: InlineNode }) {
                 </>
             );
 
+        case 'emoji':
+            /*
+             * The shortcode rides along as the accessible name: a screen reader
+             * announcing "rocket" is the same information a sighted reader gets
+             * from the glyph, where the bare character announces as anything
+             * from a full description to nothing at all.
+             */
+            return (
+                <span
+                    role="img"
+                    aria-label={node.shortcode}
+                    className="text-[1.15em] leading-none"
+                >
+                    {node.glyph}
+                </span>
+            );
+
         case 'code':
             return (
                 <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.8125em] text-foreground">

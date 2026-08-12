@@ -27,6 +27,16 @@ describe('MessageText', () => {
         ).toBeInTheDocument();
     });
 
+    it('draws a shortcode as an emoji labelled by its name', () => {
+        // A webhook writes shortcodes, not glyphs; the label is what a screen
+        // reader announces in place of the character.
+        render(<MessageText body="master updated :rocket:" />);
+
+        expect(screen.getByRole('img', { name: 'rocket' })).toHaveTextContent(
+            '🚀',
+        );
+    });
+
     it('does not render an img tag from a message body', () => {
         const { container } = render(
             <MessageText body={'<img src=x onerror="alert(1)">'} />,

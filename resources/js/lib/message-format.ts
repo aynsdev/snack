@@ -19,12 +19,15 @@
  *
  *   `code`      **bold**      _italic_      ~~strike~~
  *   > quote     ```fenced code```           bare http(s) links
- *   - bullet    1. numbered
+ *   - bullet    1. numbered   :shortcode: emoji
  */
+
+import { EMOJI, emojiFor } from '@/lib/emoji';
 
 export type InlineNode =
     | { type: 'text'; value: string }
     | { type: 'code'; value: string }
+    | { type: 'emoji'; shortcode: string; glyph: string }
     | { type: 'link'; href: string; value: string }
     | { type: 'mention'; kind: MentionKind; handle: string }
     | { type: 'channel'; slug: string }
@@ -66,9 +69,28 @@ export type BlockNode =
  */
 const HANDLE = '[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?';
 
+/**
+ * `:shortcode:`, but only for shortcodes {@link EMOJI} actually knows.
+ *
+ * Spelling the names out rather than matching `:[a-z_]+:` generally is what
+ * keeps the rule from reaching into ordinary prose: "3:4:5" and a Windows path
+ * are untouched, because no alternative here matches them.
+ *
+ * Two things depend on this token existing at all. The obvious one is that a
+ * webhook's `:rocket:` should draw a rocket. The subtle one is that it must be
+ * recognized *before* the italic rule sees the same characters — otherwise the
+ * underscores inside `:twisted_rightwards_arrows:` read as emphasis markers and
+ * the shortcode arrives on screen as "twistedrightwardsarrows" with a word
+ * mysteriously in italics, which is precisely how this was found.
+ */
+const SHORTCODE = Object.keys(EMOJI)
+    .map((shortcode) => shortcode.replace(/[+]/g, '\\$&'))
+    .join('|');
+
 const INLINE_PATTERN = new RegExp(
     [
         '(`[^`\\n]+`)', // `code`
+        `(:(?:${SHORTCODE}):)`, // :emoji:
         '(\\*\\*[\\s\\S]+?\\*\\*)', // **bold**
         '(~~[\\s\\S]+?~~)', // ~~strike~~
         '(_[^_\\n]+_)', // _italic_
@@ -226,11 +248,34 @@ export function parseInline(text: string): InlineNode[] {
             });
         }
 
-        const [token, code, bold, strike, italic, link, handle, channel] =
-            match;
+        const [
+            token,
+            code,
+            emoji,
+            bold,
+            strike,
+            italic,
+            link,
+            handle,
+            channel,
+        ] = match;
 
         if (code !== undefined) {
             nodes.push({ type: 'code', value: code.slice(1, -1) });
+        } else if (emoji !== undefined) {
+            const shortcode = emoji.slice(1, -1);
+
+            /*
+             * The glyph is resolved here rather than in the renderer so the
+             * tree carries what will be drawn. The lookup cannot miss — the
+             * pattern is built from the same map — but the fallback keeps the
+             * node honest if the two ever drift.
+             */
+            nodes.push({
+                type: 'emoji',
+                shortcode,
+                glyph: emojiFor(shortcode) ?? token,
+            });
         } else if (bold !== undefined) {
             nodes.push({
                 type: 'bold',
