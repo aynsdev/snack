@@ -86,16 +86,6 @@ class Asset extends Model
     // -- Scopes --------------------------------------------------------------
 
     /**
-     * Assets sitting at the top of the library rather than on a shelf.
-     *
-     * @param  Builder<$this>  $query
-     */
-    public function scopeAtRoot(Builder $query): void
-    {
-        $query->whereNull('folder_id');
-    }
-
-    /**
      * The library's type filter, expressed against the file's MIME prefix so the
      * buckets match {@see MessageAttachment::kind()} exactly.
      *

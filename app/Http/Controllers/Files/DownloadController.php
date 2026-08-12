@@ -24,19 +24,41 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *
  * # Inline is a narrower door than download
  *
- * Anything served inline renders *on this application's origin*, so an
- * `image/svg+xml` with a `<script>` in it would be stored XSS against every
- * viewer. Only a fixed list of raster formats is ever given an inline
- * disposition; everything else — SVG included — is an attachment, which browsers
- * download rather than execute. `nosniff` and a sandboxing CSP back that up for
- * the cases where a browser would otherwise go looking for a better content type
- * than the one it was given.
+ * Anything served inline renders *on this application's origin*, so a document
+ * that can carry script would be stored XSS against every viewer. Only a fixed
+ * list of image formats is ever given an inline disposition; everything else is
+ * an attachment, which browsers download rather than execute. `nosniff` and a
+ * sandboxing CSP back that up for the cases where a browser would otherwise go
+ * looking for a better content type than the one it was given.
  */
 class DownloadController extends Controller
 {
     /**
-     * Raster formats it is safe to render on our own origin. SVG is deliberately
-     * absent: it is a document that can carry script, not a picture.
+     * Image formats it is safe to render on our own origin.
+     *
+     * # Why SVG is on this list
+     *
+     * It was not, and the reasoning was sound as far as it went: an SVG is a
+     * document that can carry script, and one rendered on this origin with
+     * nothing else in the way is stored XSS. What that missed is that half the
+     * asset library is SVG — a logo is *the* thing a company files — and every
+     * one of them showed up as a grey placeholder icon in a gallery whose entire
+     * purpose is recognising artwork by looking at it.
+     *
+     * Two independent things make it safe here, and the second is the one that
+     * matters. Every surface that renders one does so through an `<img>`, and an
+     * SVG loaded as an image never runs its script — but that is the caller's
+     * behaviour, and this class cannot depend on every future caller keeping to
+     * it. The response itself therefore carries `Content-Security-Policy:
+     * default-src 'none'; sandbox`, which is what makes a *direct navigation* to
+     * the URL harmless too: `sandbox` with no `allow-scripts` token means no
+     * script executes, and with no `allow-same-origin` token the document sits
+     * in an opaque origin with no reach into this one's cookies or storage.
+     *
+     * That header is not new — {@see stream()} has always sent it — which is
+     * precisely why adding SVG here is a smaller change than it looks. Paired
+     * with `nosniff` and an explicit `Content-Type`, the file is rendered as the
+     * picture it claims to be and as nothing else.
      *
      * @var array<int, string>
      */
@@ -48,6 +70,7 @@ class DownloadController extends Controller
         'image/webp',
         'image/avif',
         'image/bmp',
+        'image/svg+xml',
     ];
 
     /**

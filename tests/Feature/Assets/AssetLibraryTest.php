@@ -7,13 +7,23 @@ use App\Models\User;
 
 use function Pest\Laravel\actingAs;
 
-it('shows what is at the top of the library', function () {
+/**
+ * The top of the library is everything in it, however deeply it is filed.
+ *
+ * A library you have to walk is a library where "do we have a dark version of
+ * the logo" answers "somewhere, probably" — see
+ * AssetLibraryController::subtreeIds.
+ */
+it('shows every file in the workspace at the top of the library', function () {
     [$workspace, $owner] = makeWorkspaceWithOwner();
 
     Asset::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Company one-pager']);
 
-    $shelf = AssetFolder::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Brand']);
-    Asset::factory()->inside($shelf)->create(['name' => 'Primary logo']);
+    $brand = AssetFolder::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Brand']);
+    $logos = AssetFolder::factory()->inside($brand)->create(['name' => 'Logos']);
+
+    Asset::factory()->inside($brand)->create(['name' => 'Colour palette']);
+    Asset::factory()->inside($logos)->create(['name' => 'Primary logo']);
 
     actingAs($owner)
         ->get(route('assets.index', $workspace))
@@ -21,17 +31,54 @@ it('shows what is at the top of the library', function () {
         ->assertInertia(fn ($page) => $page
             ->component('assets/index')
             ->where('folder', null)
-            // Only what is at the root: the logo is on a shelf.
-            ->has('assets', 1)
-            ->where('assets.0.name', 'Company one-pager')
+            ->has('assets', 3)
+            ->where(
+                'assets',
+                fn ($assets) => collect($assets)->pluck('name')->sort()->values()->all() === [
+                    'Colour palette', 'Company one-pager', 'Primary logo',
+                ],
+            )
             // The tree is sent whole regardless of where you are standing.
-            ->has('folders', 1)
-            ->where('folders.0.name', 'Brand')
-            ->where('folders.0.asset_count', 1),
+            ->has('folders', 2),
         );
 });
 
-it('shows one shelf, with its breadcrumb', function () {
+/**
+ * A folder narrows the listing rather than walling things off: opening one shows
+ * less than the level above, never something that level could not show.
+ */
+it('shows a folder’s whole subtree, with its breadcrumb', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+
+    $brand = AssetFolder::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Brand']);
+    $logos = AssetFolder::factory()->inside($brand)->create(['name' => 'Logos']);
+    $legal = AssetFolder::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Legal']);
+
+    Asset::factory()->inside($brand)->create(['name' => 'Colour palette']);
+    Asset::factory()->inside($logos)->create(['name' => 'Primary logo']);
+
+    // Neither of these is under Brand, so neither may appear.
+    Asset::factory()->inside($legal)->create(['name' => 'Master services agreement']);
+    Asset::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Company one-pager']);
+
+    actingAs($owner)
+        ->get(route('assets.folders.show', [$workspace, $brand]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('folder.name', 'Brand')
+            ->has('assets', 2)
+            ->where(
+                'assets',
+                fn ($assets) => collect($assets)->pluck('name')->sort()->values()->all() === [
+                    'Colour palette', 'Primary logo',
+                ],
+            )
+            ->has('breadcrumb', 1)
+            ->where('breadcrumb.0.name', 'Brand'),
+        );
+});
+
+it('shows the deepest shelf on its own, with the whole breadcrumb', function () {
     [$workspace, $owner] = makeWorkspaceWithOwner();
 
     $brand = AssetFolder::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Brand']);

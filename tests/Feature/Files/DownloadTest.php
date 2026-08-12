@@ -116,7 +116,17 @@ it('only lets the uploader fetch an upload that is not on a message yet', functi
     actingAs($other)->get(signedShow($attachment))->assertNotFound();
 });
 
-it('never serves an svg inline, however it is asked for', function () {
+/**
+ * SVG renders inline — a logo is what the asset library is for, and a gallery of
+ * grey placeholders where the artwork should be is not a library.
+ *
+ * What makes that safe is the headers, not the file: `sandbox` with no
+ * `allow-scripts` token means nothing in the document executes even if somebody
+ * navigates straight to the URL, and with no `allow-same-origin` token it has no
+ * reach into this origin. This test is the guard on that pairing — inline
+ * without the CSP is the stored XSS the disposition used to be preventing.
+ */
+it('serves an svg inline, sandboxed so nothing in it can run', function () {
     [$workspace, $owner] = makeWorkspaceWithOwner();
     $channel = makeChannel($workspace);
     addToChannel($channel, $owner);
@@ -136,8 +146,38 @@ it('never serves an svg inline, however it is asked for', function () {
 
     $response = actingAs($owner)->get(signedShow($attachment, inline: true));
 
-    // An inline SVG on our own origin is stored XSS, so it is forced to an
-    // attachment disposition regardless of what the client asked for.
+    expect($response->headers->get('Content-Disposition'))->toStartWith('inline')
+        ->and($response->headers->get('Content-Type'))->toStartWith('image/svg+xml')
+        ->and($response->headers->get('Content-Security-Policy'))->toContain('sandbox')
+        ->and($response->headers->get('Content-Security-Policy'))->not->toContain('allow-scripts')
+        ->and($response->headers->get('X-Content-Type-Options'))->toBe('nosniff');
+});
+
+/**
+ * The inline door is still narrow. Anything that is not an image stays an
+ * attachment however it is asked for — an HTML file rendered on this origin is
+ * stored XSS that no sandbox on the *image* path would have covered.
+ */
+it('never serves a document inline, however it is asked for', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $channel = makeChannel($workspace);
+    addToChannel($channel, $owner);
+
+    $message = makeMessage($channel, $owner);
+
+    $attachment = MessageAttachment::factory()->create([
+        'workspace_id' => $workspace->id,
+        'message_id' => $message->id,
+        'uploaded_by' => $owner->id,
+        'disk' => 'local',
+        'original_name' => 'notes.html',
+        'mime_type' => 'text/html',
+    ]);
+
+    Storage::disk('local')->put($attachment->path, '<script>alert(1)</script>');
+
+    $response = actingAs($owner)->get(signedShow($attachment, inline: true));
+
     expect($response->headers->get('Content-Disposition'))->toStartWith('attachment');
 });
 

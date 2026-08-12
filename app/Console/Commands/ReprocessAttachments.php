@@ -26,10 +26,19 @@ use Illuminate\Console\Command;
  * that have never been asked the animation question. `--all` re-reads
  * everything, which is what a change to the orientation handling wants.
  *
+ * `--missing` is the third case, and the operational one: images with no
+ * thumbnail at all. A job that failed — a worker restarted mid-decode, a bucket
+ * that was briefly unreachable, a format the build could not decode until it
+ * was upgraded — leaves a row that is indistinguishable from a legitimately
+ * un-thumbnailable file, and no amount of waiting fixes it because nothing will
+ * ever dispatch that job again. This is what re-dispatches it, and it is the
+ * first thing to reach for when somebody reports that *some* files have
+ * previews and others do not.
+ *
  * Re-queued rather than done inline: the work is decoding every image the
  * workspace has ever received, and that belongs on a worker.
  */
-#[Signature('snack:reprocess-attachments {--all : Re-read every image, not just the ones never examined} {--chunk=200 : Rows per batch}')]
+#[Signature('snack:reprocess-attachments {--all : Re-read every image, not just the ones never examined} {--missing : Only images that ended up with no thumbnail} {--chunk=200 : Rows per batch}')]
 #[Description('Rebuild thumbnails, dimensions, and animation flags for uploaded images.')]
 class ReprocessAttachments extends Command
 {
@@ -37,10 +46,13 @@ class ReprocessAttachments extends Command
     {
         $chunk = max(1, (int) $this->option('chunk'));
         $all = (bool) $this->option('all');
+        $missing = (bool) $this->option('missing');
 
         $query = MessageAttachment::query()->where('mime_type', 'like', 'image/%');
 
-        if (! $all) {
+        if ($missing) {
+            $query->whereNull('thumbnail_path');
+        } elseif (! $all) {
             /*
              * Rows written before the flag existed. `?` is the Postgres JSONB
              * key-exists operator, so this is an indexable test for "never
@@ -50,9 +62,11 @@ class ReprocessAttachments extends Command
             $query->whereRaw("NOT (metadata ?? 'animated')");
         }
 
-        $this->components->info($all
-            ? 'Re-reading every uploaded image…'
-            : 'Backfilling images that were never examined…');
+        $this->components->info(match (true) {
+            $missing => 'Re-reading images that have no thumbnail…',
+            $all => 'Re-reading every uploaded image…',
+            default => 'Backfilling images that were never examined…',
+        });
 
         $queued = 0;
 

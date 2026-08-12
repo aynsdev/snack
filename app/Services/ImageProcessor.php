@@ -30,7 +30,7 @@ use Throwable;
 class ImageProcessor
 {
     /**
-     * MIME types GD can decode in this build. `gif` is included even though the
+     * MIME types GD can decode in every build. `gif` is included even though the
      * animation is lost: a still first frame is a better thumbnail than none.
      *
      * @var array<int, string>
@@ -44,9 +44,35 @@ class ImageProcessor
         'image/bmp',
     ];
 
+    /**
+     * Formats GD decodes only when it was compiled with the codec, checked at
+     * runtime rather than assumed.
+     *
+     * AVIF is what a current phone and a current screenshot tool now produce by
+     * default, so leaving it out meant a growing share of perfectly ordinary
+     * photographs arriving with no thumbnail at all — and looking, to the person
+     * who uploaded them, exactly like the product being broken. It is absent
+     * from {@see DECODABLE} rather than added to it because `--with-avif` is not
+     * universal: on a build without it `imagecreatefromstring()` fails, and a
+     * thumbnail nobody can produce should be declined here rather than attempted
+     * and lost.
+     *
+     * @var array<string, string>
+     */
+    private const OPTIONAL = [
+        'image/avif' => 'imagecreatefromavif',
+    ];
+
     public function canProcess(string $mimeType): bool
     {
-        return in_array(strtolower($mimeType), self::DECODABLE, true);
+        $mimeType = strtolower($mimeType);
+
+        if (in_array($mimeType, self::DECODABLE, true)) {
+            return true;
+        }
+
+        return isset(self::OPTIONAL[$mimeType])
+            && function_exists(self::OPTIONAL[$mimeType]);
     }
 
     /**

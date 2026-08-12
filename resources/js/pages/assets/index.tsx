@@ -4,14 +4,17 @@ import {
     Folder,
     FolderPlus,
     Images,
+    LayoutGrid,
     Library,
+    List,
     MoreHorizontal,
     Pencil,
     Search,
     Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AssetDetailDialog } from '@/components/snack/assets/asset-detail-dialog';
+import { AssetRow } from '@/components/snack/assets/asset-row';
 import { AssetTile } from '@/components/snack/assets/asset-tile';
 import {
     AssetUploader,
@@ -27,6 +30,8 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { useAssetView } from '@/hooks/use-asset-view';
+import type { AssetView } from '@/hooks/use-asset-view';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import { index as assetsIndex } from '@/routes/assets';
@@ -66,13 +71,24 @@ const KIND_FILTERS: { value: AttachmentKind | null; label: string }[] = [
  * difference is intent: this is what somebody *filed*, and filing is the only
  * reason anything is still findable a year later.
  *
- * # Why a gallery rather than a list
+ * # Why the listing is flat
  *
- * The library's centre of gravity is brand material, and nobody recognises a
- * logo by its filename. A grid of previews answers "which one is this" in a
- * glance, where a list of rows called `Logo_FINAL_v3 (2).svg` answers nothing.
- * Documents fall back to a kind icon and lose nothing by it — a PDF is
- * recognised by its name, which the tile also shows.
+ * The top of the library shows everything in it, and a folder shows its whole
+ * subtree — folders narrow the listing rather than hiding things behind it. A
+ * library you have to walk is a library where the answer to "do we have a dark
+ * version of the logo" is "somewhere, probably", and the point of filing
+ * something was that the answer would be "yes, here". The folder each thing is
+ * on is still shown, because *where* it is filed is genuinely useful; it is just
+ * not a door you have to open first. See `AssetLibraryController::subtreeIds`.
+ *
+ * # Why there are two views
+ *
+ * The gallery is the default because the library's centre of gravity is brand
+ * material, and nobody recognises a logo by its filename. That reverses the
+ * moment the shelf is documents: forty contracts are forty identical PDF icons,
+ * and telling them apart is reading names and dates. Which one is right is a
+ * property of what somebody keeps in their library, so the choice is theirs and
+ * it is remembered — see {@see useAssetView}.
  */
 export default function AssetsIndex({
     folders,
@@ -88,6 +104,7 @@ export default function AssetsIndex({
     const [creatingFolder, setCreatingFolder] = useState(false);
     const [renamingFolder, setRenamingFolder] = useState(false);
     const [openAsset, setOpenAsset] = useState<LibraryAsset | null>(null);
+    const [view, setView] = useAssetView(workspace.slug);
 
     const isSearching = filters.q !== null;
 
@@ -101,6 +118,30 @@ export default function AssetsIndex({
     const children = isSearching
         ? []
         : folders.filter((node) => node.parent_id === (folder?.id ?? null));
+
+    /*
+     * Folder names by id, so a flat listing can say where each thing is filed
+     * without the server sending the name on every row. The tree is already
+     * here — it is the navigation — so this is a lookup rather than a payload.
+     */
+    const folderNames = useMemo(
+        () => new Map(folders.map((node) => [node.id, node.name])),
+        [folders],
+    );
+
+    /**
+     * The shelf to label a row with, or nothing.
+     *
+     * Suppressed for anything filed directly on the folder being looked at: the
+     * heading already says so, and a badge repeating it on every row is noise.
+     * What it does mark is the rows that came from *deeper* in the subtree,
+     * which is exactly where the reader would otherwise wonder how a file they
+     * cannot see a folder for got onto the screen.
+     */
+    const shelfOf = (asset: LibraryAsset): string | null =>
+        asset.folder_id === null || asset.folder_id === folder?.id
+            ? null
+            : (folderNames.get(asset.folder_id) ?? null);
 
     /**
      * Re-run the library with a changed filter.
@@ -178,12 +219,14 @@ export default function AssetsIndex({
                             <p className="mt-0.5 max-w-prose text-sm text-pretty text-muted-foreground">
                                 {folder?.description ??
                                     (folder === null
-                                        ? 'Brand material, company information, and the documents everybody keeps asking for a link to.'
+                                        ? 'Everything filed in this workspace — brand material, company information, and the documents everybody keeps asking for a link to.'
                                         : '')}
                             </p>
                         </div>
 
                         <div className="flex items-center gap-2">
+                            <ViewToggle value={view} onChange={setView} />
+
                             {abilities.create_folder && (
                                 <Button
                                     type="button"
@@ -300,9 +343,9 @@ export default function AssetsIndex({
                                 Folders
                             </h2>
 
-                            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+                            <ul className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
                                 {children.map((child) => (
-                                    <li key={child.id}>
+                                    <li key={child.id} className="flex">
                                         <FolderCard
                                             workspaceSlug={workspace.slug}
                                             folder={child}
@@ -316,28 +359,27 @@ export default function AssetsIndex({
                     {assets.length === 0 ? (
                         /*
                          * Three different nothings, and they are not
-                         * interchangeable. "The library is empty" beside a
-                         * shelf full of folders is simply untrue — what is empty
-                         * is this level of it — and the invitation to add the
-                         * logo is wrong advice for somebody whose search just
-                         * missed.
+                         * interchangeable. A search that missed wants to be told
+                         * to search differently, not invited to upload a logo;
+                         * and an empty *shelf* is a different fact from an empty
+                         * library, even though the listing being flat means
+                         * "empty here" now really does mean "nothing in this
+                         * folder or anything under it".
                          */
                         <EmptyState
                             icon={Images}
                             title={
                                 isSearching || filters.kind !== null
                                     ? 'Nothing matches that'
-                                    : children.length > 0
-                                      ? 'No files here yet'
-                                      : folder === null
-                                        ? 'The library is empty'
-                                        : `Nothing in ${folder.name} yet`
+                                    : folder === null
+                                      ? 'The library is empty'
+                                      : `Nothing in ${folder.name} yet`
                             }
                             description={
                                 isSearching || filters.kind !== null
                                     ? 'Try a shorter search, or clear the type filter.'
                                     : children.length > 0
-                                      ? 'Open a folder above, or drop files here to file them at this level.'
+                                      ? 'Not in this folder or any folder under it. Drag files here to file them at this level.'
                                       : 'Put the logo, the deck, and the contracts somewhere everyone can find them. Drag files here, or use Add files.'
                             }
                         />
@@ -349,16 +391,42 @@ export default function AssetsIndex({
                                 </h2>
                             )}
 
-                            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
-                                {assets.map((asset) => (
-                                    <li key={asset.id}>
-                                        <AssetTile
-                                            asset={asset}
-                                            onOpen={() => setOpenAsset(asset)}
-                                        />
-                                    </li>
-                                ))}
-                            </ul>
+                            {view === 'grid' ? (
+                                /*
+                                 * `items-stretch` plus a tile that fills its
+                                 * cell: without both, a row is as tall as its
+                                 * tallest tile and the rest float with a gap
+                                 * underneath, which reads as broken alignment
+                                 * rather than as a taller neighbour.
+                                 */
+                                <ul className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+                                    {assets.map((asset) => (
+                                        <li key={asset.id} className="flex">
+                                            <AssetTile
+                                                asset={asset}
+                                                folderName={shelfOf(asset)}
+                                                onOpen={() =>
+                                                    setOpenAsset(asset)
+                                                }
+                                            />
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                                    {assets.map((asset) => (
+                                        <li key={asset.id}>
+                                            <AssetRow
+                                                asset={asset}
+                                                folderName={shelfOf(asset)}
+                                                onOpen={() =>
+                                                    setOpenAsset(asset)
+                                                }
+                                            />
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
 
                             {nextCursor !== null && (
                                 <LoadMore
@@ -409,6 +477,58 @@ export default function AssetsIndex({
                 />
             )}
         </>
+    );
+}
+
+/**
+ * Tiles or rows.
+ *
+ * A two-state segmented control rather than a dropdown: there are exactly two
+ * answers, both are one click away, and each button shows the shape it produces
+ * — which is the whole explanation anybody needs and shorter than any label
+ * would be.
+ *
+ * `aria-pressed` rather than a radio group, matching the type filters above it:
+ * these are two toggles that happen to be mutually exclusive, and a screen
+ * reader announcing "grid, pressed" says the true thing.
+ */
+function ViewToggle({
+    value,
+    onChange,
+}: {
+    value: AssetView;
+    onChange: (view: AssetView) => void;
+}) {
+    const options: {
+        view: AssetView;
+        label: string;
+        icon: typeof LayoutGrid;
+    }[] = [
+        { view: 'grid', label: 'Grid view', icon: LayoutGrid },
+        { view: 'list', label: 'List view', icon: List },
+    ];
+
+    return (
+        <div className="flex items-center rounded-md border border-border p-0.5">
+            {options.map((option) => (
+                <button
+                    key={option.view}
+                    type="button"
+                    onClick={() => onChange(option.view)}
+                    aria-pressed={value === option.view}
+                    title={option.label}
+                    className={cn(
+                        'flex size-7 items-center justify-center rounded transition-colors',
+                        value === option.view
+                            ? 'bg-brand-subtle text-foreground'
+                            : 'text-muted-foreground hover:text-foreground',
+                    )}
+                >
+                    <option.icon aria-hidden="true" className="size-4" />
+                    <span className="sr-only">{option.label}</span>
+                </button>
+            ))}
+        </div>
     );
 }
 
@@ -483,13 +603,13 @@ function FolderCard({
                 workspace: workspaceSlug,
                 assetFolder: folder.id,
             })}
-            className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 transition-colors hover:border-brand/50"
+            className="flex w-full min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 transition-colors hover:border-brand/50"
         >
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-brand">
                 <Folder aria-hidden="true" className="size-4.5" />
             </span>
 
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">
                     {folder.name}
                 </span>

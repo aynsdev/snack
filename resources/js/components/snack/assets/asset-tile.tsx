@@ -17,6 +17,31 @@ export const KIND_ICONS: Record<AttachmentKind, typeof FileIcon> = {
 };
 
 /**
+ * The picture to draw for an asset, or null when there is no picture to draw.
+ *
+ * # Why there are two URLs and the generated one is not always there
+ *
+ * `thumbnail_url` is the queue's work: a re-encoded, bounded-edge raster. It is
+ * null for as long as the queue has not been round, and permanently null for
+ * anything GD cannot decode — which includes every SVG, because SVG is not a
+ * raster at all. A brand library is *mostly* SVG, so treating a null thumbnail
+ * as "this file has no preview" turned the logos — the single thing the library
+ * exists to hold — into grey placeholder icons.
+ *
+ * `preview_url` is the original, offered for any image under the inline ceiling,
+ * and it is exactly right in both of those gaps: an SVG is a few kilobytes and
+ * scales perfectly, and an image the queue has not reached yet is better shown
+ * at full size than not shown at all.
+ *
+ * Shared with the timeline and the card attachments, which have always fallen
+ * back this way — the gallery was the one surface that did not, which is why it
+ * was the one surface with missing previews.
+ */
+export function assetPreviewUrl(asset: LibraryAsset): string | null {
+    return asset.file?.thumbnail_url ?? asset.file?.preview_url ?? null;
+}
+
+/**
  * One thing on the shelf, as a gallery tile.
  *
  * # Why the tile opens a panel rather than downloading
@@ -28,40 +53,48 @@ export const KIND_ICONS: Record<AttachmentKind, typeof FileIcon> = {
  * in the downloads folder. The download is one click further in, where it is
  * unambiguous.
  *
- * The thumbnail is the queue's, and it is null until the queue has been round —
- * and forever for anything that is not a decodable image. Both fall back to the
- * kind icon, which is the same control at a different fidelity rather than a
- * broken state.
+ * # Why every part of the tile has a fixed height
+ *
+ * A grid row is as tall as its tallest cell, and a tile that sizes to its own
+ * content leaves the short ones floating with a gap underneath — which reads as
+ * the tiles being misaligned rather than as one of them being taller. The button
+ * fills its cell (`h-full`), the media box is a fixed ratio, and the caption is
+ * pinned to the bottom (`mt-auto`) with a line count that does not depend on how
+ * long anybody's filename is.
  */
 export function AssetTile({
     asset,
+    folderName,
     onOpen,
 }: {
     asset: LibraryAsset;
+    /** The shelf this is filed on, shown because the gallery is not folded. */
+    folderName?: string | null;
     onOpen: () => void;
 }) {
     const kind = asset.file?.kind ?? 'file';
     const Icon = KIND_ICONS[kind];
+    const preview = assetPreviewUrl(asset);
 
     return (
         <button
             type="button"
             onClick={onOpen}
-            className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-brand/50 focus-visible:border-brand focus-visible:outline-none"
+            className="group flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-brand/50 focus-visible:border-brand focus-visible:outline-none"
         >
             <span
                 className={cn(
-                    'flex aspect-4/3 w-full items-center justify-center overflow-hidden bg-brand-subtle text-brand',
+                    'flex aspect-4/3 w-full shrink-0 items-center justify-center overflow-hidden bg-brand-subtle text-brand',
                     // A checkerboard behind transparent art, so a white logo on
                     // a white tile is not an empty box.
                     kind === 'image' && 'snack-checkerboard',
                 )}
             >
-                {asset.file?.thumbnail_url == null ? (
+                {preview === null ? (
                     <Icon aria-hidden="true" className="size-8" />
                 ) : (
                     <img
-                        src={asset.file.thumbnail_url}
+                        src={preview}
                         alt=""
                         loading="lazy"
                         decoding="async"
@@ -70,7 +103,7 @@ export function AssetTile({
                 )}
             </span>
 
-            <span className="flex min-w-0 flex-col gap-0.5 border-t border-border px-3 py-2">
+            <span className="mt-auto flex w-full min-w-0 flex-col gap-0.5 border-t border-border px-3 py-2">
                 <span className="truncate text-sm font-medium">
                     {asset.name}
                 </span>
@@ -79,6 +112,7 @@ export function AssetTile({
                     {asset.file === null
                         ? 'File missing'
                         : `${kindLabel(kind)} · ${asset.file.human_size}`}
+                    {folderName != null && ` · ${folderName}`}
                 </span>
             </span>
         </button>

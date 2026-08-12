@@ -11,6 +11,7 @@ use App\Models\Workspace;
 use App\Policies\AssetPolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
@@ -40,10 +41,13 @@ use Inertia\Response as InertiaResponse;
  *
  * The folder tree is sent whole, flat, with counts — it is the navigation, so it
  * has to be complete, and it is bounded by how many shelves people make rather
- * than by how much they store. The assets are only ever one shelf's worth, and
- * cursor-paginated on top of that for the same reason the timeline is: things
- * keep being added while somebody is browsing, and an OFFSET would duplicate or
- * skip rows every time one was.
+ * than by how much they store.
+ *
+ * The assets are a page of whatever the open folder's subtree contains — the
+ * whole workspace, at the top — and cursor-paginated for the same reason the
+ * timeline is: things keep being added while somebody is browsing, and an OFFSET
+ * would duplicate or skip rows every time one was. See {@see subtreeIds()} for
+ * why a folder does not hide what is inside its folders.
  */
 class AssetLibraryController extends Controller
 {
@@ -93,7 +97,24 @@ class AssetLibraryController extends Controller
         $kind = $request->string('kind')->toString();
         $cursor = $request->integer('before') ?: null;
 
-        $assets = $this->assets($workspace, $folder, $term, $kind)
+        /*
+         * The whole tree, flat, on every load. It is the navigation — the
+         * sidebar draws it and the move dialog offers every node in it as a
+         * destination — so a partial tree would be a sidebar that changes shape
+         * as you walk it.
+         *
+         * Fetched before the assets because the listing below is scoped by the
+         * open folder's *subtree*, and the ids for that are read out of this
+         * collection rather than asked of the database a second time.
+         */
+        $tree = AssetFolder::query()
+            ->where('workspace_id', $workspace->id)
+            ->withCount(['children', 'assets'])
+            ->orderBy('name')
+            ->get()
+            ->each(fn (AssetFolder $node) => $node->setRelation('workspace', $workspace));
+
+        $assets = $this->assets($workspace, $this->subtreeIds($tree, $folder), $term, $kind)
             ->when($cursor !== null, fn (Builder $query) => $query->where('id', '<', $cursor))
             ->orderByDesc('id')
             // One extra row answers "is there more?" without a second COUNT.
@@ -115,20 +136,7 @@ class AssetLibraryController extends Controller
             ->each(fn (Asset $asset) => $asset->setRelation('workspace', $workspace));
 
         return Inertia::render('assets/index', [
-            /*
-             * The whole tree, flat, on every load. It is the navigation — the
-             * sidebar draws it and the move dialog offers every node in it as a
-             * destination — so a partial tree would be a sidebar that changes
-             * shape as you walk it.
-             */
-            'folders' => AssetFolderResource::collection(
-                AssetFolder::query()
-                    ->where('workspace_id', $workspace->id)
-                    ->withCount(['children', 'assets'])
-                    ->orderBy('name')
-                    ->get()
-                    ->each(fn (AssetFolder $node) => $node->setRelation('workspace', $workspace)),
-            )->resolve($request),
+            'folders' => AssetFolderResource::collection($tree)->resolve($request),
 
             'folder' => $folder === null
                 ? null
@@ -170,14 +178,70 @@ class AssetLibraryController extends Controller
     }
 
     /**
+     * The folders a listing is confined to, or null for "the whole library".
+     *
+     * # Why a folder does not hide what is inside its folders
+     *
+     * A shelf that lists only what sits directly on it is a filing cabinet, and
+     * a filing cabinet makes you remember where you put things. The library's
+     * job is the opposite: it is the place you go *because* you have forgotten,
+     * and every level of nesting between you and the file is one more guess you
+     * have to get right before you see it.
+     *
+     * So the top of the library lists everything the workspace has, and a folder
+     * lists its own subtree. Folders stop being walls and become a narrowing —
+     * open "Brand" and you see less, never something you could not have found
+     * one level up. The cards remain as navigation, because knowing *where* a
+     * thing is filed is still worth showing; it just is not a precondition for
+     * seeing it.
+     *
+     * Read out of the tree the page has already fetched rather than by a
+     * recursive query: the walk is bounded by {@see AssetFolder::MAX_DEPTH} and
+     * the rows are in memory, so the subtree costs nothing.
+     *
+     * @param  Collection<int, AssetFolder>  $tree
+     * @return array<int, int>|null
+     */
+    private function subtreeIds(Collection $tree, ?AssetFolder $folder): ?array
+    {
+        if ($folder === null) {
+            return null;
+        }
+
+        $ids = [$folder->id];
+
+        /*
+         * Breadth-first over the flat list, one pass per level. Bounded by
+         * MAX_DEPTH, so this cannot spin even on a tree some earlier bug left
+         * with a cycle in it.
+         */
+        for ($depth = 0; $depth < AssetFolder::MAX_DEPTH; $depth++) {
+            $next = $tree
+                ->whereIn('parent_id', $ids)
+                ->pluck('id')
+                ->diff($ids)
+                ->all();
+
+            if ($next === []) {
+                break;
+            }
+
+            $ids = [...$ids, ...$next];
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @param  array<int, int>|null  $folderIds
      * @return Builder<Asset>
      */
-    private function assets(Workspace $workspace, ?AssetFolder $folder, string $term, string $kind): Builder
+    private function assets(Workspace $workspace, ?array $folderIds, string $term, string $kind): Builder
     {
         return Asset::query()
             ->where('workspace_id', $workspace->id)
             /*
-             * A search spans the library; browsing does not.
+             * A search spans the library; browsing narrows it.
              *
              * Someone typing a name is asking "where is the brand book", and
              * confining that to the shelf they happen to be standing in front of
@@ -188,9 +252,9 @@ class AssetLibraryController extends Controller
              */
             ->when(
                 $term === '',
-                fn (Builder $query) => $folder === null
-                    ? $query->atRoot()
-                    : $query->where('folder_id', $folder->id),
+                fn (Builder $query) => $folderIds === null
+                    ? $query
+                    : $query->whereIn('folder_id', $folderIds),
                 fn (Builder $query) => $query
                     ->where('name', 'ilike', '%'.addcslashes($term, '%_\\').'%'),
             )

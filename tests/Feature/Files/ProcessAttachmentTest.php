@@ -7,7 +7,10 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Services\ImageProcessor;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+
+use function Pest\Laravel\artisan;
 
 beforeEach(function () {
     Storage::fake('local');
@@ -146,6 +149,60 @@ it('marks an ordinary image as not animated', function () {
 
     expect($attachment->refresh()->metadata['animated'])->toBeFalse()
         ->and(AttachmentResource::payload($attachment)['is_animated'])->toBeFalse();
+});
+
+/**
+ * The operational half of the thumbnail story.
+ *
+ * A worker that restarted mid-decode, a bucket that was briefly unreachable, or
+ * a format the build could not decode until it was upgraded all leave a row that
+ * looks exactly like a file which legitimately has no preview — and nothing will
+ * ever dispatch that job again on its own. `--missing` is what re-dispatches it,
+ * and it is the first thing to reach for when somebody reports that *some* files
+ * have previews and others do not.
+ */
+it('re-queues only the images that ended up with no thumbnail', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+
+    Queue::fake();
+
+    $thumbnailed = MessageAttachment::factory()->orphaned()->create([
+        'workspace_id' => $workspace->id,
+        'uploaded_by' => $owner->id,
+        'mime_type' => 'image/png',
+        'thumbnail_path' => 'workspaces/1/attachments/done_thumb.jpg',
+        'metadata' => ['animated' => false],
+    ]);
+
+    $bare = MessageAttachment::factory()->orphaned()->create([
+        'workspace_id' => $workspace->id,
+        'uploaded_by' => $owner->id,
+        'mime_type' => 'image/svg+xml',
+        'thumbnail_path' => null,
+        // Already examined, so the default pass would skip it — this row is
+        // reachable only through --missing.
+        'metadata' => ['animated' => false],
+    ]);
+
+    // Not an image at all: no pass should ever touch it.
+    MessageAttachment::factory()->orphaned()->create([
+        'workspace_id' => $workspace->id,
+        'uploaded_by' => $owner->id,
+        'mime_type' => 'application/pdf',
+        'thumbnail_path' => null,
+    ]);
+
+    artisan('snack:reprocess-attachments', ['--missing' => true])->assertSuccessful();
+
+    Queue::assertPushed(ProcessAttachment::class, 1);
+    Queue::assertPushed(
+        ProcessAttachment::class,
+        fn (ProcessAttachment $job) => (new ReflectionClass($job))
+            ->getProperty('attachmentId')
+            ->getValue($job) === $bare->id,
+    );
+
+    expect($thumbnailed->refresh()->thumbnail_path)->not->toBeNull();
 });
 
 /**
