@@ -3,6 +3,7 @@ import {
     dropNeighbours,
     filterTasks,
     NO_BOARD_FILTERS,
+    orderedTasks,
     tasksInColumn,
 } from '@/hooks/use-board';
 import type { Task } from '@/types';
@@ -53,6 +54,21 @@ describe('tasksInColumn', () => {
         ];
 
         expect(tasksInColumn(tasks, 2).map((task) => task.id)).toEqual([2]);
+    });
+});
+
+describe('orderedTasks', () => {
+    it('does not disturb the list it is given', () => {
+        // The backlog sorts the array useBoard holds in state. Sorting in
+        // place would mutate it, and a card saved from a quick action would
+        // then reappear at the bottom of its section.
+        const tasks = [
+            makeTask({ id: 2, position: 200 }),
+            makeTask({ id: 1, position: 100 }),
+        ];
+
+        expect(orderedTasks(tasks).map((task) => task.id)).toEqual([1, 2]);
+        expect(tasks.map((task) => task.id)).toEqual([2, 1]);
     });
 });
 

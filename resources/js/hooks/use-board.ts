@@ -218,12 +218,24 @@ export function useBoard({
  * id — which is what the server's own `ordered()` scope does.
  */
 export function tasksInColumn(tasks: Task[], columnId: number): Task[] {
-    return tasks
-        .filter((task) => task.board_column_id === columnId)
-        .sort(
-            (left, right) =>
-                left.position - right.position || left.id - right.id,
-        );
+    return orderedTasks(
+        tasks.filter((task) => task.board_column_id === columnId),
+    );
+}
+
+/**
+ * A set of cards in the server's order.
+ *
+ * Every surface that lists cards has to do this for itself, because
+ * {@see useBoard} appends on every change: a card that is saved — from its
+ * panel, or from a quick action on its own row — would otherwise jump to the
+ * bottom of the list the moment it was touched. Copies rather than sorting in
+ * place, since the array being sorted is the one held in state.
+ */
+export function orderedTasks(tasks: Task[]): Task[] {
+    return [...tasks].sort(
+        (left, right) => left.position - right.position || left.id - right.id,
+    );
 }
 
 /**

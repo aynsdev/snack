@@ -2,20 +2,22 @@ import { Head, router } from '@inertiajs/react';
 import { CalendarClock, ChevronDown, Play, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { ProjectHeader } from '@/components/snack/projects/project-header';
-import {
-    LabelChip,
-    TaskPriorityIcon,
-    TaskTypeIcon,
-} from '@/components/snack/projects/task-glyphs';
+import { LabelChip } from '@/components/snack/projects/task-glyphs';
 import { TaskPanel } from '@/components/snack/projects/task-panel';
-import { UserAvatar } from '@/components/snack/user-avatar';
+import {
+    TaskAssigneeMenu,
+    TaskPriorityMenu,
+    TaskRowMenu,
+    TaskStatusMenu,
+    TaskTypeMenu,
+} from '@/components/snack/projects/task-quick-actions';
 import { Button } from '@/components/ui/button';
 import {
     Collapsible,
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { useBoard } from '@/hooks/use-board';
+import { orderedTasks, useBoard } from '@/hooks/use-board';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import {
@@ -87,7 +89,9 @@ export default function ProjectBacklogPage({
     const [openTaskId, setOpenTaskId] = useState<number | null>(null);
 
     const selected = tasks.find((task) => task.id === openTaskId) ?? null;
-    const backlog = tasks.filter((task) => task.sprint_id === null);
+    const backlog = orderedTasks(
+        tasks.filter((task) => task.sprint_id === null),
+    );
 
     /**
      * Dropping onto a section moves the card into it, keeping the status it
@@ -111,6 +115,34 @@ export default function ProjectBacklogPage({
             sprint_id: sprintId,
             in_backlog: sprintId === null,
         });
+    };
+
+    /*
+     * What the row's own menus write. The same three calls the panel makes —
+     * the quick actions are a second way to reach them, not a second path
+     * through the server.
+     */
+    const updateTask = (task: Task, attributes: Record<string, unknown>) => {
+        void update(task.id, attributes);
+    };
+
+    const moveTask = (
+        task: Task,
+        target: {
+            board_column_id?: number;
+            sprint_id?: number | null;
+            in_backlog?: boolean;
+        },
+    ) => {
+        void move(task, target);
+    };
+
+    const deleteTask = (task: Task) => {
+        if (task.id === openTaskId) {
+            setOpenTaskId(null);
+        }
+
+        void remove(task.id);
     };
 
     return (
@@ -149,16 +181,24 @@ export default function ProjectBacklogPage({
                         title={sprint.name}
                         subtitle={sprintSubtitle(sprint)}
                         state={sprint.state}
-                        tasks={tasks.filter(
-                            (task) => task.sprint_id === sprint.id,
+                        tasks={orderedTasks(
+                            tasks.filter(
+                                (task) => task.sprint_id === sprint.id,
+                            ),
                         )}
                         columns={columns}
+                        sprints={sprints}
+                        members={members}
+                        labels={labels}
                         canContribute={canContribute}
                         draggingId={dragging?.id ?? null}
                         onOpenTask={(task) => setOpenTaskId(task.id)}
                         onDragStart={setDragging}
                         onDragEnd={() => setDragging(null)}
                         onDropInto={() => dropInto(sprint.id)}
+                        onUpdateTask={updateTask}
+                        onMoveTask={moveTask}
+                        onDeleteTask={deleteTask}
                         onCreate={async (title) => {
                             await create({
                                 title,
@@ -184,12 +224,18 @@ export default function ProjectBacklogPage({
                     subtitle={`${backlog.length} ${backlog.length === 1 ? 'item' : 'items'}`}
                     tasks={backlog}
                     columns={columns}
+                    sprints={sprints}
+                    members={members}
+                    labels={labels}
                     canContribute={canContribute}
                     draggingId={dragging?.id ?? null}
                     onOpenTask={(task) => setOpenTaskId(task.id)}
                     onDragStart={setDragging}
                     onDragEnd={() => setDragging(null)}
                     onDropInto={() => dropInto(null)}
+                    onUpdateTask={updateTask}
+                    onMoveTask={moveTask}
+                    onDeleteTask={deleteTask}
                     onCreate={async (title) => {
                         await create({
                             title,
@@ -234,6 +280,9 @@ function BacklogSection({
     state,
     tasks,
     columns,
+    sprints,
+    members,
+    labels,
     canContribute,
     draggingId,
     actions,
@@ -242,12 +291,18 @@ function BacklogSection({
     onDragEnd,
     onDropInto,
     onCreate,
+    onUpdateTask,
+    onMoveTask,
+    onDeleteTask,
 }: {
     title: string;
     subtitle: string;
     state?: Sprint['state'];
     tasks: Task[];
     columns: BoardColumn[];
+    sprints: Sprint[];
+    members: ProjectMembership[];
+    labels: TaskLabel[];
     canContribute: boolean;
     draggingId: number | null;
     actions?: React.ReactNode;
@@ -256,6 +311,16 @@ function BacklogSection({
     onDragEnd: () => void;
     onDropInto: () => void;
     onCreate: (title: string) => Promise<void>;
+    onUpdateTask: (task: Task, attributes: Record<string, unknown>) => void;
+    onMoveTask: (
+        task: Task,
+        target: {
+            board_column_id?: number;
+            sprint_id?: number | null;
+            in_backlog?: boolean;
+        },
+    ) => void;
+    onDeleteTask: (task: Task) => void;
 }) {
     const [open, setOpen] = useState(true);
     const [isOver, setIsOver] = useState(false);
@@ -327,11 +392,18 @@ function BacklogSection({
                             key={task.id}
                             task={task}
                             columns={columns}
+                            sprints={sprints}
+                            members={members}
+                            labels={labels}
+                            canContribute={canContribute}
                             draggable={canContribute}
                             isDragging={draggingId === task.id}
                             onOpen={onOpenTask}
                             onDragStart={onDragStart}
                             onDragEnd={onDragEnd}
+                            onUpdate={onUpdateTask}
+                            onMove={onMoveTask}
+                            onDelete={onDeleteTask}
                         />
                     ))}
                 </ul>
@@ -391,27 +463,51 @@ function BacklogSection({
     );
 }
 
+/**
+ * One row, and every decision that can be made about it without opening it.
+ *
+ * The glyphs it already drew — type, status, priority, assignee — are the
+ * controls for changing them; see {@see TaskTypeMenu} for why. Everything
+ * narrower than a click still opens the card.
+ */
 function BacklogRow({
     task,
     columns,
+    sprints,
+    members,
+    labels,
+    canContribute,
     draggable,
     isDragging,
     onOpen,
     onDragStart,
     onDragEnd,
+    onUpdate,
+    onMove,
+    onDelete,
 }: {
     task: Task;
     columns: BoardColumn[];
+    sprints: Sprint[];
+    members: ProjectMembership[];
+    labels: TaskLabel[];
+    canContribute: boolean;
     draggable: boolean;
     isDragging: boolean;
     onOpen: (task: Task) => void;
     onDragStart: (task: Task) => void;
     onDragEnd: () => void;
+    onUpdate: (task: Task, attributes: Record<string, unknown>) => void;
+    onMove: (
+        task: Task,
+        target: {
+            board_column_id?: number;
+            sprint_id?: number | null;
+            in_backlog?: boolean;
+        },
+    ) => void;
+    onDelete: (task: Task) => void;
 }) {
-    const column = columns.find(
-        (candidate) => candidate.id === task.board_column_id,
-    );
-
     return (
         <li
             draggable={draggable}
@@ -422,12 +518,16 @@ function BacklogRow({
             }}
             onDragEnd={onDragEnd}
             className={cn(
-                'flex items-center gap-2 px-3 py-2 transition-colors hover:bg-accent/40',
+                'group/row flex items-center gap-2 px-3 py-2 transition-colors hover:bg-accent/40',
                 draggable && 'cursor-grab active:cursor-grabbing',
                 isDragging && 'opacity-40',
             )}
         >
-            <TaskTypeIcon type={task.type} />
+            <TaskTypeMenu
+                task={task}
+                disabled={!canContribute}
+                onChange={(type) => onUpdate(task, { type })}
+            />
 
             <span className="shrink-0 text-xs font-medium text-muted-foreground tabular-nums">
                 {task.reference}
@@ -460,22 +560,41 @@ function BacklogRow({
 
             {/* The status is worth a word here in a way it is not on the board,
                 where the column the card sits in already says it. */}
-            {column !== undefined && (
-                <span className="hidden shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] font-medium text-muted-foreground sm:inline">
-                    {column.name}
-                </span>
-            )}
+            <TaskStatusMenu
+                task={task}
+                columns={columns}
+                disabled={!canContribute}
+                className="hidden sm:inline-flex"
+                onChange={(columnId) =>
+                    onMove(task, { board_column_id: columnId })
+                }
+            />
 
-            <TaskPriorityIcon priority={task.priority} />
+            <TaskPriorityMenu
+                task={task}
+                disabled={!canContribute}
+                onChange={(priority) => onUpdate(task, { priority })}
+            />
 
-            {task.assignee != null ? (
-                <UserAvatar user={task.assignee} size="xs" />
-            ) : (
-                <span
-                    title="Unassigned"
-                    className="size-5 rounded-full border border-dashed border-muted-foreground/40"
-                />
-            )}
+            <TaskAssigneeMenu
+                task={task}
+                members={members}
+                disabled={!canContribute}
+                onChange={(assigneeId) =>
+                    onUpdate(task, { assignee_id: assigneeId })
+                }
+            />
+
+            <TaskRowMenu
+                task={task}
+                sprints={sprints}
+                labels={labels}
+                canContribute={canContribute}
+                canDelete={canContribute}
+                onUpdate={(attributes) => onUpdate(task, attributes)}
+                onMove={(target) => onMove(task, target)}
+                onDelete={() => onDelete(task)}
+            />
         </li>
     );
 }
