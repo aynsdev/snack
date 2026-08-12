@@ -1,50 +1,333 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import {
+    Activity,
     ArrowRight,
     AtSign,
     Bell,
+    Bookmark,
+    ChartNoAxesColumn,
+    Columns3,
+    FileText,
     Files,
     Hash,
+    HardDrive,
+    Headphones,
+    Images,
+    Inbox,
+    KeyRound,
+    LayoutGrid,
+    ListTodo,
     Lock,
+    Mail,
+    MessageCircle,
     MessagesSquare,
+    Moon,
+    Palette,
+    Paperclip,
+    Pin,
+    Radio,
+    Rocket,
+    ScrollText,
     Search,
     Send,
+    Server,
+    ShieldCheck,
     Smile,
+    Sunrise,
+    Tag,
+    Timer,
+    Type,
+    UserPlus,
+    Webhook,
+    Zap,
 } from 'lucide-react';
 import { SnackLogo, SnackLogoIcon } from '@/components/snack/snack-logo';
 import { Button } from '@/components/ui/button';
 import { dashboard, login } from '@/routes';
 
-const FEATURES = [
+type Feature = {
+    icon: typeof Hash;
+    title: string;
+    body: string;
+};
+
+type Section = {
+    id: string;
+    eyebrow: string;
+    title: string;
+    features: readonly Feature[];
+};
+
+/**
+ * Everything the application does, grouped the way somebody evaluating it would
+ * ask about it.
+ *
+ * # Why the copy is this short
+ *
+ * A landing page is skimmed, not read. Every feature here gets a name and one
+ * line, because a visitor deciding whether to keep scrolling is asking "does it
+ * do X" — and a paragraph explaining *why* it does X is an answer to a question
+ * they have not asked yet. The product itself is where the reasoning lives.
+ *
+ * The line is a claim, not a slogan: it says what the thing is, so the list can
+ * be scanned top to bottom without any of it needing a second read.
+ *
+ * Every entry ships. A feature list is a promise the first five minutes of using
+ * the product get checked against, so anything aspirational belongs in a
+ * roadmap, not here.
+ */
+const SECTIONS: readonly Section[] = [
     {
-        icon: Hash,
-        title: 'Channels that stay readable',
-        body: 'Public, private, and announcement-only channels. Unread markers remember where you stopped, so coming back after a day off is not an archaeology exercise.',
+        id: 'conversation',
+        eyebrow: 'Conversation',
+        title: 'Talking, without losing the plot',
+        features: [
+            {
+                icon: Hash,
+                title: 'Channels',
+                body: 'Public, private, or announcement-only. Browse, join, archive.',
+            },
+            {
+                icon: MessagesSquare,
+                title: 'Threads',
+                body: 'Replies stay beside the message. One inbox for the ones you follow.',
+            },
+            {
+                icon: Send,
+                title: 'DMs and group DMs',
+                body: 'One-to-one or a group, renameable, people added as you go.',
+            },
+            {
+                icon: Type,
+                title: 'Formatting',
+                body: 'Markdown or a toolbar. Code blocks, quotes, lists. Edit and delete.',
+            },
+            {
+                icon: Smile,
+                title: 'Emoji and reactions',
+                body: 'React without adding noise. Type :rocket: and get 🚀.',
+            },
+            {
+                icon: AtSign,
+                title: 'Mentions',
+                body: 'A person or the whole channel — and it reaches you through a mute.',
+            },
+            {
+                icon: Pin,
+                title: 'Pins and saves',
+                body: 'Pin it for the channel, save it for yourself.',
+            },
+            {
+                icon: Radio,
+                title: 'Presence and status',
+                body: 'Who is around, who is typing, and a status that expires.',
+            },
+            {
+                icon: Headphones,
+                title: 'Huddles',
+                body: 'Live audio and video in any channel or DM. No invite, no link.',
+            },
+            {
+                icon: Sunrise,
+                title: 'Standups',
+                body: 'A bot asks, on your days and your schedule, in your channel.',
+            },
+        ],
     },
     {
-        icon: MessagesSquare,
-        title: 'Threads that stay put',
-        body: 'Replies live beside the message that started them instead of shoving it up the channel. Follow the ones you care about and ignore the rest.',
+        id: 'projects',
+        eyebrow: 'Projects',
+        title: 'The work itself, not a link to it',
+        features: [
+            {
+                icon: Columns3,
+                title: 'Boards',
+                body: 'Your columns, drag between them.',
+            },
+            {
+                icon: ListTodo,
+                title: 'Backlog',
+                body: 'Type, priority, status, assignee — set from the row.',
+            },
+            {
+                icon: Timer,
+                title: 'Sprints',
+                body: 'Start, complete, roll the rest onward.',
+            },
+            {
+                icon: Rocket,
+                title: 'Releases',
+                body: 'What shipped together, planned through released.',
+            },
+            {
+                icon: Tag,
+                title: 'Labels and priorities',
+                body: 'Your own labels and colours. Five priority levels.',
+            },
+            {
+                icon: MessageCircle,
+                title: 'Cards with detail',
+                body: 'Comments, attachments, and per-project numbering.',
+            },
+            {
+                icon: ChartNoAxesColumn,
+                title: 'Summary',
+                body: 'In flight, blocked, and shipped — without building a report.',
+            },
+            {
+                icon: LayoutGrid,
+                title: 'Grouped and starred',
+                body: 'Your own headings. Archive what is done.',
+            },
+        ],
     },
     {
-        icon: Send,
-        title: 'Direct and group messages',
-        body: 'One-to-one or a huddle of six, on the same message pipeline as channels — same editing, same search, same files, no second-class inbox.',
+        id: 'knowledge',
+        eyebrow: 'Knowledge',
+        title: 'The things you need to find again',
+        features: [
+            {
+                icon: FileText,
+                title: 'Canvases',
+                body: 'Shared docs with covers and templates, attached to a channel.',
+            },
+            {
+                icon: Images,
+                title: 'Asset library',
+                body: 'Logos, decks, contracts. Folders, previews, grid or list.',
+            },
+            {
+                icon: Files,
+                title: 'File browser',
+                body: 'Every file you can see, filtered by kind or channel.',
+            },
+            {
+                icon: Search,
+                title: 'Search',
+                body: 'Full text, narrowed by from:, in:, and has:file.',
+            },
+            {
+                icon: Paperclip,
+                title: 'Attachments',
+                body: 'Drag anything in. Thumbnails, previews, all of it searchable.',
+            },
+            {
+                icon: Webhook,
+                title: 'Webhooks',
+                body: 'Post from CI or a script, signed if you want.',
+            },
+        ],
     },
     {
-        icon: Search,
-        title: 'Search that finds it',
-        body: 'Full-text search across every message and file, narrowed by from:, in:, has:file, and date. Results come back with the line highlighted.',
+        id: 'attention',
+        eyebrow: 'Attention',
+        title: 'Told about the right things',
+        features: [
+            {
+                icon: Bell,
+                title: 'Per-channel levels',
+                body: 'All, mentions only, or nothing.',
+            },
+            {
+                icon: Inbox,
+                title: 'One inbox',
+                body: 'Mentions, replies, and assignments in a list you can clear.',
+            },
+            {
+                icon: Moon,
+                title: 'Quiet hours',
+                body: 'Hold email overnight. The app keeps working.',
+            },
+            {
+                icon: Mail,
+                title: 'Digest email',
+                body: 'One morning summary, off unless you ask.',
+            },
+            {
+                icon: Activity,
+                title: 'Activity feed',
+                body: 'What happened while you were gone.',
+            },
+            {
+                icon: Bookmark,
+                title: 'Unread markers',
+                body: 'Where you stopped, per channel, after a day off.',
+            },
+        ],
     },
     {
-        icon: Files,
-        title: 'Files where you left them',
-        body: 'Drag anything in. Images get thumbnails, everything gets indexed, and the file browser lists the lot without you scrolling back through chat.',
+        id: 'running-it',
+        eyebrow: 'Running it',
+        title: 'Yours to administer',
+        features: [
+            {
+                icon: LayoutGrid,
+                title: 'Many workspaces',
+                body: 'One login, separate channels, projects, and people.',
+            },
+            {
+                icon: ShieldCheck,
+                title: 'Roles and guests',
+                body: 'Owner, admin, member — and guests who see one channel.',
+            },
+            {
+                icon: UserPlus,
+                title: 'Invitations',
+                body: 'By email or a link you can revoke. No open sign-up.',
+            },
+            {
+                icon: ScrollText,
+                title: 'Audit log',
+                body: 'Who removed it, who changed the role.',
+            },
+            {
+                icon: Palette,
+                title: 'Themes',
+                body: 'Your logo, light or dark, six colours — set per person.',
+            },
+            {
+                icon: Bookmark,
+                title: 'Your own sidebar',
+                body: 'Group channels under headings nobody else sees.',
+            },
+        ],
     },
     {
-        icon: Bell,
-        title: 'Notifications with a volume knob',
-        body: 'Per-channel levels, mute that still lets a direct mention through, quiet hours, and email only when you are genuinely away.',
+        id: 'foundations',
+        eyebrow: 'Foundations',
+        title: 'On your hardware, on your terms',
+        features: [
+            {
+                icon: Server,
+                title: 'Self-hosted',
+                body: 'App, database, sockets, and media on your own boxes.',
+            },
+            {
+                icon: KeyRound,
+                title: 'Passkeys and 2FA',
+                body: 'WebAuthn, authenticator apps, recovery codes.',
+            },
+            {
+                icon: Lock,
+                title: 'No public file URLs',
+                body: 'Every download re-checks who you are.',
+            },
+            {
+                icon: Zap,
+                title: 'Realtime',
+                body: 'Your own websocket server. No polling.',
+            },
+            {
+                icon: HardDrive,
+                title: 'Storage',
+                body: 'Local disk or S3-compatible. One setting.',
+            },
+            {
+                icon: Radio,
+                title: 'One-screen setup',
+                body: 'First account, first workspace, door closed.',
+            },
+        ],
     },
 ] as const;
 
@@ -93,10 +376,31 @@ export default function Welcome() {
             <Head title="Snack — small chats, big work" />
 
             <div className="min-h-dvh bg-background text-foreground">
-                <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
-                    <SnackLogo />
+                <header className="sticky top-0 z-20 border-b border-transparent bg-background/80 backdrop-blur-sm">
+                    <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-4">
+                        <SnackLogo />
 
-                    <nav className="flex items-center gap-2">
+                        {/*
+                         * Jump links rather than a marketing menu. The page is
+                         * long because the product is broad, and a reader who
+                         * arrived asking "does it do project tracking" should
+                         * not have to scroll past chat to find out.
+                         */}
+                        <nav
+                            aria-label="Sections"
+                            className="hidden items-center gap-1 lg:flex"
+                        >
+                            {SECTIONS.map((section) => (
+                                <a
+                                    key={section.id}
+                                    href={`#${section.id}`}
+                                    className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                >
+                                    {section.eyebrow}
+                                </a>
+                            ))}
+                        </nav>
+
                         {auth.user ? (
                             <Button asChild>
                                 <Link href={dashboard()}>
@@ -109,7 +413,7 @@ export default function Welcome() {
                                 <Link href={login()}>Sign in</Link>
                             </Button>
                         )}
-                    </nav>
+                    </div>
                 </header>
 
                 <main>
@@ -137,12 +441,9 @@ export default function Welcome() {
                                     </span>
                                 </h1>
 
-                                <p className="mt-6 max-w-xl text-lg text-pretty text-muted-foreground">
-                                    Snack is a team chat app you run yourself.
-                                    Channels, direct messages, threads, search,
-                                    and files — on your own hardware, with your
-                                    own data, and nobody metering your message
-                                    history.
+                                <p className="mt-6 max-w-md text-lg text-pretty text-muted-foreground">
+                                    Chat, boards, docs, and files in one app —
+                                    on your own server.
                                 </p>
 
                                 <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -169,6 +470,21 @@ export default function Welcome() {
                                         </>
                                     )}
                                 </div>
+
+                                <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+                                    {SECTIONS.map((section) => (
+                                        <li
+                                            key={section.id}
+                                            className="flex items-center gap-2"
+                                        >
+                                            <span
+                                                aria-hidden="true"
+                                                className="size-1.5 rounded-full bg-brand"
+                                            />
+                                            {section.eyebrow}
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
 
                             {/* A still of the product rather than a stock illustration. */}
@@ -232,36 +548,23 @@ export default function Welcome() {
                         </div>
                     </section>
 
-                    {/* Features */}
-                    <section className="mx-auto w-full max-w-6xl px-6 pt-4 pb-16 lg:pt-8 lg:pb-24">
-                        <h2 className="max-w-2xl text-3xl font-bold tracking-tight text-balance">
-                            Everything a working team needs, and not much else.
-                        </h2>
-
-                        <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                            {FEATURES.map((feature) => (
-                                <div key={feature.title}>
-                                    <span className="flex size-10 items-center justify-center rounded-xl bg-brand-subtle text-brand">
-                                        <feature.icon
-                                            aria-hidden="true"
-                                            className="size-5"
-                                        />
-                                    </span>
-
-                                    <h3 className="mt-4 font-semibold">
-                                        {feature.title}
-                                    </h3>
-
-                                    <p className="mt-2 text-sm text-pretty text-muted-foreground">
-                                        {feature.body}
-                                    </p>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
+                    {/* Features, by pillar */}
+                    {SECTIONS.map((section, index) => (
+                        <FeatureSection
+                            key={section.id}
+                            section={section}
+                            /*
+                             * Alternating surfaces rather than rules between
+                             * sections: six identical bands of cards read as one
+                             * very long list, and the reader loses track of
+                             * which heading they are still under.
+                             */
+                            tinted={index % 2 === 1}
+                        />
+                    ))}
 
                     {/* Closing */}
-                    <section className="mx-auto w-full max-w-6xl px-6 pb-16 lg:pb-24">
+                    <section className="mx-auto w-full max-w-6xl px-6 py-16 lg:py-24">
                         <div className="rounded-3xl border border-border bg-card px-6 py-12 text-center sm:px-12">
                             <SnackLogoIcon className="mx-auto size-10 text-brand" />
 
@@ -269,10 +572,9 @@ export default function Welcome() {
                                 Your team, your server, your history.
                             </h2>
 
-                            <p className="mx-auto mt-4 max-w-xl text-pretty text-muted-foreground">
-                                Snack keeps every message, file, and thread on
-                                infrastructure you control. No seat pricing, no
-                                message limits, no third party reading the room.
+                            <p className="mx-auto mt-4 max-w-md text-pretty text-muted-foreground">
+                                No seat pricing, no message limits, nobody else
+                                reading the room.
                             </p>
 
                             <div className="mt-8">
@@ -302,5 +604,75 @@ export default function Welcome() {
                 </footer>
             </div>
         </>
+    );
+}
+
+/**
+ * One pillar: a heading and its features.
+ *
+ * # Why the icon sits beside the name rather than above it
+ *
+ * A one-line feature stacked under a 40px icon is a card that is mostly empty
+ * space, and a grid of them scrolls for pages saying very little. Putting the
+ * icon on the left makes each entry two lines tall, which is what lets a whole
+ * pillar be taken in without scrolling — the point of cutting the copy in the
+ * first place.
+ *
+ * `scroll-mt` on the section stops the sticky header from covering the heading a
+ * jump link just navigated to; without it the reader lands one heading-height
+ * too far down and sees features with no title above them.
+ */
+function FeatureSection({
+    section,
+    tinted,
+}: {
+    section: Section;
+    tinted: boolean;
+}) {
+    return (
+        <section
+            id={section.id}
+            aria-labelledby={`${section.id}-heading`}
+            className={
+                'scroll-mt-20 border-t border-border' +
+                (tinted ? ' bg-card/40' : '')
+            }
+        >
+            <div className="mx-auto w-full max-w-6xl px-6 py-12 lg:py-16">
+                <p className="text-xs font-semibold tracking-wide text-brand uppercase">
+                    {section.eyebrow}
+                </p>
+
+                <h2
+                    id={`${section.id}-heading`}
+                    className="mt-1.5 max-w-2xl text-2xl font-bold tracking-tight text-balance sm:text-3xl"
+                >
+                    {section.title}
+                </h2>
+
+                <div className="mt-8 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+                    {section.features.map((feature) => (
+                        <div key={feature.title} className="flex gap-3">
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-brand">
+                                <feature.icon
+                                    aria-hidden="true"
+                                    className="size-4.5"
+                                />
+                            </span>
+
+                            <div className="min-w-0">
+                                <h3 className="text-sm font-semibold">
+                                    {feature.title}
+                                </h3>
+
+                                <p className="mt-0.5 text-sm text-pretty text-muted-foreground">
+                                    {feature.body}
+                                </p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </section>
     );
 }
