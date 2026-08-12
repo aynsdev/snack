@@ -146,7 +146,84 @@ it('resumes an ask that died halfway through', function () {
         ->and($run->fresh()->asked_at)->not->toBeNull();
 });
 
-it('posts the summary to the channel once everybody has answered', function () {
+it('posts an answer to the channel the moment it is given', function () {
+    runStandupsAt('2026-08-10 09:30:00');
+
+    $run = StandupRun::query()->firstOrFail();
+
+    $response = StandupResponse::query()
+        ->where('standup_run_id', $run->id)
+        ->where('user_id', $this->ada->id)
+        ->firstOrFail();
+
+    $this->actingAs($this->ada)
+        ->postJson("/w/{$this->workspace->slug}/standup-responses/{$response->id}", [
+            'answers' => ['Shipping the parser', 'Review on #418'],
+        ])
+        ->assertOk();
+
+    // Still open — one of two people. The channel hears from Ada anyway, which
+    // is the whole point: an answer is worth reading at 09:31, not at lunchtime.
+    expect($run->fresh()->isOpen())->toBeTrue();
+
+    $posted = Message::query()->findOrFail($response->fresh()->answer_message_id);
+
+    expect($posted->channel_id)->toBe($this->channel->id)
+        ->and($posted->body)->toContain($this->ada->name)
+        ->and($posted->body)->toContain('Shipping the parser')
+        ->and($posted->body)->toContain('Review on #418')
+        // A real message from a real sender, so it renders, paginates and
+        // searches like anything else in the channel.
+        ->and($posted->type)->toBe(MessageType::Text)
+        ->and($posted->sender->is_bot)->toBeTrue();
+});
+
+it('edits the message it already posted rather than answering twice', function () {
+    runStandupsAt('2026-08-10 09:30:00');
+
+    $run = StandupRun::query()->firstOrFail();
+
+    $response = StandupResponse::query()
+        ->where('standup_run_id', $run->id)
+        ->where('user_id', $this->ada->id)
+        ->firstOrFail();
+
+    foreach (['First go', 'Corrected'] as $answer) {
+        $this->actingAs($this->ada)
+            ->postJson("/w/{$this->workspace->slug}/standup-responses/{$response->id}", [
+                'answers' => [$answer],
+            ])
+            ->assertOk();
+    }
+
+    $posted = Message::query()->where('channel_id', $this->channel->id)->get();
+
+    expect($posted)->toHaveCount(1)
+        ->and($posted->first()->body)->toContain('Corrected')
+        ->and($posted->first()->body)->not->toContain('First go');
+});
+
+it('does not post a skip to the channel', function () {
+    runStandupsAt('2026-08-10 09:30:00');
+
+    $run = StandupRun::query()->firstOrFail();
+
+    $response = StandupResponse::query()
+        ->where('standup_run_id', $run->id)
+        ->where('user_id', $this->ada->id)
+        ->firstOrFail();
+
+    $this->actingAs($this->ada)
+        ->postJson("/w/{$this->workspace->slug}/standup-responses/{$response->id}", [
+            'skipped' => true,
+        ])
+        ->assertOk();
+
+    expect($response->fresh()->answer_message_id)->toBeNull()
+        ->and(Message::query()->where('channel_id', $this->channel->id)->count())->toBe(0);
+});
+
+it('rolls the run up once everybody has answered', function () {
     runStandupsAt('2026-08-10 09:30:00');
 
     $run = StandupRun::query()->firstOrFail();
@@ -172,10 +249,16 @@ it('posts the summary to the channel once everybody has answered', function () {
 
     $summary = Message::query()->findOrFail($run->summary_message_id);
 
+    /*
+     * Names, not answers. Both updates went to the channel as they were given,
+     * and reprinting them hours later would be the same morning twice — what is
+     * left for the summary to say is who the standup reached.
+     */
     expect($summary->channel_id)->toBe($this->channel->id)
+        ->and($summary->body)->toContain('Answers from')
         ->and($summary->body)->toContain($this->ada->name)
-        ->and($summary->body)->toContain('Working on thing 0')
-        ->and($summary->body)->toContain('Working on thing 1')
+        ->and($summary->body)->toContain($this->bo->name)
+        ->and($summary->body)->not->toContain('Working on thing 0')
         // A real message from a real sender, so it renders, paginates and
         // searches like anything else in the channel.
         ->and($summary->type)->toBe(MessageType::Text)
@@ -209,9 +292,9 @@ it('closes on the window with whatever it has, and names who is missing', functi
 
     $summary = Message::query()->findOrFail($run->summary_message_id);
 
-    expect($summary->body)->toContain('Shipping the parser')
-        // Named, because a summary that quietly shrinks makes two answers look
-        // like a team of two.
+    expect($summary->body)->toContain('Answers from '.$this->ada->name)
+        // Named, because a summary that quietly shrinks makes one answer look
+        // like a team of one.
         ->and($summary->body)->toContain('No answer yet from '.$this->bo->name);
 });
 

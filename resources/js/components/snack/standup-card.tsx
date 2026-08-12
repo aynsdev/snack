@@ -34,12 +34,17 @@ export function StandupCard({ card }: { card: StandupCardData }) {
     const workspace = useWorkspace();
 
     /*
-     * Seeded from the prop and then owned locally, which is the one thing to be
-     * careful about here: `useState(prop)` freezes at first render, so this is
-     * correct only because the server's copy cannot change underneath us — the
-     * only writer is this component, and it writes through `setCard`.
+     * The submitted card is held as an override, not as a seeded copy.
+     *
+     * `useState(card)` would freeze at first render, which was correct only
+     * while this component was the sole writer. It is not any more: answering by
+     * typing a reply into the DM retires the card server-side and broadcasts the
+     * message, so the prop can now change underneath us — and a seeded copy
+     * would go on showing the form for a standup that is already in the channel.
      */
-    const [state, setCard] = useState(card);
+    const [submitted, setSubmitted] = useState<StandupCardData | null>(null);
+
+    const state = submitted ?? card;
 
     const answered = state.state !== 'pending';
 
@@ -68,7 +73,7 @@ export function StandupCard({ card }: { card: StandupCardData }) {
                 <StandupForm
                     card={state}
                     workspaceSlug={workspace.slug}
-                    onSubmitted={setCard}
+                    onSubmitted={setSubmitted}
                 />
             )}
         </section>

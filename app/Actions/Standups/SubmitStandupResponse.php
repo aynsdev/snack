@@ -3,6 +3,7 @@
 namespace App\Actions\Standups;
 
 use App\Enums\StandupResponseState;
+use App\Events\MessageUpdated;
 use App\Models\Message;
 use App\Models\StandupResponse;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +29,10 @@ use Illuminate\Support\Facades\DB;
  */
 class SubmitStandupResponse
 {
-    public function __construct(private readonly CloseStandup $close) {}
+    public function __construct(
+        private readonly CloseStandup $close,
+        private readonly PostStandupAnswer $post,
+    ) {}
 
     /**
      * @param  array<int, string>  $answers  Aligned with the prompt's questions,
@@ -63,25 +67,46 @@ class SubmitStandupResponse
             ? StandupResponseState::Skipped
             : StandupResponseState::Submitted;
 
-        DB::transaction(function () use ($response, $pairs, $state): void {
+        $retired = DB::transaction(function () use ($response, $pairs, $state): array {
             $response->forceFill([
                 'answers' => $pairs,
                 'state' => $state,
                 'submitted_at' => now(),
             ])->save();
 
-            $this->retirePrompt($response);
+            return $this->retirePrompt($response);
         });
 
         /*
-         * Written up the moment the last person answers, rather than at the
-         * close window. A standup everybody finished at 09:34 is worth reading
-         * at 09:34; holding it until lunchtime because that is when the timer
-         * expires is the difference between a tool the team uses and a report
-         * they find later.
+         * The retired cards are announced after the commit, for the same reason
+         * the channel post below is: a broadcast cannot be rolled back.
          *
-         * Outside the transaction: this posts a message, and a message that has
-         * broadcast cannot be rolled back.
+         * They are announced at all because answering is no longer something
+         * only the card can do. A reply typed into the DM is submitted by
+         * App\Actions\Standups\AnswerStandupFromReply, and the person who typed
+         * it holds no handle on the response — without this, the form would sit
+         * there still offering to answer a standup that is already in the
+         * channel, until they happened to reload.
+         */
+        foreach ($retired as $card) {
+            MessageUpdated::dispatch($card);
+        }
+
+        /*
+         * Straight into the channel, ahead of any summary.
+         *
+         * Everything below this point is outside the transaction, and for one
+         * reason: these post messages, and a message that has broadcast cannot
+         * be rolled back.
+         */
+        $this->post->handle($response);
+
+        /*
+         * The run is written up the moment the last person answers, rather than
+         * at the close window. A standup everybody finished at 09:34 is worth
+         * reading at 09:34; holding the roll-up until lunchtime because that is
+         * when the timer expires is the difference between a tool the team uses
+         * and a report they find later.
          */
         $run = $response->run;
 
@@ -100,9 +125,14 @@ class SubmitStandupResponse
      * Not a correctness path so much as a "never render an answer with no
      * question attached to it" one.
      *
+     * Public because a typed reply has to be split against the same snapshot
+     * this then aligns to — see {@see AnswerStandupFromReply}. Two readings of
+     * "which questions were asked" is exactly the disagreement that files an
+     * answer under the wrong question.
+     *
      * @return array<int, string>
      */
-    private function questionsAsked(StandupResponse $response): array
+    public function questionsAsked(StandupResponse $response): array
     {
         $asked = data_get($response->promptMessage?->metadata, 'standup.questions');
 
@@ -133,20 +163,24 @@ class SubmitStandupResponse
      * an index lookup on a table with every message in the workspace in it: the
      * cards for a response are all in one DM by construction.
      *
-     * `saveQuietly` and no broadcast: the only person who can see this DM is the
-     * one who just submitted, and their own request is already answering them. A
-     * broadcast would be a second delivery of a message they are looking at.
+     * `saveQuietly` here and the broadcast raised by the caller, after the
+     * commit — a message that has announced itself cannot be un-announced by a
+     * rollback.
+     *
+     * @return array<int, Message> The cards, for the caller to announce.
      */
-    private function retirePrompt(StandupResponse $response): void
+    private function retirePrompt(StandupResponse $response): array
     {
         if ($response->conversation_id === null) {
-            return;
+            return [];
         }
 
         $cards = Message::query()
             ->where('conversation_id', $response->conversation_id)
             ->where('metadata->standup->response_id', $response->id)
             ->get();
+
+        $retired = [];
 
         foreach ($cards as $message) {
             $metadata = $message->metadata ?? [];
@@ -164,6 +198,10 @@ class SubmitStandupResponse
 
             $message->metadata = $metadata;
             $message->saveQuietly();
+
+            $retired[] = $message;
         }
+
+        return $retired;
     }
 }

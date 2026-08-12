@@ -18,7 +18,15 @@ use Illuminate\Support\Collection;
  * guard below is what stops a submission landing in the same second as the
  * sweep from posting the summary twice.
  *
- * # What a summary says about the people who did not answer
+ * # Why the summary no longer repeats the answers
+ *
+ * Because they are already in the channel. Each answer is posted the moment it
+ * is given — see {@see PostStandupAnswer} — so a summary that quoted them all
+ * again would be the same morning printed twice, with the second copy arriving
+ * hours after anybody needed it. What is left is the thing no individual message
+ * can say: who the standup went to, and how that compares with who answered.
+ *
+ * # What it says about the people who did not answer
  *
  * It names them. Not to shame anybody, but because the alternative is a summary
  * that quietly shrinks: a standup with two of five replies looks like a team of
@@ -108,9 +116,9 @@ class CloseStandup
     /**
      * The message the channel reads.
      *
-     * One message rather than one per person: a standup is a thing the team
-     * reads in a minute, and five messages would push four of them off the
-     * screen and light the channel up five times.
+     * A roll-up rather than a transcript: every answer was posted as it arrived,
+     * so this is the line that closes the morning off — who spoke, who had
+     * nothing, and who was never heard from.
      *
      * @param  Collection<int, StandupResponse>  $responses
      */
@@ -120,31 +128,25 @@ class CloseStandup
 
         $lines = ["**{$standup->name}** — {$run->dateLabel()}"];
 
-        foreach ($responses as $response) {
-            $pairs = $response->answerPairs();
-            $name = $response->user->name;
-
-            if ($pairs === []) {
-                continue;
-            }
-
-            $lines[] = '';
-            $lines[] = "**{$name}**";
-
-            foreach ($pairs as $pair) {
-                $lines[] = "_{$pair['question']}_";
-                $lines[] = $pair['answer'];
-            }
-        }
+        $answered = $responses
+            ->filter(fn (StandupResponse $response): bool => $response->answerPairs() !== [])
+            ->map(fn (StandupResponse $response): string => $response->user->name)
+            ->values()
+            ->all();
 
         $skipped = $this->names($responses, StandupResponseState::Skipped);
         $waiting = $this->names($responses, StandupResponseState::Pending);
 
+        if ($answered !== []) {
+            $lines[] = '';
+            $lines[] = '_Answers from '.$this->join($answered).'._';
+        }
+
         /*
-         * Both tails are single lines rather than sections. "Nothing to report"
-         * is information, but it is not worth the same vertical space as an
-         * answer, and a standup where four people are quiet should not be four
-         * paragraphs of nothing.
+         * A line each rather than a section each. "Nothing to report" is
+         * information, but it is not worth the vertical space of an answer, and
+         * a standup where four people are quiet should not be four paragraphs of
+         * nothing.
          */
         if ($skipped !== []) {
             $lines[] = '';

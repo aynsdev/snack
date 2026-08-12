@@ -196,6 +196,41 @@ describe('StandupCard', () => {
         expect(screen.getByText(/nothing to report/i)).toBeInTheDocument();
     });
 
+    /*
+     * The card is no longer the only way to answer: a plain reply typed into
+     * the DM is parsed server-side, which retires this card and broadcasts the
+     * message. So an answered card arriving as a new prop has to win over the
+     * pending one this rendered with — the version that seeded local state at
+     * first render went on offering to answer a standup already in the channel.
+     */
+    it('retires when the answer arrived some other way', () => {
+        const { rerender } = render(<StandupCard card={makeCard()} />);
+
+        expect(
+            screen.getByRole('button', { name: 'Send to #engineering' }),
+        ).toBeInTheDocument();
+
+        rerender(
+            <StandupCard
+                card={makeCard({
+                    state: 'submitted',
+                    submitted_at: '2026-08-10T09:34:00+00:00',
+                    answers: [
+                        {
+                            question: 'What are you working on?',
+                            answer: 'The parser',
+                        },
+                    ],
+                })}
+            />,
+        );
+
+        expect(
+            screen.queryByRole('button', { name: 'Send to #engineering' }),
+        ).not.toBeInTheDocument();
+        expect(screen.getByText('The parser')).toBeInTheDocument();
+    });
+
     it('says so when the send fails, and leaves the form standing', async () => {
         const user = userEvent.setup();
 

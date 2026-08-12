@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property StandupResponseState $state
  * @property int|null $conversation_id
  * @property int|null $prompt_message_id
+ * @property int|null $answer_message_id
  * @property array<int, array{question: string, answer: string}> $answers
  * @property CarbonImmutable|null $submitted_at
  * @property CarbonImmutable|null $created_at
@@ -36,7 +37,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 #[Fillable([
     'standup_run_id', 'user_id', 'state', 'conversation_id',
-    'prompt_message_id', 'answers', 'submitted_at',
+    'prompt_message_id', 'answer_message_id', 'answers', 'submitted_at',
 ])]
 /*
  * Pointed at the standup's own policy rather than getting one of its own.
@@ -98,6 +99,19 @@ class StandupResponse extends Model
     public function promptMessage(): BelongsTo
     {
         return $this->belongsTo(Message::class, 'prompt_message_id');
+    }
+
+    /**
+     * The channel message this person's answers were posted as.
+     *
+     * Held so a re-submission edits that message rather than posting a second
+     * copy of the same update — see {@see App\Actions\Standups\PostStandupAnswer}.
+     *
+     * @return BelongsTo<Message, $this>
+     */
+    public function answerMessage(): BelongsTo
+    {
+        return $this->belongsTo(Message::class, 'answer_message_id');
     }
 
     // -- Scopes --------------------------------------------------------------
