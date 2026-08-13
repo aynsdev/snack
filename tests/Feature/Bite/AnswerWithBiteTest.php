@@ -3,15 +3,20 @@
 use App\Actions\Messages\SendMessage;
 use App\Ai\Agents\Bite;
 use App\Ai\BiteAttachments;
+use App\Ai\BiteUploads;
+use App\Enums\BiteCapability;
 use App\Enums\WorkspaceRole;
 use App\Events\BiteReplying;
 use App\Jobs\AnswerWithBite;
+use App\Models\BiteSetting;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Services\BiteBot;
 use App\Services\BiteSummons;
 use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
@@ -345,4 +350,82 @@ it('carries a lifetime while working and none when finished', function () {
         ->toMatchArray(['name' => 'Bite', 'replying' => true, 'expires_in' => 45])
         ->and((new BiteReplying($summons, $this->bot, false))->broadcastWith())
         ->toMatchArray(['replying' => false, 'expires_in' => 0]);
+});
+
+/**
+ * # Files handed to Bite with the question
+ *
+ * `read_file` is Bite going to fetch something it heard about. This is the
+ * other direction: a screenshot dropped into the composer, where the file is
+ * the whole question and there is no name to search for. See
+ * {@see BiteUploads}.
+ */
+it('puts an attached file into the prompt', function () {
+    Storage::fake('local');
+    Storage::disk('local')->put('attachments/notes.md', 'The staging host is stage-2.');
+
+    Bite::fake(['Reading it now.']);
+
+    $message = askBite('@bite what does this say?');
+
+    MessageAttachment::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'message_id' => $message->id,
+        'uploaded_by' => $this->ada->id,
+        'disk' => 'local',
+        'path' => 'attachments/notes.md',
+        'original_name' => 'notes.md',
+        'mime_type' => 'text/markdown',
+    ]);
+
+    // Re-run the job now the file is attached, the way the real pipeline sees
+    // it: the upload is claimed inside the send transaction.
+    app(AnswerWithBite::class, ['messageId' => $message->id])->handle(
+        app(BiteSummons::class),
+        app(BiteBot::class),
+        app(BiteAttachments::class),
+    );
+
+    Bite::assertPrompted(fn (AgentPrompt $prompt): bool => str_contains(
+        (string) $prompt->prompt,
+        'The staging host is stage-2.',
+    ));
+});
+
+/**
+ * And the admin switch closes this door as well as `read_file`'s.
+ */
+it('ignores an attached file when the workspace switched file reading off', function () {
+    Storage::fake('local');
+    Storage::disk('local')->put('attachments/secret.md', 'Do not read me.');
+
+    BiteSetting::factory()
+        ->forWorkspace($this->workspace)
+        ->allowing([BiteCapability::SearchMessages])
+        ->create();
+
+    Bite::fake(['Nothing to see.']);
+
+    $message = askBite('@bite what does this say?');
+
+    MessageAttachment::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'message_id' => $message->id,
+        'uploaded_by' => $this->ada->id,
+        'disk' => 'local',
+        'path' => 'attachments/secret.md',
+        'original_name' => 'secret.md',
+        'mime_type' => 'text/markdown',
+    ]);
+
+    app(AnswerWithBite::class, ['messageId' => $message->id])->handle(
+        app(BiteSummons::class),
+        app(BiteBot::class),
+        app(BiteAttachments::class),
+    );
+
+    Bite::assertPrompted(fn (AgentPrompt $prompt): bool => ! str_contains(
+        (string) $prompt->prompt,
+        'Do not read me.',
+    ));
 });

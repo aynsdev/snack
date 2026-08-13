@@ -243,6 +243,45 @@ class MessageAttachment extends Model
         return $this->mime_type === 'application/pdf';
     }
 
+    /**
+     * Whether these bytes are better read as text than handled as a file.
+     *
+     * Matched on the whole MIME type or a prefix, because the useful set is not
+     * `text/*`: JSON, CSV, and most source files are served as `application/*`
+     * or as whatever the uploader's browser guessed. SVG is here rather than
+     * with the images because its contents are the interesting part — an image
+     * pipeline would rasterize away the one thing worth reading.
+     *
+     * Lives on the attachment rather than in whichever class happens to need
+     * it, because two callers already do — {@see App\Ai\Tools\ReadFile}, which
+     * fetches a file Bite went looking for, and {@see App\Ai\BiteUploads},
+     * which handles one somebody attached to their question. The two
+     * disagreeing about whether a `.csv` is text would mean the same file
+     * answered differently depending on how Bite came by it.
+     */
+    public function isTextual(): bool
+    {
+        $textTypes = [
+            'text/',
+            'application/json',
+            'application/xml',
+            'application/javascript',
+            'application/x-yaml',
+            'application/yaml',
+            'application/sql',
+            'application/csv',
+            'image/svg+xml',
+        ];
+
+        foreach ($textTypes as $type) {
+            if (str_starts_with($this->mime_type, $type)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function hasThumbnail(): bool
     {
         return $this->thumbnail_path !== null;

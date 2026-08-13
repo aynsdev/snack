@@ -43,25 +43,6 @@ use function Laravel\Ai\agent;
  */
 class ReadFile extends BiteTool implements Tool
 {
-    /**
-     * Types worth reading as text.
-     *
-     * Matched on the whole MIME type or a prefix, because the useful set is not
-     * `text/*`: JSON, CSV, and most source files are served as `application/*`
-     * or as whatever the uploader's browser guessed.
-     */
-    private const TEXT_TYPES = [
-        'text/',
-        'application/json',
-        'application/xml',
-        'application/javascript',
-        'application/x-yaml',
-        'application/yaml',
-        'application/sql',
-        'application/csv',
-        'image/svg+xml',
-    ];
-
     public function __construct(BiteContext $context, private readonly BiteFiles $files)
     {
         parent::__construct($context);
@@ -92,7 +73,7 @@ class ReadFile extends BiteTool implements Tool
             ?: 'Summarize this file.';
 
         return match (true) {
-            $this->isText($file) => $this->readText($file),
+            $file->isTextual() => $this->readText($file),
             $file->isPdf() => $this->readDocument($file, $question),
             $file->isImage() => $this->readImage($file, $question),
             default => "[{$file->original_name}] is a {$file->mime_type} file, which cannot be read as text. "
@@ -220,16 +201,5 @@ class ReadFile extends BiteTool implements Tool
         } catch (Throwable) {
             return null;
         }
-    }
-
-    private function isText(MessageAttachment $file): bool
-    {
-        foreach (self::TEXT_TYPES as $type) {
-            if (str_starts_with($file->mime_type, $type)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

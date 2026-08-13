@@ -9,6 +9,7 @@ use App\Ai\BiteKnowledge;
 use App\Ai\Tools;
 use App\Enums\BiteCapability;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\User;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\Provider;
@@ -281,7 +282,7 @@ class Bite implements Agent, Conversational, HasTools
             : $this->context->container->messages()->getQuery()->whereNull('parent_message_id');
 
         return $query
-            ->with('sender:id,name,username')
+            ->with(['sender:id,name,username', 'attachments:id,message_id,original_name'])
             ->orderByDesc('id')
             ->limit($limit)
             ->get()
@@ -347,13 +348,42 @@ class Bite implements Agent, Conversational, HasTools
      * Named, because a group channel's history is unreadable without knowing
      * who said what — and because Bite is regularly asked to summarize exactly
      * that. Its own messages are left unlabelled: the role already says.
+     *
+     * Files are named rather than read. "Ada posted design-v2.png" is what
+     * makes "what did she send earlier?" answerable at all, and it is honest
+     * about the limit: the bytes are not here, so Bite can offer to read the
+     * file with `read_file` instead of describing a picture it has not seen.
+     * Only the message being answered has its files actually attached — see
+     * {@see App\Ai\BiteUploads}.
      */
     private function transcribe(Message $message): string
     {
+        $body = $message->body.$this->attachmentNames($message);
+
         if ($message->sender_id === $this->bot->id) {
-            return $message->body;
+            return $body;
         }
 
-        return "{$message->sender->name} (@{$message->sender->username}): {$message->body}";
+        return "{$message->sender->name} (@{$message->sender->username}): {$body}";
+    }
+
+    /**
+     * What was attached to a historical message, if anything.
+     *
+     * Reads the already-eager-loaded relation and never queries: this runs once
+     * per message in the transcript, so a lazy load here would be twenty
+     * queries to build one prompt.
+     */
+    private function attachmentNames(Message $message): string
+    {
+        if (! $message->relationLoaded('attachments') || $message->attachments->isEmpty()) {
+            return '';
+        }
+
+        $names = $message->attachments
+            ->map(fn (MessageAttachment $file): string => $file->original_name)
+            ->implode(', ');
+
+        return " [attached: {$names}]";
     }
 }

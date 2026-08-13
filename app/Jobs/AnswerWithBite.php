@@ -5,6 +5,8 @@ namespace App\Jobs;
 use App\Ai\Agents\Bite;
 use App\Ai\BiteAttachments;
 use App\Ai\BiteContext;
+use App\Ai\BiteUploads;
+use App\Enums\BiteCapability;
 use App\Events\BiteReplying;
 use App\Models\Channel;
 use App\Models\Conversation;
@@ -77,7 +79,7 @@ class AnswerWithBite implements ShouldQueue
     public function handle(BiteSummons $summons, BiteBot $bots, BiteAttachments $attachments): void
     {
         $message = Message::query()
-            ->with(['sender', 'channel', 'conversation'])
+            ->with(['sender', 'channel', 'conversation', 'attachments'])
             ->find($this->messageId);
 
         if ($message === null) {
@@ -146,6 +148,22 @@ class AnswerWithBite implements ShouldQueue
     ): ?AgentResponse {
         try {
             /*
+             * The files on the message go with the question rather than through
+             * a tool call. See {@see App\Ai\BiteUploads} for why fetching a file
+             * and being handed one are different problems, and for the shapes
+             * the provider will accept.
+             */
+            $uploads = app(BiteUploads::class);
+
+            /*
+             * Gated on the same capability as `read_file`. An admin who has
+             * switched off "Read files" has said Bite may not read this
+             * workspace's files, and a file arriving by a different door is
+             * still one of this workspace's files.
+             */
+            $reads = $agent->context->settings()->allows(BiteCapability::ReadFile);
+
+            /*
              * `forUser` starts a stored agent conversation owned by the person
              * who asked, which is what makes a paused tool approval resumable
              * minutes later — the pending call has to still exist when they
@@ -153,7 +171,10 @@ class AnswerWithBite implements ShouldQueue
              * two people asking Bite different things in the same channel do
              * not end up sharing one.
              */
-            return $agent->forUser($sender)->prompt($this->promptFrom($message));
+            return $agent->forUser($sender)->prompt(
+                $this->promptFrom($message).($reads ? $uploads->describe($message) : ''),
+                attachments: $reads ? $uploads->attachmentsFor($message) : [],
+            );
         } catch (Throwable $exception) {
             report($exception);
 
