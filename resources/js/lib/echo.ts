@@ -80,6 +80,9 @@ export const events = {
     conversationRead: '.conversation.read',
     conversationUpdated: '.conversation.updated',
     presenceChanged: '.presence.changed',
+    // The assistant is working on an answer. A server broadcast rather than a
+    // whisper, because Bite is a queue worker — see App\Events\BiteReplying.
+    biteReplying: '.bite.replying',
     // One card on a project board, carrying the whole card — see
     // App\Events\TaskChanged for why it is never a diff.
     taskChanged: '.task.changed',

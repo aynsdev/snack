@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\BiteSetting;
 use App\Models\Channel;
 use App\Models\Conversation;
 use App\Models\Message;
@@ -22,6 +23,19 @@ use App\Models\User;
  * pipeline uses — {@see MentionParser} strips code spans and fenced blocks
  * first, so `@bite` inside a snippet summons nobody, exactly as it notifies
  * nobody.
+ *
+ * # Three switches, not one
+ *
+ * A summon has to get past the installation's own `snack.bite.enabled`, the
+ * workspace's {@see App\Models\BiteSetting}, and — in a channel — that
+ * workspace's channel guard. They answer to different people and none of them
+ * overrides another: an operator decides whether this deployment talks to an AI
+ * provider at all, and a workspace's admins decide whether it has an assistant
+ * and where it may speak.
+ *
+ * Every refusal here is silent. An assistant that announces "I am not allowed to
+ * answer in this channel" is an assistant that is still posting in that channel,
+ * which is exactly what the admin turned off.
  *
  * # Loop prevention
  *
@@ -69,8 +83,24 @@ class BiteSummons
             return null;
         }
 
+        $settings = BiteSetting::forWorkspace($message->workspace);
+
+        /*
+         * The workspace's own switch and its audience rule, checked before the
+         * container branches because they apply to both. A workspace that has
+         * turned Bite off has turned it off in DMs too — the switch is about
+         * whether this workspace has an assistant, not about where.
+         */
+        if (! $settings->is_enabled) {
+            return null;
+        }
+
+        if (! $settings->audience->admits($sender->roleIn($message->workspace))) {
+            return null;
+        }
+
         return $container instanceof Channel
-            ? $this->summonedInChannel($message, $container)
+            ? $this->summonedInChannel($message, $container, $settings)
             : $this->summonedInConversation($container);
     }
 
@@ -81,11 +111,27 @@ class BiteSummons
      * said in one would be unusable within a day. Being named is the whole
      * consent mechanism.
      */
-    private function summonedInChannel(Message $message, Channel $channel): ?User
+    private function summonedInChannel(Message $message, Channel $channel, BiteSetting $settings): ?User
     {
         $handles = MentionParser::extract($message->body)['usernames'];
 
         if (! $this->namesBite($handles, $channel->workspace_id)) {
+            return null;
+        }
+
+        /*
+         * The channel guard, checked after the name and before the account is
+         * resolved. After the name because a workspace that has confined Bite to
+         * two channels still sends thousands of messages that do not mention it,
+         * and this is the cheaper of the two rejections to reach last. Before
+         * the account because `accountFor` creates one, and a summon in a
+         * forbidden channel must leave nothing behind at all.
+         *
+         * Silence rather than a refusal message: an assistant that answers "I am
+         * not allowed to speak here" every time somebody types its name in the
+         * wrong channel is one that is still speaking in that channel.
+         */
+        if (! $settings->admitsChannel($channel->id)) {
             return null;
         }
 

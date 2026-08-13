@@ -4,10 +4,14 @@ use App\Actions\Messages\SendMessage;
 use App\Ai\Agents\Bite;
 use App\Ai\BiteAttachments;
 use App\Enums\WorkspaceRole;
+use App\Events\BiteReplying;
 use App\Jobs\AnswerWithBite;
 use App\Models\Message;
 use App\Services\BiteBot;
 use App\Services\BiteSummons;
+use Illuminate\Broadcasting\PresenceChannel;
+use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Support\Facades\Event;
 use Laravel\Ai\Approvals\PendingApproval;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
@@ -220,4 +224,125 @@ it('posts an ordinary, searchable message', function () {
     expect($reply->workspace_id)->toBe($this->workspace->id)
         ->and($reply->channel_id)->toBe($this->channel->id)
         ->and($reply->type->value)->toBe('text');
+});
+
+/**
+ * # The "Bite is replying…" indicator
+ *
+ * An answer takes as long as it takes, and until the message lands there is
+ * nothing on screen at all. That silence is indistinguishable from a summon
+ * that did not register, an assistant that is switched off, and a queue worker
+ * that is not running — so the wait is announced at both ends.
+ */
+it('says it is replying before it asks the model, and stops when it is done', function () {
+    Bite::fake(['The annual plan.']);
+
+    $summons = askBite('@bite pricing?');
+
+    Event::assertDispatched(
+        BiteReplying::class,
+        fn (BiteReplying $event): bool => $event->replying === true
+            && $event->summons->is($summons)
+            && $event->bot->is($this->bot),
+    );
+
+    Event::assertDispatched(
+        BiteReplying::class,
+        fn (BiteReplying $event): bool => $event->replying === false,
+    );
+});
+
+/**
+ * The half that matters. An indicator that is only taken down on success is an
+ * assistant that is permanently about to answer every time a provider refuses.
+ */
+it('stops saying it is replying when the model fails', function () {
+    Bite::fake(function (): never {
+        throw new RuntimeException('provider exploded');
+    });
+
+    askBite('@bite hello');
+
+    Event::assertDispatched(
+        BiteReplying::class,
+        fn (BiteReplying $event): bool => $event->replying === false,
+    );
+});
+
+/**
+ * And when there is no answer to post at all — a model that returns nothing
+ * leaves no message behind, so the indicator is the only thing that could be
+ * left running.
+ */
+it('stops saying it is replying when the answer is empty', function () {
+    Bite::fake(['   ']);
+
+    askBite('@bite hello');
+
+    expect(biteSaid())->toBeNull();
+
+    Event::assertDispatched(
+        BiteReplying::class,
+        fn (BiteReplying $event): bool => $event->replying === false,
+    );
+});
+
+/**
+ * Nothing is announced for a message that was not addressed to Bite, which is
+ * almost every message the application sends.
+ */
+it('says nothing about replying when it was not summoned', function () {
+    app(SendMessage::class)->handle(
+        container: $this->channel,
+        sender: $this->ada,
+        body: 'just talking among ourselves',
+    );
+
+    Event::assertNotDispatched(BiteReplying::class);
+});
+
+/**
+ * The indicator is heard where the answer will land: a summon inside a thread
+ * is answered inside that thread, so the wait belongs on the thread's channel
+ * and not in front of everyone reading the container.
+ */
+it('announces into the thread when it was summoned in one', function () {
+    $root = makeMessage($this->channel, $this->ada, 'about the migration');
+
+    $summons = Message::factory()
+        ->inChannel($this->channel)
+        ->from($this->ada)
+        ->replyTo($root)
+        ->withBody('@bite what was the conclusion?')
+        ->create();
+
+    $channels = (new BiteReplying($summons, $this->bot, true))->broadcastOn();
+
+    expect($channels)->toHaveCount(1)
+        ->and($channels[0])->toBeInstanceOf(PrivateChannel::class)
+        ->and($channels[0]->name)->toBe('private-thread.'.$root->id);
+});
+
+it('announces into the channel when it was summoned at top level', function () {
+    $summons = makeMessage($this->channel, $this->ada, '@bite hello');
+
+    $channels = (new BiteReplying($summons, $this->bot, true))->broadcastOn();
+
+    expect($channels[0])->toBeInstanceOf(PresenceChannel::class)
+        ->and($channels[0]->name)->toBe('presence-channel.'.$this->channel->id);
+});
+
+/**
+ * The payload the client counts down from. Zero on the way out, because a
+ * "finished" that carried a lifetime would be a contradiction.
+ */
+it('carries a lifetime while working and none when finished', function () {
+    config()->set('snack.bite.replying_ttl_seconds', 45);
+
+    $summons = makeMessage($this->channel, $this->ada, '@bite hello');
+
+    expect((new BiteReplying($summons, $this->bot, true))->broadcastWith())
+        ->toMatchArray(['name' => 'Bite', 'replying' => true, 'expires_in' => 45])
+        ->and((new BiteReplying($summons, $this->bot, false))->broadcastWith())
+        ->toMatchArray(['replying' => false, 'expires_in' => 0]);
 });

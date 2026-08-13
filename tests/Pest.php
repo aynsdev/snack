@@ -7,6 +7,7 @@ use App\Enums\ColumnCategory;
 use App\Enums\MemberStatus;
 use App\Enums\ProjectRole;
 use App\Enums\WorkspaceRole;
+use App\Events\BiteReplying;
 use App\Events\BoardChanged;
 use App\Events\ChannelActivity;
 use App\Events\ChannelCreated;
@@ -64,6 +65,7 @@ pest()->extend(TestCase::class)
         // listener untouched, and tests can still assert on dispatch with
         // Event::assertDispatched().
         Event::fake([
+            BiteReplying::class,
             ChannelActivity::class,
             ChannelCreated::class,
             ChannelMembershipGranted::class,

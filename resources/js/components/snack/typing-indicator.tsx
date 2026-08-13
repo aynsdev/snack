@@ -8,19 +8,29 @@ import { cn } from '@/lib/utils';
 const NAMED = 2;
 
 /**
- * "Ada is typing…"
+ * "Ada is typing…", and "Bite is replying…"
  *
  * Occupies a fixed line whether or not anyone is typing. Letting it appear and
  * disappear would push the composer up and down by a line while somebody types
  * at you, which is the kind of movement that makes a text box feel unreliable.
+ *
+ * The assistant shares the line rather than getting one of its own, for that
+ * same reason: a second line that exists only sometimes moves the composer, and
+ * the two states are the same sentence to the reader — somebody is about to say
+ * something.
  */
 export function TypingIndicator({
     typists,
+    replying = null,
     className,
 }: {
     typists: Typist[];
+    /** The assistant's name while it is working on an answer, else null. */
+    replying?: string | null;
     className?: string;
 }) {
+    const sentence = describe(typists, replying);
+
     return (
         <p
             aria-live="polite"
@@ -29,10 +39,10 @@ export function TypingIndicator({
                 className,
             )}
         >
-            {typists.length > 0 && (
+            {sentence !== '' && (
                 <>
                     <TypingDots />
-                    {describe(typists)}
+                    {sentence}
                 </>
             )}
         </p>
@@ -70,8 +80,28 @@ function TypingDots() {
  *
  * Exported for testing: it is small, but it is the sort of string that reads
  * fine in the one case anyone checks and ungrammatically in the others.
+ *
+ * The assistant is a separate clause rather than another name in the list. It is
+ * not typing — it is thinking, then posting all at once — and "Ada and Bite are
+ * typing…" would describe a colleague's keyboard and a queue worker as the same
+ * activity.
  */
-export function describe(typists: Typist[]): string {
+export function describe(
+    typists: Typist[],
+    replying: string | null = null,
+): string {
+    const clauses = [
+        typing(typists),
+        replying === null ? '' : `${replying} is replying…`,
+    ];
+
+    return clauses.filter((clause) => clause !== '').join(' · ');
+}
+
+/**
+ * The people half of the sentence.
+ */
+function typing(typists: Typist[]): string {
     const names = typists.map((typist) => typist.name);
 
     if (names.length === 0) {

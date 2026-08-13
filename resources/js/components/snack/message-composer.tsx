@@ -55,6 +55,7 @@ export function MessageComposer({
     disabledReason,
     mentionSource,
     typists = [],
+    replying = null,
     workspaceSlug,
     onTyping,
     onStopTyping,
@@ -65,6 +66,8 @@ export function MessageComposer({
     disabledReason?: string;
     mentionSource?: MentionSource;
     typists?: Typist[];
+    /** The assistant's name while it is working on an answer here, else null. */
+    replying?: string | null;
     workspaceSlug?: string;
     onTyping?: () => void;
     onStopTyping?: () => void;
@@ -391,7 +394,11 @@ export function MessageComposer({
                 attach(event.dataTransfer.files);
             }}
         >
-            <TypingIndicator typists={typists} className="mb-1" />
+            <TypingIndicator
+                typists={typists}
+                replying={replying}
+                className="mb-1"
+            />
 
             <div className="relative">
                 <MentionPicker

@@ -1,6 +1,8 @@
 <?php
 
 use App\Ai\Agents\Bite;
+use App\Ai\BiteAttachments;
+use App\Ai\BiteContext;
 use App\Enums\ChannelType;
 use App\Enums\WorkspaceRole;
 use App\Models\Message;
@@ -228,4 +230,70 @@ it('reports a failure while resuming without reopening the card', function () {
         ->first();
 
     expect($followUp->body)->toContain('could not finish that');
+});
+
+/**
+ * # The regression that made every real approval fail
+ *
+ * `Bite::messages()` overrides the `RemembersConversations` trait method that
+ * loads the stored agent conversation. Before the alias, that override simply
+ * replaced it — so a resume sent the *channel's* transcript and not the stored
+ * turns, the SDK walked back to Bite's own "I need your go-ahead" message,
+ * found an assistant message with no tool calls, and rejected the decision as
+ * naming a tool call that does not exist. Every approval answered "I could not
+ * finish that — something went wrong on my side."
+ *
+ * The suite did not catch it because the fake gateway never runs the approval
+ * validation the real provider path does, so these assert on the messages the
+ * agent would actually send.
+ */
+it('sends the stored conversation, not the room, when resuming', function () {
+    $conversation = AgentConversation::query()->create([
+        'id' => (string) Str::ulid(),
+        'title' => 'Resume under test',
+        'participant_type' => $this->ada->getMorphClass(),
+        'participant_id' => $this->ada->id,
+    ]);
+
+    // What the room said, including Bite's own card message — the assistant
+    // message that used to mask the paused tool call.
+    makeMessage($this->channel, $this->ada, 'please file that bug');
+    makeMessage($this->channel, $this->bot, 'I need your go-ahead before I create that.');
+
+    $agent = (new Bite(
+        new BiteContext(
+            workspace: $this->workspace,
+            user: $this->ada,
+            container: $this->channel,
+        ),
+        $this->bot,
+        app(BiteAttachments::class),
+    ))->continue($conversation->id, as: $this->ada);
+
+    $bodies = collect($agent->messages())
+        ->map(fn ($message): string => (string) $message->content)
+        ->implode(' | ');
+
+    expect($bodies)->not->toContain('please file that bug')
+        ->and($bodies)->not->toContain('I need your go-ahead');
+});
+
+it('sends the room transcript when it is not resuming', function () {
+    makeMessage($this->channel, $this->ada, 'please file that bug');
+
+    $agent = new Bite(
+        new BiteContext(
+            workspace: $this->workspace,
+            user: $this->ada,
+            container: $this->channel,
+        ),
+        $this->bot,
+        app(BiteAttachments::class),
+    );
+
+    $bodies = collect($agent->messages())
+        ->map(fn ($message): string => (string) $message->content)
+        ->implode(' | ');
+
+    expect($bodies)->toContain('please file that bug');
 });

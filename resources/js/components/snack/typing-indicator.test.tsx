@@ -39,6 +39,21 @@ describe('typing sentence', () => {
             'Ada, Bo and 2 others are typing…',
         );
     });
+
+    /*
+     * The assistant gets its own verb. It is not typing — it is thinking, and
+     * then posting all at once — and folding it into the list of names would
+     * describe a colleague's keyboard and a queue worker as the same activity.
+     */
+    it('says the assistant is replying', () => {
+        expect(sentence([], 'Bite')).toBe('Bite is replying…');
+    });
+
+    it('keeps both clauses when somebody types while the assistant works', () => {
+        expect(sentence(typists('Ada'), 'Bite')).toBe(
+            'Ada is typing… · Bite is replying…',
+        );
+    });
 });
 
 describe('TypingIndicator', () => {
@@ -55,6 +70,15 @@ describe('TypingIndicator', () => {
         const { container } = render(<TypingIndicator typists={[]} />);
 
         expect(container.querySelectorAll('.snack-typing-dot')).toHaveLength(0);
+    });
+
+    it('animates the dots while the assistant is working', () => {
+        const { container } = render(
+            <TypingIndicator typists={[]} replying="Bite" />,
+        );
+
+        expect(container.querySelectorAll('.snack-typing-dot')).toHaveLength(3);
+        expect(screen.getByText('Bite is replying…')).toBeInTheDocument();
     });
 
     it('keeps the dots out of the accessibility tree', () => {

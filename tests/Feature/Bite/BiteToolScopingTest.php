@@ -221,8 +221,10 @@ it('hides projects and tasks from a guest', function () {
  * member of the workspace and would otherwise sail through.
  */
 it('refuses to create a task on a project the asker cannot contribute to', function () {
-    $project = makeProject($this->workspace, $this->owner, ['name' => 'Apollo', 'key' => 'APO']);
-    $project->update(['is_archived' => true]);
+    // A live board the asker is simply not on. The policy is what refuses, and
+    // it is asked about them rather than about Bite — which is a member of the
+    // workspace and would otherwise sail through.
+    makeProject($this->workspace, $this->owner, ['name' => 'Apollo', 'key' => 'APO']);
 
     $tool = new CreateTask(contextFor($this->insider));
 
@@ -232,6 +234,31 @@ it('refuses to create a task on a project the asker cannot contribute to', funct
     ]));
 
     expect($result)->toContain('cannot create tasks')
+        ->and(Task::query()->where('title', 'Something')->exists())->toBeFalse();
+});
+
+/**
+ * An archived board is not somewhere to put new work, and it is refused before
+ * the policy rather than by it — so the answer says the board is not there
+ * rather than talking about permissions the person does have.
+ */
+it('does not offer an archived project at all', function () {
+    $archived = makeProject($this->workspace, $this->owner, ['name' => 'Apollo', 'key' => 'APO']);
+    addToProject($archived, $this->insider);
+    $archived->update(['is_archived' => true]);
+
+    // A live board beside it, so the answer is the list of real options rather
+    // than "there is nothing here" — which is what the model needs to ask with.
+    makeProject($this->workspace, $this->owner, ['name' => 'Gemini', 'key' => 'GEM']);
+
+    $result = (string) (new CreateTask(contextFor($this->insider)))->handle(new Request([
+        'project' => 'APO',
+        'title' => 'Something',
+    ]));
+
+    expect($result)->toContain('No project here is called')
+        ->and($result)->toContain('GEM · Gemini')
+        ->and($result)->not->toContain('Apollo')
         ->and(Task::query()->where('title', 'Something')->exists())->toBeFalse();
 });
 
@@ -246,7 +273,7 @@ it('refuses to create a task on another workspace\'s project', function () {
         'title' => 'Something',
     ]));
 
-    expect($result)->toContain('No project with the key')
+    expect($result)->toContain('no projects in this workspace')
         ->and(Task::query()->where('title', 'Something')->exists())->toBeFalse();
 });
 
@@ -325,4 +352,148 @@ it('clamps a limit the model asked for', function () {
     $result = (string) $tool->handle(new Request(['query' => 'budget', 'limit' => 500]));
 
     expect(substr_count($result, 'message #'))->toBeLessThanOrEqual(25);
+});
+
+/**
+ * # Naming a project and a person the way people actually do
+ *
+ * "@bite file an issue on the marketing board and give it to Ada" is the shape
+ * of request this tool exists for, and until these it only understood
+ * "APO"-style keys and exact usernames.
+ */
+it('finds a project by its name, not only its key', function () {
+    $project = makeProject($this->workspace, $this->owner, ['name' => 'Apollo', 'key' => 'APO']);
+    addToProject($project, $this->insider);
+
+    (new CreateTask(contextFor($this->insider)))->handle(new Request([
+        'project' => 'apollo',
+        'title' => 'Named by name',
+    ]));
+
+    expect(Task::query()->where('title', 'Named by name')->first()?->project_id)
+        ->toBe($project->id);
+});
+
+it('resolves a partial name when only one project could be meant', function () {
+    $project = makeProject($this->workspace, $this->owner, ['name' => 'Marketing site', 'key' => 'MKT']);
+    addToProject($project, $this->insider);
+
+    (new CreateTask(contextFor($this->insider)))->handle(new Request([
+        'project' => 'marketing',
+        'title' => 'Half a name',
+    ]));
+
+    expect(Task::query()->where('title', 'Half a name')->first()?->project_id)
+        ->toBe($project->id);
+});
+
+/**
+ * Two boards that both match is the case where guessing does real damage — the
+ * card lands on the wrong team's backlog and nobody notices for a week. It asks
+ * instead, and is given the options to ask with.
+ */
+it('refuses to guess between two projects that both match', function () {
+    $first = makeProject($this->workspace, $this->owner, ['name' => 'Marketing site', 'key' => 'MKT']);
+    $second = makeProject($this->workspace, $this->owner, ['name' => 'Marketing emails', 'key' => 'MEM']);
+
+    addToProject($first, $this->insider);
+    addToProject($second, $this->insider);
+
+    $result = (string) (new CreateTask(contextFor($this->insider)))->handle(new Request([
+        'project' => 'marketing',
+        'title' => 'Ambiguous',
+    ]));
+
+    expect($result)->toContain('do not guess')
+        ->and($result)->toContain('MKT · Marketing site')
+        ->and($result)->toContain('MEM · Marketing emails')
+        ->and(Task::query()->where('title', 'Ambiguous')->exists())->toBeFalse();
+});
+
+it('assigns by username', function () {
+    $project = makeProject($this->workspace, $this->owner, ['name' => 'Apollo', 'key' => 'APO']);
+    addToProject($project, $this->insider);
+    addToProject($project, $this->outsider);
+
+    $result = (string) (new CreateTask(contextFor($this->insider)))->handle(new Request([
+        'project' => 'APO',
+        'title' => 'For a colleague',
+        'assignee' => '@'.$this->outsider->username,
+    ]));
+
+    expect(Task::query()->where('title', 'For a colleague')->first()?->assignee_id)
+        ->toBe($this->outsider->id)
+        ->and($result)->toContain('Assigned to');
+});
+
+it('assigns by display name too', function () {
+    $project = makeProject($this->workspace, $this->owner, ['name' => 'Apollo', 'key' => 'APO']);
+    addToProject($project, $this->insider);
+    addToProject($project, $this->outsider);
+
+    (new CreateTask(contextFor($this->insider)))->handle(new Request([
+        'project' => 'APO',
+        'title' => 'By their name',
+        'assignee' => $this->outsider->name,
+    ]));
+
+    expect(Task::query()->where('title', 'By their name')->first()?->assignee_id)
+        ->toBe($this->outsider->id);
+});
+
+/**
+ * The bug this half was written for. Membership is the assignment gate all
+ * through Snack, so a colleague who is not on the board cannot be given the
+ * card — but silently filing it unassigned left Bite free to reply "assigned to
+ * Bob", and Bob never heard about it.
+ */
+it('files the task and says so when the assignee is not on the project', function () {
+    $project = makeProject($this->workspace, $this->owner, ['name' => 'Apollo', 'key' => 'APO']);
+    addToProject($project, $this->insider);
+
+    $result = (string) (new CreateTask(contextFor($this->insider)))->handle(new Request([
+        'project' => 'APO',
+        'title' => 'Filed but unassigned',
+        'assignee' => $this->outsider->username,
+    ]));
+
+    $task = Task::query()->where('title', 'Filed but unassigned')->first();
+
+    expect($task)->not->toBeNull()
+        ->and($task->assignee_id)->toBeNull()
+        ->and($result)->toContain('could NOT be assigned')
+        ->and($result)->toContain('not a member of Apollo');
+});
+
+it('says plainly when nobody by that name is here', function () {
+    $project = makeProject($this->workspace, $this->owner, ['name' => 'Apollo', 'key' => 'APO']);
+    addToProject($project, $this->insider);
+
+    $result = (string) (new CreateTask(contextFor($this->insider)))->handle(new Request([
+        'project' => 'APO',
+        'title' => 'Nobody home',
+        'assignee' => 'santa',
+    ]));
+
+    expect($result)->toContain('nobody in this workspace matches');
+});
+
+/**
+ * The card is the person's one chance to catch the model having picked the
+ * wrong board or the wrong colleague, so it names both — resolved, not echoed.
+ */
+it('names the resolved project and assignee on the approval card', function () {
+    $project = makeProject($this->workspace, $this->owner, ['name' => 'Apollo', 'key' => 'APO']);
+    addToProject($project, $this->insider);
+    addToProject($project, $this->outsider);
+
+    $approval = (new CreateTask(contextFor($this->insider)))->shouldRequestApproval(new Request([
+        'project' => 'apollo',
+        'title' => 'Fix the signup redirect',
+        'assignee' => $this->outsider->username,
+    ]));
+
+    expect($approval->reason)
+        ->toContain('Apollo (APO)')
+        ->toContain('assigned to '.$this->outsider->name);
 });

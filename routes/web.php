@@ -64,6 +64,8 @@ use App\Http\Controllers\Standups\StandupResponseController;
 use App\Http\Controllers\UploadController;
 use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\Workspaces\AuditLogController;
+use App\Http\Controllers\Workspaces\BiteController;
+use App\Http\Controllers\Workspaces\BiteMemoryController;
 use App\Http\Controllers\Workspaces\IncomingWebhookController;
 use App\Http\Controllers\Workspaces\InvitationController;
 use App\Http\Controllers\Workspaces\InviteLinkController;
@@ -788,6 +790,36 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->name('workspace-logo.destroy');
 
         Route::get('audit', [AuditLogController::class, 'index'])->name('audit.index');
+
+        /*
+         *--------------------------------------------------------------------
+         * Bite
+         *--------------------------------------------------------------------
+         *
+         * The assistant's configuration: whether this workspace has one, who may
+         * summon it, where it may speak, what it may do, and the facts it is
+         * told to know.
+         *
+         * Admin-gated including the read, like the webhooks screen and for a
+         * related reason: the page prints the house instructions and the whole
+         * knowledge base, which is a document the workspace has written rather
+         * than a list of its rooms. See App\Policies\BiteSettingPolicy.
+         *
+         * The knowledge entries are addressed by id as `{biteMemory}` — the
+         * parameter name is what ties scopeBindings() to
+         * Workspace::biteMemories(), so an entry from another tenant 404s at the
+         * router rather than at a policy.
+         */
+        Route::get('bite', [BiteController::class, 'edit'])->name('bite-settings.edit');
+        Route::patch('bite', [BiteController::class, 'update'])->name('bite-settings.update');
+
+        Route::post('bite/memories', [BiteMemoryController::class, 'store'])
+            ->middleware('throttle:60,1')
+            ->name('bite-memories.store');
+        Route::patch('bite/memories/{biteMemory}', [BiteMemoryController::class, 'update'])
+            ->name('bite-memories.update');
+        Route::delete('bite/memories/{biteMemory}', [BiteMemoryController::class, 'destroy'])
+            ->name('bite-memories.destroy');
 
         /*
          *--------------------------------------------------------------------

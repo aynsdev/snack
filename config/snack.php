@@ -732,6 +732,48 @@ return [
          */
         'max_steps' => 8,
 
+        /*
+         * How long the "Bite is replying…" indicator stays up unattended.
+         *
+         * The indicator is switched off explicitly when the answer is posted
+         * (see App\Events\BiteReplying), so this only ever matters when that
+         * never happens: a worker killed mid-answer, a deploy, a provider call
+         * that hangs past the job's own timeout. Comfortably longer than a
+         * normal answer, comfortably shorter than the patience of somebody
+         * watching an assistant that is no longer running.
+         */
+        'replying_ttl_seconds' => 60,
+
+        /*
+         * The admin-curated facts Bite is given on every question.
+         *
+         * Every enabled entry goes into the system prompt of every answer — see
+         * the `bite_memories` migration for why that is deliberate — so this is
+         * a bill the workspace pays per message, not per lookup. The caps are
+         * what keep a knowledge base from quietly becoming the most expensive
+         * thing in the application: they are enforced when an entry is saved,
+         * so the admin is told at the point of typing rather than by a provider
+         * error days later, and again when the prompt is assembled.
+         */
+        'knowledge' => [
+            /** The longest one fact may be. */
+            'max_entry_characters' => 2_000,
+
+            /**
+             * And the most all of them may come to together. Roughly six
+             * thousand tokens — large enough for a page of house rules, small
+             * enough to leave the context window to the conversation.
+             */
+            'max_characters' => 24_000,
+        ],
+
+        /*
+         * The ceiling on the house instructions an admin can append to Bite's
+         * system prompt. Long enough for a paragraph about tone and what to
+         * defer on; short enough that it cannot become the prompt.
+         */
+        'max_instruction_characters' => 2_000,
+
         'files' => [
             /*
              * The most text Bite will inline from one file.

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Ai\Agents\Bite;
 use App\Ai\BiteAttachments;
 use App\Ai\BiteContext;
+use App\Events\BiteReplying;
 use App\Models\Channel;
 use App\Models\Conversation;
 use App\Models\Message;
@@ -105,6 +106,44 @@ class AnswerWithBite implements ShouldQueue
 
         $agent = new Bite($context, $bot, $attachments);
 
+        /*
+         * Say so before the first provider call, and stop saying so whatever
+         * happens after it.
+         *
+         * The `finally` is the point: an answer that throws, that comes back
+         * empty, or that is refused by the provider must still take the
+         * indicator down. Leaving it up would be worse than never showing it —
+         * an assistant that is permanently about to answer.
+         */
+        $this->announce($message, $bot, replying: true);
+
+        try {
+            $response = $this->think($agent, $bots, $container, $bot, $message, $sender);
+
+            if ($response === null) {
+                return;
+            }
+
+            $this->reply($bots, $context, $bot, $response, $attachments);
+        } finally {
+            $this->announce($message, $bot, replying: false);
+        }
+    }
+
+    /**
+     * Ask the model, and answer with the failure itself if it will not.
+     *
+     * Null means the exchange is over: the person has already been told, and
+     * there is nothing left for the caller to post.
+     */
+    private function think(
+        Bite $agent,
+        BiteBot $bots,
+        Channel|Conversation $container,
+        User $bot,
+        Message $message,
+        User $sender,
+    ): ?AgentResponse {
         try {
             /*
              * `forUser` starts a stored agent conversation owned by the person
@@ -114,7 +153,7 @@ class AnswerWithBite implements ShouldQueue
              * two people asking Bite different things in the same channel do
              * not end up sharing one.
              */
-            $response = $agent->forUser($sender)->prompt($this->promptFrom($message));
+            return $agent->forUser($sender)->prompt($this->promptFrom($message));
         } catch (Throwable $exception) {
             report($exception);
 
@@ -126,10 +165,27 @@ class AnswerWithBite implements ShouldQueue
                 'I could not answer that just now — something went wrong reaching the model. Try again in a moment.',
             );
 
-            return;
+            return null;
         }
+    }
 
-        $this->reply($bots, $context, $bot, $response, $attachments);
+    /**
+     * Put the "Bite is replying…" line up, or take it down.
+     *
+     * Failures are swallowed on purpose. This is decoration on an operation
+     * whose actual product is the message, and Reverb being unreachable — a
+     * local socket that is not running, a restart mid-answer — must cost the
+     * indicator, not the answer. The `finally` above is what guarantees the
+     * second call happens at all; this is what guarantees it cannot itself be
+     * the thing that fails the job.
+     */
+    private function announce(Message $summons, User $bot, bool $replying): void
+    {
+        try {
+            BiteReplying::dispatch($summons, $bot, $replying);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     /**

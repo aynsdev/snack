@@ -74,6 +74,10 @@ import {
 } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import { index as auditIndex } from '@/routes/audit';
+import { edit as biteSettings } from '@/routes/bite-settings';
+// The assistant's own face rather than a generic icon, for the reason the
+// workspace logo is its own: this row points at a thing people recognise by
+// sight from the timeline. One file, shared with the bot's stored avatar.
 import { index as browseChannels } from '@/routes/channels';
 import { index as huddlesIndex } from '@/routes/huddles';
 import { index as workspaceMembers } from '@/routes/members';
@@ -95,6 +99,7 @@ import type {
     Project,
     WorkspacePerson,
 } from '@/types';
+import biteLogo from '../../../images/bite-avatar.png';
 
 /**
  * The second column: workspace identity, global navigation, and the channel
@@ -1176,6 +1181,28 @@ function SidebarHeader({
                             <Link href={webhooksIndex(workspace.slug)}>
                                 <Plug className="mr-2 size-4" />
                                 Webhooks
+                            </Link>
+                        </DropdownMenuItem>
+                    )}
+
+                    {/*
+                     * Beside the standups and the webhooks, which is the set it
+                     * belongs to: the three things in this workspace that act
+                     * on their own. An assistant that answers questions out of
+                     * the company's own messages is the one of the three most
+                     * worth being able to find the settings for.
+                     */}
+                    {workspace.abilities.administer && (
+                        <DropdownMenuItem asChild>
+                            <Link href={biteSettings(workspace.slug)}>
+                                <img
+                                    src={biteLogo}
+                                    alt=""
+                                    width={16}
+                                    height={16}
+                                    className="mr-2 size-4 rounded"
+                                />
+                                Bite
                             </Link>
                         </DropdownMenuItem>
                     )}

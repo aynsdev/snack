@@ -3,6 +3,7 @@
 namespace App\Ai;
 
 use App\Enums\WorkspaceRole;
+use App\Models\BiteSetting;
 use App\Models\Channel;
 use App\Models\Conversation;
 use App\Models\Message;
@@ -54,6 +55,24 @@ final readonly class BiteContext
          */
         public ?Message $message = null,
     ) {}
+
+    /**
+     * How this workspace has configured its assistant.
+     *
+     * Resolved on demand rather than taken in the constructor, so that every
+     * caller that builds a context — the job, the approval controller, a test —
+     * cannot forget to pass it and silently get the defaults. The relation is
+     * memoized on the workspace model after the first read, so asking repeatedly
+     * costs one query for the whole answer.
+     *
+     * These settings narrow what Bite does. They never widen what it may know:
+     * that is decided per person by the rules on this class, and an admin has no
+     * control over it. See {@see App\Models\BiteSetting}.
+     */
+    public function settings(): BiteSetting
+    {
+        return BiteSetting::forWorkspace($this->workspace);
+    }
 
     /**
      * The asker's standing in this workspace.

@@ -114,6 +114,26 @@ enum AuditAction: string
     case AssetDeleted = 'asset.deleted';
     case AssetFolderDeleted = 'asset.folder_deleted';
 
+    /*
+     * The assistant's configuration, under its own subject.
+     *
+     * Recorded in full — including the knowledge base — because these entries
+     * answer a question nothing else can: "why did Bite tell the whole company
+     * that?". The answer is almost always something an admin typed on that
+     * screen, and without a trail the only record of it is the value that has
+     * since been corrected.
+     *
+     * The knowledge entries are separated from the settings for the same reason
+     * `workspace.settings_updated` is separate from `workspace.updated`:
+     * changing what an assistant *knows* and changing where it may *speak* are
+     * different kinds of event, and an administrator reading the log back
+     * usually wants one of them and not the other.
+     */
+    case BiteSettingsUpdated = 'bite.settings_updated';
+    case BiteMemoryCreated = 'bite.memory_created';
+    case BiteMemoryUpdated = 'bite.memory_updated';
+    case BiteMemoryDeleted = 'bite.memory_deleted';
+
     public function label(): string
     {
         return match ($this) {
@@ -158,6 +178,10 @@ enum AuditAction: string
             self::WebhookSecretRotated => 'Webhook signing secret replaced',
             self::WebhookDeleted => 'Webhook deleted',
             self::MessageDeletedByAdmin => 'Message removed by admin',
+            self::BiteSettingsUpdated => 'Bite settings updated',
+            self::BiteMemoryCreated => 'Bite knowledge added',
+            self::BiteMemoryUpdated => 'Bite knowledge edited',
+            self::BiteMemoryDeleted => 'Bite knowledge removed',
             self::AssetDeleted => 'Asset deleted',
             self::AssetFolderDeleted => 'Asset folder deleted',
         };

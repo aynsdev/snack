@@ -7,7 +7,9 @@ import {
 } from '@/components/snack/message-item';
 import { RightPanel } from '@/components/snack/right-panel';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useBiteReplying } from '@/hooks/use-bite-replying';
 import { useThread } from '@/hooks/use-thread';
+import { channels } from '@/lib/echo';
 import { continuesGroup, pendingContinuesGroup } from '@/lib/message-grouping';
 import { cn } from '@/lib/utils';
 import type { ReactionGroup, SnackUser } from '@/types';
@@ -49,6 +51,16 @@ export function ThreadPanel({
     onClose: () => void;
 }) {
     const thread = useThread({ rootId, workspaceSlug, sendUrl, currentUser });
+
+    /*
+     * A summon inside a thread is answered inside that thread, so this is where
+     * the wait happens. Private rather than presence: a thread has no roster of
+     * its own — see routes/channels.php.
+     */
+    const replying = useBiteReplying({
+        channelName: channels.thread(rootId),
+        visibility: 'private',
+    });
 
     const scroller = useRef<HTMLDivElement>(null);
     const atBottom = useRef(true);
@@ -213,6 +225,7 @@ export function ThreadPanel({
 
                         <MessageComposer
                             channelName={`this thread in ${containerName}`}
+                            replying={replying}
                             workspaceSlug={workspaceSlug}
                             disabled={!canPost}
                             disabledReason={

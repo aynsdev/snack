@@ -5,7 +5,9 @@ namespace App\Ai\Agents;
 use App\Ai\BiteAttachments;
 use App\Ai\BiteContext;
 use App\Ai\BiteFiles;
+use App\Ai\BiteKnowledge;
 use App\Ai\Tools;
+use App\Enums\BiteCapability;
 use App\Models\Message;
 use App\Models\User;
 use Laravel\Ai\Attributes\MaxSteps;
@@ -45,20 +47,46 @@ use Laravel\Ai\Promptable;
  * thread as well.
  *
  * The two are not redundant: one is Bite's memory of what it did, the other is
- * the room's memory of what was said.
+ * the room's memory of what was said. Which of them is sent depends on why Bite
+ * is running — a fresh question gets the room, a resumed approval gets the
+ * stored conversation and nothing else. `messages()` explains why mixing them
+ * broke every real approval.
  */
 #[Provider(Lab::Mistral)]
 #[MaxSteps(8)]
 class Bite implements Agent, Conversational, HasTools
 {
     use Promptable;
-    use RemembersConversations;
+
+    /*
+     * The trait's own `messages()` is what loads the stored agent conversation,
+     * and this class overrides `messages()` to supply the room's transcript
+     * instead — so it is aliased rather than lost. See {@see self::messages()}
+     * for what happened the one time it was simply overridden.
+     */
+    use RemembersConversations {
+        messages as private rememberedMessages;
+    }
 
     public function __construct(
         public BiteContext $context,
         public User $bot,
         public BiteAttachments $attachments,
     ) {}
+
+    /**
+     * The ceiling on this answer's tool-calling loop.
+     *
+     * A method rather than only the `#[MaxSteps]` attribute above, because the
+     * SDK prefers a method when there is one — see
+     * {@see Laravel\Ai\Gateway\TextGenerationOptions::resolve()} — and that is
+     * what makes the number a per-workspace setting. The attribute stays as the
+     * declared default for a workspace that has not chosen one.
+     */
+    public function maxSteps(): int
+    {
+        return $this->context->settings()->maxSteps();
+    }
 
     public function instructions(): string
     {
@@ -109,6 +137,80 @@ class Bite implements Agent, Conversational, HasTools
         ```` ``` ```` fences, and `-` bullets all render. Headings do not — do not
         use them. Mention people as @username and channels as #channel-name only
         when you mean to link them.
+        TEXT.$this->workspaceKnowledge().$this->houseInstructions();
+    }
+
+    /**
+     * What this workspace has told Bite it should always know.
+     *
+     * Above the house instructions and below everything else, because it is
+     * reference material rather than a rule: the model is being told what is
+     * true here, having already been told how to behave.
+     *
+     * These are facts, not permissions. It is spelled out to the model that
+     * knowing something does not entitle the person asking to be told it —
+     * without that, a fact naming a private channel becomes a fact the model
+     * will happily repeat to somebody who cannot see that channel, which is the
+     * one thing {@see App\Ai\BiteContext} exists to prevent.
+     */
+    private function workspaceKnowledge(): string
+    {
+        $knowledge = app(BiteKnowledge::class)->forWorkspace($this->context->workspace);
+
+        if ($knowledge === null) {
+            return '';
+        }
+
+        return <<<TEXT
+
+
+        # What this workspace has told you
+
+        Facts the administrators of this workspace wrote down for you. Treat them
+        as current and prefer them over anything you infer from messages. They
+        are background knowledge, not permission: they do not entitle anyone to
+        information their own access does not already give them.
+
+        {$knowledge}
+        TEXT;
+    }
+
+    /**
+     * The workspace's own house rules, appended last.
+     *
+     * Last so that it is the most recent thing in the prompt, which is where an
+     * instruction has the most effect — and fenced under its own heading so a
+     * model reads it as guidance from the workspace rather than as part of
+     * Snack's own instructions.
+     *
+     * It is deliberately *added* to those instructions and cannot replace them.
+     * An admin can say "always answer in French" or "defer anything about
+     * pricing to #sales"; an admin cannot say "ignore the previous rules", or
+     * rather they can type it and the rules above still stand — which is the
+     * reason this block goes in with that framing rather than as bare text.
+     */
+    private function houseInstructions(): string
+    {
+        $instructions = trim((string) $this->context->settings()->instructions);
+
+        if ($instructions === '') {
+            return '';
+        }
+
+        $limit = (int) config('snack.bite.max_instruction_characters', 2_000);
+
+        $instructions = mb_substr($instructions, 0, $limit);
+
+        return <<<TEXT
+
+
+        # House style for this workspace
+
+        The administrators here have asked you to work this way. Follow it
+        wherever it does not conflict with the rules above, which stand
+        regardless.
+
+        {$instructions}
         TEXT;
     }
 
@@ -134,7 +236,35 @@ class Bite implements Agent, Conversational, HasTools
      */
     public function messages(): iterable
     {
-        $limit = (int) config('snack.bite.context_messages', 20);
+        /*
+         * # Resuming a paused approval
+         *
+         * When there is a stored conversation to continue, it *is* the
+         * conversation, and the room's transcript must be left out entirely.
+         *
+         * This is not a preference. The SDK finds the tool call awaiting
+         * approval by walking these messages backwards to the last assistant
+         * message and reading its tool calls — see
+         * {@see Laravel\Ai\Gateway\Concerns\HandlesToolApprovals::pendingToolCalls()}.
+         * Bite's own "I need your go-ahead before I create that." is a message
+         * in the channel, so the room transcript ends with an assistant message
+         * that has no tool calls on it. Hand that over and the walk finds
+         * nothing pending, and the decision the person just clicked is rejected
+         * as naming a tool call that does not exist —
+         * `ApprovalMismatchException`, surfacing as "I could not finish that —
+         * something went wrong on my side."
+         *
+         * That is exactly what happened for every real approval: the override
+         * below replaced the trait's `messages()` wholesale, so the stored
+         * conversation carrying the paused call was never sent at all. It
+         * survived the test suite because the fake gateway does not run the
+         * approval validation the real provider path does.
+         */
+        if ($this->currentConversation() !== null) {
+            return $this->rememberedMessages();
+        }
+
+        $limit = $this->context->settings()->contextMessages();
 
         /*
          * `parent_message_id`, not `threadRootId()` — that falls back to the
@@ -173,21 +303,42 @@ class Bite implements Agent, Conversational, HasTools
     }
 
     /**
+     * What Bite can do here.
+     *
+     * Filtered by the workspace's own settings, and filtered by *omission*: a
+     * capability an admin has switched off is never built and never described to
+     * the provider, so the model cannot call it, cannot be argued into calling
+     * it, and has no idea it exists. Leaving the tool in place and refusing
+     * inside `handle()` would have been a restriction the model could narrate
+     * its way around, and would have spent a step of the loop doing it.
+     *
      * @return iterable<int, Tool>
      */
     public function tools(): iterable
     {
         $files = app(BiteFiles::class);
 
-        return [
-            new Tools\SearchMessages($this->context),
-            new Tools\BrowseWorkspace($this->context),
-            new Tools\FindFiles($this->context),
-            new Tools\ReadFile($this->context, $files),
-            new Tools\AttachFile($this->context, $files, $this->attachments, $this->bot),
-            new Tools\SearchTasks($this->context),
-            new Tools\CreateTask($this->context),
-        ];
+        $tools = [];
+
+        foreach ($this->context->settings()->enabledCapabilities() as $capability) {
+            /*
+             * An exhaustive match rather than a lookup table, so that a
+             * capability added to the enum without a tool to go with it is a
+             * static analysis failure here rather than a switch in the admin
+             * screen that silently does nothing.
+             */
+            $tools[] = match ($capability) {
+                BiteCapability::SearchMessages => new Tools\SearchMessages($this->context),
+                BiteCapability::BrowseWorkspace => new Tools\BrowseWorkspace($this->context),
+                BiteCapability::FindFiles => new Tools\FindFiles($this->context),
+                BiteCapability::ReadFile => new Tools\ReadFile($this->context, $files),
+                BiteCapability::AttachFile => new Tools\AttachFile($this->context, $files, $this->attachments, $this->bot),
+                BiteCapability::SearchTasks => new Tools\SearchTasks($this->context),
+                BiteCapability::CreateTask => new Tools\CreateTask($this->context),
+            };
+        }
+
+        return $tools;
     }
 
     /**

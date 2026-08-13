@@ -16,6 +16,7 @@ import { ThreadPanel } from '@/components/snack/thread-panel';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useBiteReplying } from '@/hooks/use-bite-replying';
 import { useChannelMessages } from '@/hooks/use-channel-messages';
 import { useContainerHuddle } from '@/hooks/use-container-huddle';
 import type { HuddleTarget } from '@/hooks/use-huddle';
@@ -285,6 +286,10 @@ function ChannelTimeline({
         currentUserName: currentUser?.name ?? null,
     });
 
+    const biteReplying = useBiteReplying({
+        channelName: channels.channel(channel.id),
+    });
+
     /*
      * Memoized for the same reason `endpoints` is in use-channel-messages: an
      * object rebuilt every render gives every hook that depends on it a fresh
@@ -368,6 +373,7 @@ function ChannelTimeline({
                     // so the picker asks the server, scoped to this channel.
                     mentionSource={mentionSource}
                     typists={typing.typists}
+                    replying={biteReplying}
                     workspaceSlug={workspace.slug}
                     onTyping={typing.startTyping}
                     onStopTyping={typing.stopTyping}

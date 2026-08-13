@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 
@@ -202,6 +203,31 @@ class Workspace extends Model
     public function standups(): HasMany
     {
         return $this->hasMany(Standup::class);
+    }
+
+    /**
+     * How this workspace has configured its assistant.
+     *
+     * Optional by design: no row means "running on the installation's
+     * defaults", which is every workspace until an admin saves the screen. Read
+     * it through {@see BiteSetting::forWorkspace()} rather than directly, so
+     * callers get the defaults rather than a null.
+     *
+     * @return HasOne<BiteSetting, $this>
+     */
+    public function biteSetting(): HasOne
+    {
+        return $this->hasOne(BiteSetting::class);
+    }
+
+    /**
+     * The facts an admin has told Bite about this workspace.
+     *
+     * @return HasMany<BiteMemory, $this>
+     */
+    public function biteMemories(): HasMany
+    {
+        return $this->hasMany(BiteMemory::class);
     }
 
     /**

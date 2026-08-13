@@ -29,6 +29,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useBiteReplying } from '@/hooks/use-bite-replying';
 import { useContainerHuddle } from '@/hooks/use-container-huddle';
 import { useConversationMessages } from '@/hooks/use-conversation-messages';
 import type { HuddleTarget } from '@/hooks/use-huddle';
@@ -274,6 +275,10 @@ function ConversationTimeline({
         currentUserName: currentUser?.name ?? null,
     });
 
+    const biteReplying = useBiteReplying({
+        channelName: channels.conversation(conversation.id),
+    });
+
     const mentionSource = useMemo<MentionSource>(
         () => ({ kind: 'local', people: others }),
         [others],
@@ -347,6 +352,7 @@ function ConversationTimeline({
                      */
                     mentionSource={mentionSource}
                     typists={typing.typists}
+                    replying={biteReplying}
                     workspaceSlug={workspace.slug}
                     onTyping={typing.startTyping}
                     onStopTyping={typing.stopTyping}
