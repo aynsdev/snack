@@ -45,11 +45,18 @@ export function FilePreviewDialog({
 
     const Icon = KIND_ICONS[file.kind];
     const previewSource = filePreviewSource(file);
+    const hasLargePreview = previewSource !== null;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-2xl">
-                <DialogHeader>
+            <DialogContent
+                className={cn(
+                    hasLargePreview
+                        ? 'flex w-full max-w-[min(calc(100vw-4rem),72rem)] max-h-[calc(100dvh-4rem)] flex-col gap-4 sm:max-w-[min(calc(100vw-4rem),72rem)]'
+                        : 'sm:max-w-2xl',
+                )}
+            >
+                <DialogHeader className="shrink-0">
                     <DialogTitle className="truncate">{file.name}</DialogTitle>
 
                     <DialogDescription>
@@ -60,36 +67,38 @@ export function FilePreviewDialog({
                 <div
                     className={cn(
                         'overflow-hidden rounded-xl border border-border',
-                        file.kind === 'pdf' && previewSource !== null
-                            ? 'bg-muted'
-                            : 'flex max-h-64 items-center justify-center',
+                        hasLargePreview
+                            ? 'flex h-[min(calc(100dvh-16rem),72vh)] min-h-80 items-center justify-center'
+                            : 'flex max-h-64 items-center justify-center bg-muted',
                         file.kind === 'image' && 'snack-checkerboard',
-                        file.kind !== 'image' &&
-                            !(file.kind === 'pdf' && previewSource !== null) &&
-                            'bg-muted',
+                        file.kind === 'pdf' && hasLargePreview && 'bg-muted',
                     )}
                 >
                     {file.kind === 'pdf' && previewSource !== null ? (
                         <iframe
                             src={previewSource}
                             title={file.name}
-                            className="h-96 w-full"
+                            className="h-full w-full"
                         />
                     ) : previewSource !== null ? (
                         <img
                             src={previewSource}
                             alt={file.name}
-                            className="max-h-64 w-auto object-contain"
+                            className={cn(
+                                hasLargePreview
+                                    ? 'max-h-full max-w-full object-contain'
+                                    : 'max-h-64 w-auto object-contain',
+                            )}
                         />
                     ) : (
-                        <span className="flex h-32 items-center justify-center text-muted-foreground">
+                        <span className="flex h-32 w-full items-center justify-center text-muted-foreground">
                             <Icon aria-hidden="true" className="size-10" />
                         </span>
                     )}
                 </div>
 
                 {file.uploader !== null && (
-                    <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <p className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                         <UserAvatar user={file.uploader} size="sm" />
                         Shared by {file.uploader.name}
                         {file.created_at !== null && (
@@ -98,7 +107,7 @@ export function FilePreviewDialog({
                     </p>
                 )}
 
-                <DialogFooter className="sm:justify-between">
+                <DialogFooter className="shrink-0 sm:justify-between">
                     {containerHref !== null ? (
                         <Button asChild variant="outline" size="sm">
                             <a href={containerHref}>
