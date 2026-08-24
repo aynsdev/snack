@@ -85,6 +85,27 @@ describe('FilesIndex', () => {
         ).toHaveAttribute('href', '/files/1?signature=abc');
     });
 
+    it('previews a pdf in an iframe', async () => {
+        const user = userEvent.setup();
+
+        render(
+            <FilesIndex
+                {...defaultProps}
+                files={[
+                    makeFile({
+                        preview_url: '/files/1?inline=1&signature=abc',
+                    }),
+                ]}
+            />,
+        );
+
+        await user.click(screen.getByRole('button', { name: /budget\.pdf/ }));
+
+        expect(
+            screen.getByTitle('budget.pdf'),
+        ).toHaveAttribute('src', '/files/1?inline=1&signature=abc');
+    });
+
     it('previews an image in the dialog', async () => {
         const user = userEvent.setup();
 

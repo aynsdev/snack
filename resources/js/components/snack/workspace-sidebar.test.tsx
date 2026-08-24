@@ -355,8 +355,31 @@ describe('WorkspaceSidebar outside direct messages', () => {
                             target_id: 4,
                             type: 'file',
                             label: 'launch-brief.pdf',
-                            url: '/files/4?signature=signed',
                             is_starred: false,
+                            file: {
+                                id: 4,
+                                name: 'launch-brief.pdf',
+                                mime_type: 'application/pdf',
+                                size: 2048,
+                                human_size: '2 KB',
+                                kind: 'pdf',
+                                width: null,
+                                height: null,
+                                is_animated: false,
+                                download_url: '/files/4?signature=signed',
+                                preview_url: '/files/4?inline=1&signature=signed',
+                                thumbnail_url: null,
+                                created_at: '2026-07-31T09:00:00+00:00',
+                                uploader: null,
+                                container: {
+                                    kind: 'channel',
+                                    id: 1,
+                                    name: 'Launch',
+                                    slug: 'launch',
+                                    type: 'public',
+                                },
+                                message_id: 42,
+                            },
                         },
                         {
                             id: 'canvas:01K2CANVAS',
@@ -401,8 +424,8 @@ describe('WorkspaceSidebar outside direct messages', () => {
         expect(screen.getByText('Recent')).toBeInTheDocument();
         expect(screen.getByText('Starred')).toBeInTheDocument();
         expect(
-            screen.getByRole('link', { name: 'launch-brief.pdf' }),
-        ).toHaveAttribute('href', '/files/4?signature=signed');
+            screen.getByRole('button', { name: 'launch-brief.pdf' }),
+        ).toBeInTheDocument();
         expect(
             screen.getAllByRole('link', { name: 'Launch notes' }),
         ).toHaveLength(2);

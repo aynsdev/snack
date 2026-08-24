@@ -3,8 +3,11 @@
 namespace App\Services;
 
 use App\Http\Resources\AttachmentResource;
+use App\Http\Resources\ContainerSummary;
+use App\Http\Resources\UserResource;
 use App\Models\Canvas;
 use App\Models\FileCanvasStar;
+use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
 use App\Models\Workspace;
@@ -131,7 +134,14 @@ class FileCanvasSidebarContent
             ->whereHas(
                 'message',
                 fn (Builder $message) => $this->messageVisibility->apply($message, $workspace, $user),
-            );
+            )
+            ->with([
+                'uploader:id,name,username,avatar_path,title,presence_status',
+                'message' => fn ($message) => $message->with([
+                    'channel:id,name,slug,type,workspace_id',
+                    'conversation',
+                ]),
+            ]);
     }
 
     /** @return array<int, string> */
@@ -150,9 +160,21 @@ class FileCanvasSidebarContent
             'target_id' => $file->id,
             'type' => 'file',
             'label' => $file->original_name,
-            'url' => (string) AttachmentResource::payload($file)['download_url'],
             'is_starred' => $isStarred,
             'timestamp' => $timestamp,
+            'file' => [
+                ...AttachmentResource::payload($file),
+
+                'uploader' => $file->uploader === null
+                    ? null
+                    : (new UserResource($file->uploader))->resolve(request()),
+
+                'container' => $file->message instanceof Message
+                    ? ContainerSummary::for($file->message)
+                    : null,
+
+                'message_id' => $file->message_id,
+            ],
         ];
     }
 

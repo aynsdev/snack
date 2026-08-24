@@ -655,14 +655,23 @@ export type CanvasDocument = {
     } | null;
 };
 
-export type FileCanvasSidebarItem = {
-    id: string;
-    target_id: string | number;
-    type: 'file' | 'canvas';
-    label: string;
-    url: string;
-    is_starred: boolean;
-};
+export type FileCanvasSidebarItem =
+    | {
+          id: string;
+          target_id: number;
+          type: 'file';
+          label: string;
+          is_starred: boolean;
+          file: FileRow;
+      }
+    | {
+          id: string;
+          target_id: string;
+          type: 'canvas';
+          label: string;
+          url: string;
+          is_starred: boolean;
+      };
 
 export type FileCanvasSidebarContent = {
     recent: FileCanvasSidebarItem[];

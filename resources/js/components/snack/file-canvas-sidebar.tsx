@@ -1,6 +1,7 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import { Clock3, File, FileText, Folder, Plus, Star } from 'lucide-react';
 import { useState } from 'react';
+import { FilePreviewDialog } from '@/components/snack/file-preview-dialog';
 import { useIsCanvasesView, useIsFilesView } from '@/hooks/use-active-channel';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
@@ -14,7 +15,11 @@ import {
 } from '@/routes/canvases/star';
 import { index as filesIndex } from '@/routes/files';
 import { destroy as unstarFile, store as starFile } from '@/routes/files/star';
-import type { FileCanvasSidebarContent, FileCanvasSidebarItem } from '@/types';
+import type {
+    FileCanvasSidebarContent,
+    FileCanvasSidebarItem,
+    FileRow,
+} from '@/types';
 
 export function FileCanvasSidebar({ onNavigate }: { onNavigate?: () => void }) {
     const workspace = useWorkspace();
@@ -24,6 +29,7 @@ export function FileCanvasSidebar({ onNavigate }: { onNavigate?: () => void }) {
         file_canvas_sidebar?: FileCanvasSidebarContent;
     }>().props.file_canvas_sidebar ?? { recent: [], starred: [] };
     const [creating, setCreating] = useState(false);
+    const [viewing, setViewing] = useState<FileRow | null>(null);
 
     const createCanvas = () => {
         setCreating(true);
@@ -87,6 +93,7 @@ export function FileCanvasSidebar({ onNavigate }: { onNavigate?: () => void }) {
                                     key={item.id}
                                     item={item}
                                     onNavigate={onNavigate}
+                                    onOpenFile={setViewing}
                                 />
                             ))}
                         </ul>
@@ -106,12 +113,23 @@ export function FileCanvasSidebar({ onNavigate }: { onNavigate?: () => void }) {
                                     key={item.id}
                                     item={item}
                                     onNavigate={onNavigate}
+                                    onOpenFile={setViewing}
                                 />
                             ))}
                         </ul>
                     </section>
                 )}
             </nav>
+
+            <FilePreviewDialog
+                file={viewing}
+                open={viewing !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setViewing(null);
+                    }
+                }}
+            />
         </div>
     );
 }
@@ -119,9 +137,11 @@ export function FileCanvasSidebar({ onNavigate }: { onNavigate?: () => void }) {
 function SidebarItem({
     item,
     onNavigate,
+    onOpenFile,
 }: {
     item: FileCanvasSidebarItem;
     onNavigate?: () => void;
+    onOpenFile: (file: FileRow) => void;
 }) {
     const Icon = item.type === 'canvas' ? FileText : File;
     const workspace = useWorkspace();
@@ -171,9 +191,13 @@ function SidebarItem({
                     {content}
                 </Link>
             ) : (
-                <a href={item.url} onClick={onNavigate} className={className}>
+                <button
+                    type="button"
+                    onClick={() => onOpenFile(item.file)}
+                    className={className}
+                >
                     {content}
-                </a>
+                </button>
             )}
 
             <button

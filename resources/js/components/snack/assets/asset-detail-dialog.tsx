@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { dayLabel } from '@/lib/message-grouping';
+import { cn } from '@/lib/utils';
 import { destroy, update } from '@/routes/assets';
 import type { AssetFolder, LibraryAsset } from '@/types';
 
@@ -78,12 +79,24 @@ export function AssetDetailDialog({
                 </DialogHeader>
 
                 <div
-                    className={
-                        'flex max-h-64 items-center justify-center overflow-hidden rounded-xl border border-border' +
-                        (kind === 'image' ? ' snack-checkerboard' : ' bg-muted')
-                    }
+                    className={cn(
+                        'overflow-hidden rounded-xl border border-border',
+                        kind === 'pdf' && asset.file?.preview_url != null
+                            ? 'bg-muted'
+                            : 'flex max-h-64 items-center justify-center',
+                        kind === 'image' && 'snack-checkerboard',
+                        kind !== 'image' &&
+                            !(kind === 'pdf' && asset.file?.preview_url != null) &&
+                            'bg-muted',
+                    )}
                 >
-                    {asset.file?.preview_url != null ? (
+                    {kind === 'pdf' && asset.file?.preview_url != null ? (
+                        <iframe
+                            src={asset.file.preview_url}
+                            title={asset.name}
+                            className="h-96 w-full"
+                        />
+                    ) : asset.file?.preview_url != null ? (
                         <img
                             src={asset.file.preview_url}
                             alt={asset.name}

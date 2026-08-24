@@ -91,10 +91,11 @@ class AttachmentResource extends JsonResource
 
             /*
              * The full-size original, offered inline only below a size ceiling.
-             * Above it the message shows a chip: a 40 MB PNG is not a preview,
-             * it is a download that started on its own.
+             * Images and PDFs — the two formats the client can preview in a
+             * dialog. Above the ceiling the browser shows a chip: a 40 MB PNG is
+             * not a preview, it is a download that started on its own.
              */
-            'preview_url' => $isImage && $attachment->size <= (int) config('snack.uploads.inline_preview_max_size')
+            'preview_url' => ($isImage || $attachment->isPdf()) && $attachment->size <= (int) config('snack.uploads.inline_preview_max_size')
                 ? self::signed('files.show', $attachment, inline: true)
                 : null,
 

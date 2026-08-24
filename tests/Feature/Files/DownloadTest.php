@@ -154,7 +154,7 @@ it('serves an svg inline, sandboxed so nothing in it can run', function () {
 });
 
 /**
- * The inline door is still narrow. Anything that is not an image stays an
+ * The inline door is still narrow. Anything that is not an image or PDF stays an
  * attachment however it is asked for — an HTML file rendered on this origin is
  * stored XSS that no sandbox on the *image* path would have covered.
  */
@@ -179,6 +179,21 @@ it('never serves a document inline, however it is asked for', function () {
     $response = actingAs($owner)->get(signedShow($attachment, inline: true));
 
     expect($response->headers->get('Content-Disposition'))->toStartWith('attachment');
+});
+
+it('serves a pdf inline when asked, sandboxed like an image', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $channel = makeChannel($workspace);
+    addToChannel($channel, $owner);
+
+    $attachment = attachedFile($channel, $owner, '%PDF-1.4 fake');
+
+    $response = actingAs($owner)->get(signedShow($attachment, inline: true));
+
+    expect($response->headers->get('Content-Disposition'))->toStartWith('inline')
+        ->and($response->headers->get('Content-Type'))->toBe('application/pdf')
+        ->and($response->headers->get('Content-Security-Policy'))->toContain('sandbox')
+        ->and($response->headers->get('X-Content-Type-Options'))->toBe('nosniff');
 });
 
 it('404s a thumbnail that has not been generated', function () {

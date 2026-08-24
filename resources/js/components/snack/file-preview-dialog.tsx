@@ -59,13 +59,23 @@ export function FilePreviewDialog({
 
                 <div
                     className={cn(
-                        'flex max-h-64 items-center justify-center overflow-hidden rounded-xl border border-border',
-                        file.kind === 'image'
-                            ? 'snack-checkerboard'
-                            : 'bg-muted',
+                        'overflow-hidden rounded-xl border border-border',
+                        file.kind === 'pdf' && previewSource !== null
+                            ? 'bg-muted'
+                            : 'flex max-h-64 items-center justify-center',
+                        file.kind === 'image' && 'snack-checkerboard',
+                        file.kind !== 'image' &&
+                            !(file.kind === 'pdf' && previewSource !== null) &&
+                            'bg-muted',
                     )}
                 >
-                    {previewSource !== null ? (
+                    {file.kind === 'pdf' && previewSource !== null ? (
+                        <iframe
+                            src={previewSource}
+                            title={file.name}
+                            className="h-96 w-full"
+                        />
+                    ) : previewSource !== null ? (
                         <img
                             src={previewSource}
                             alt={file.name}
@@ -113,6 +123,10 @@ export function FilePreviewDialog({
 
 /** The best inline preview available for this file, or null when there is none. */
 function filePreviewSource(file: FileRow): string | null {
+    if (file.kind === 'pdf') {
+        return file.preview_url;
+    }
+
     if (file.kind !== 'image') {
         return null;
     }

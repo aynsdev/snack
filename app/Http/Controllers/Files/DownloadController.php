@@ -26,10 +26,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *
  * Anything served inline renders *on this application's origin*, so a document
  * that can carry script would be stored XSS against every viewer. Only a fixed
- * list of image formats is ever given an inline disposition; everything else is
- * an attachment, which browsers download rather than execute. `nosniff` and a
- * sandboxing CSP back that up for the cases where a browser would otherwise go
- * looking for a better content type than the one it was given.
+ * list of formats is ever given an inline disposition — images, because they
+ * are rendered through `<img>` and sandboxed, and PDFs, because browsers
+ * hand them to a built-in viewer rather than executing them as HTML.
+ * Everything else is an attachment, which browsers download rather than
+ * execute. `nosniff` and a sandboxing CSP back that up for the cases where a
+ * browser would otherwise go looking for a better content type than the one
+ * it was given.
  */
 class DownloadController extends Controller
 {
@@ -71,6 +74,7 @@ class DownloadController extends Controller
         'image/avif',
         'image/bmp',
         'image/svg+xml',
+        'application/pdf',
     ];
 
     /**

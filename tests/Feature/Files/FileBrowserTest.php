@@ -49,6 +49,7 @@ it('lists files from channels the viewer can read', function () {
             ->has('file_canvas_sidebar.recent', 2)
             ->has('file_canvas_sidebar.starred', 0)
             ->where('file_canvas_sidebar.recent.0.id', 'file:'.$file->id)
+            ->where('file_canvas_sidebar.recent.0.file.name', 'quarterly.pdf')
             ->where('file_canvas_sidebar.recent.1.id', 'canvas:'.$canvas->public_id),
         );
 });
