@@ -14,6 +14,7 @@ import {
     useContainerHref,
 } from '@/components/snack/container-label';
 import { EmptyState } from '@/components/snack/empty-state';
+import { FilePreviewDialog } from '@/components/snack/file-preview-dialog';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,6 +76,7 @@ export default function FilesIndex({
 }: Props) {
     const workspace = useWorkspace();
     const [term, setTerm] = useState(filters.q ?? '');
+    const [viewing, setViewing] = useState<FileRow | null>(null);
 
     /**
      * Re-run the browser with a changed filter.
@@ -195,7 +197,11 @@ export default function FilesIndex({
                         <>
                             <ul className="divide-y divide-border">
                                 {files.map((file) => (
-                                    <FileListRow key={file.id} file={file} />
+                                    <FileListRow
+                                        key={file.id}
+                                        file={file}
+                                        onOpen={() => setViewing(file)}
+                                    />
                                 ))}
                             </ul>
 
@@ -210,20 +216,36 @@ export default function FilesIndex({
                     )}
                 </div>
             </div>
+
+            <FilePreviewDialog
+                file={viewing}
+                open={viewing !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setViewing(null);
+                    }
+                }}
+            />
         </>
     );
 }
 
-function FileListRow({ file }: { file: FileRow }) {
+function FileListRow({
+    file,
+    onOpen,
+}: {
+    file: FileRow;
+    onOpen: () => void;
+}) {
     const href = useContainerHref(file.container);
     const Icon = KIND_ICONS[file.kind];
 
     return (
         <li className="flex items-center gap-3 px-4 py-3 hover:bg-accent/40">
-            <a
-                href={file.download_url}
-                download={file.name}
-                className="flex min-w-0 flex-1 items-center gap-3"
+            <button
+                type="button"
+                onClick={onOpen}
+                className="flex min-w-0 flex-1 items-center gap-3 text-left"
             >
                 <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-subtle text-brand">
                     {file.thumbnail_url === null ? (
@@ -265,10 +287,10 @@ function FileListRow({ file }: { file: FileRow }) {
                         )}
                     </span>
                 </span>
-            </a>
+            </button>
 
             {/*
-             * A separate link from the download, and deliberately so: "open the
+             * A separate link from the preview, and deliberately so: "open the
              * file" and "go to where it was said" are different intentions, and
              * a row that does one when you wanted the other is worse than two
              * targets.
