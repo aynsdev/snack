@@ -1,5 +1,6 @@
 import {
     Download,
+    Eye,
     FileAudio,
     FileText,
     FileVideo,
@@ -54,7 +55,12 @@ export function AttachmentList({
     const images = attachments.filter(
         (file) => file.kind === 'image' && file.preview_url !== null,
     );
-    const others = attachments.filter((file) => !images.includes(file));
+    const pdfs = attachments.filter(
+        (file) => file.kind === 'pdf' && file.preview_url !== null,
+    );
+    const others = attachments.filter(
+        (file) => !images.includes(file) && !pdfs.includes(file),
+    );
 
     return (
         <div className={cn('mt-1.5 space-y-1.5', className)}>
@@ -78,12 +84,76 @@ export function AttachmentList({
                 </div>
             )}
 
+            {pdfs.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                    {pdfs.map((file) => (
+                        <PdfThumbnail
+                            key={file.id}
+                            attachment={file}
+                            onOpen={() => setViewing(file)}
+                        />
+                    ))}
+                </div>
+            )}
+
             {others.map((file) => (
                 <FileChip key={file.id} attachment={file} />
             ))}
 
-            <Lightbox attachment={viewing} onClose={() => setViewing(null)} />
+            <AttachmentPreview
+                attachment={viewing}
+                onClose={() => setViewing(null)}
+            />
         </div>
+    );
+}
+
+/** A compact first-page glimpse that opens the PDF without downloading it. */
+function PdfThumbnail({
+    attachment,
+    onOpen,
+}: {
+    attachment: Attachment;
+    onOpen: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onOpen}
+            className={cn(
+                'group/pdf w-64 max-w-full overflow-hidden rounded-lg border border-border bg-card text-left',
+                'transition-colors hover:border-brand/40 focus-visible:ring-2 focus-visible:ring-brand',
+            )}
+        >
+            <span className="relative block aspect-4/3 overflow-hidden bg-muted">
+                <iframe
+                    src={attachment.preview_url ?? ''}
+                    title={`${attachment.name} preview thumbnail`}
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 size-full bg-background"
+                />
+
+                <span className="absolute right-2 bottom-2 flex size-8 items-center justify-center rounded-md border border-border bg-background/90 text-foreground shadow-sm">
+                    <Eye aria-hidden="true" className="size-4" />
+                </span>
+            </span>
+
+            <span className="flex items-center gap-2.5 px-3 py-2">
+                <FileText
+                    aria-hidden="true"
+                    className="size-4 shrink-0 text-brand"
+                />
+                <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                        {attachment.name}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                        {attachment.human_size}
+                    </span>
+                </span>
+            </span>
+        </button>
     );
 }
 
@@ -182,8 +252,8 @@ export function FileChip({
             // hint to the browser rather than the mechanism.
             download={attachment.name}
             className={cn(
-                'flex max-w-md items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2',
-                'transition-colors hover:border-brand/40 hover:bg-accent/40',
+                'flex max-w-md items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-left',
+                'transition-colors hover:border-brand/40 hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-brand',
                 className,
             )}
         >
@@ -209,13 +279,13 @@ export function FileChip({
 }
 
 /**
- * Full-size image viewing.
+ * Full-size attachment viewing.
  *
  * Built on the project's dialog primitive rather than a hand-rolled overlay, so
  * it portals out of the timeline's scroll container, traps focus, and closes on
  * Escape without any of that being reimplemented here.
  */
-function Lightbox({
+function AttachmentPreview({
     attachment,
     onClose,
 }: {
@@ -231,12 +301,25 @@ function Lightbox({
                 }
             }}
         >
-            <DialogContent className="max-w-[min(92vw,72rem)] gap-0 p-4 sm:max-w-[min(92vw,72rem)]">
+            <DialogContent className="max-w-[min(92vw,48rem)] gap-0 p-4 sm:max-w-[min(92vw,48rem)]">
                 <DialogTitle className="sr-only">
-                    {attachment?.name ?? 'Image'}
+                    {attachment?.name ?? 'File preview'}
                 </DialogTitle>
 
-                {attachment !== null && (
+                {attachment?.kind === 'pdf' &&
+                attachment.preview_url !== null ? (
+                    <figure className="flex flex-col gap-3">
+                        <div className="h-[min(60dvh,36rem)] min-h-64 overflow-hidden rounded-lg border border-border bg-muted">
+                            <iframe
+                                src={attachment.preview_url}
+                                title={attachment.name}
+                                className="size-full"
+                            />
+                        </div>
+
+                        <PreviewCaption attachment={attachment} />
+                    </figure>
+                ) : attachment !== null ? (
                     <figure className="flex flex-col items-center gap-3">
                         <img
                             src={
@@ -247,30 +330,33 @@ function Lightbox({
                             className="max-h-[75vh] w-auto max-w-full rounded-lg object-contain"
                         />
 
-                        <figcaption className="flex flex-wrap items-center justify-center gap-3 text-sm">
-                            <span className="max-w-64 truncate font-medium">
-                                {attachment.name}
-                            </span>
-
-                            <span className="text-muted-foreground">
-                                {attachment.human_size}
-                            </span>
-
-                            <a
-                                href={attachment.download_url}
-                                download={attachment.name}
-                                className="flex items-center gap-1.5 font-semibold text-brand hover:underline"
-                            >
-                                <Download
-                                    aria-hidden="true"
-                                    className="size-4"
-                                />
-                                Download
-                            </a>
-                        </figcaption>
+                        <PreviewCaption attachment={attachment} />
                     </figure>
-                )}
+                ) : null}
             </DialogContent>
         </Dialog>
+    );
+}
+
+function PreviewCaption({ attachment }: { attachment: Attachment }) {
+    return (
+        <figcaption className="flex flex-wrap items-center justify-center gap-3 text-sm">
+            <span className="max-w-64 truncate font-medium">
+                {attachment.name}
+            </span>
+
+            <span className="text-muted-foreground">
+                {attachment.human_size}
+            </span>
+
+            <a
+                href={attachment.download_url}
+                download={attachment.name}
+                className="flex items-center gap-1.5 font-semibold text-brand hover:underline"
+            >
+                <Download aria-hidden="true" className="size-4" />
+                Download
+            </a>
+        </figcaption>
     );
 }

@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { AttachmentList } from '@/components/snack/attachment-list';
 import type { Attachment } from '@/types';
@@ -43,6 +44,56 @@ describe('AttachmentList', () => {
 
         expect(link).toHaveAttribute('href', '/files/1?signature=abc');
         expect(screen.getByText('2 KB')).toBeInTheDocument();
+    });
+
+    it('opens an inline pdf preview from its message chip', async () => {
+        const user = userEvent.setup();
+
+        render(
+            <AttachmentList
+                attachments={[
+                    makeAttachment({
+                        kind: 'pdf',
+                        preview_url: '/files/1?inline=1&signature=abc',
+                    }),
+                ]}
+            />,
+        );
+
+        expect(
+            screen.queryByRole('link', { name: /budget\.pdf/ }),
+        ).not.toBeInTheDocument();
+
+        const thumbnail = screen.getByRole('button', {
+            name: /budget\.pdf/,
+        });
+
+        expect(thumbnail).toHaveClass('w-64');
+        expect(
+            screen.getByTitle('budget.pdf preview thumbnail'),
+        ).toHaveAttribute('src', '/files/1?inline=1&signature=abc');
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+        await user.click(thumbnail);
+
+        expect(screen.getByTitle('budget.pdf')).toHaveAttribute(
+            'src',
+            '/files/1?inline=1&signature=abc',
+        );
+        expect(screen.getByRole('link', { name: /download/i })).toHaveAttribute(
+            'href',
+            '/files/1?signature=abc',
+        );
+    });
+
+    it('keeps an over-ceiling pdf as a download chip', () => {
+        render(
+            <AttachmentList attachments={[makeAttachment({ kind: 'pdf' })]} />,
+        );
+
+        expect(
+            screen.getByRole('link', { name: /budget\.pdf/ }),
+        ).toHaveAttribute('href', '/files/1?signature=abc');
     });
 
     it('previews an image rather than listing its name', () => {
