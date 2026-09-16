@@ -211,6 +211,8 @@ Route::middleware(['auth', 'verified', 'workspace'])
          */
         Route::post('channels/{channel}/members', [ChannelMemberController::class, 'store'])
             ->name('channels.members.store');
+        Route::delete('channels/{channel}/members/{member}', [ChannelMemberController::class, 'destroy'])
+            ->name('channels.members.destroy');
 
         // Muting a channel and setting its notification level. The mirror of
         // conversations.preferences.update, and private to the member who asks:

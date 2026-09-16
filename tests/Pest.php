@@ -12,6 +12,7 @@ use App\Events\BoardChanged;
 use App\Events\ChannelActivity;
 use App\Events\ChannelCreated;
 use App\Events\ChannelMembershipGranted;
+use App\Events\ChannelMembershipRevoked;
 use App\Events\ChannelRead;
 use App\Events\ConversationActivity;
 use App\Events\ConversationRead;
@@ -69,6 +70,7 @@ pest()->extend(TestCase::class)
             ChannelActivity::class,
             ChannelCreated::class,
             ChannelMembershipGranted::class,
+            ChannelMembershipRevoked::class,
             ChannelRead::class,
             ConversationActivity::class,
             ConversationRead::class,

@@ -71,6 +71,7 @@ beforeEach(() => {
     vi.useFakeTimers();
     socket.handlers.clear();
     inertia.reload.mockClear();
+    inertia.visit.mockClear();
     sound.play.mockClear();
     notifications.pageIsUnattended.mockReset().mockReturnValue(false);
     notifications.showNotification.mockReset();
@@ -120,6 +121,29 @@ describe('reading a channel', () => {
         // it may have been another tab that did the reading.
         expect(sound.play).not.toHaveBeenCalled();
         expect(notifications.showNotification).not.toHaveBeenCalled();
+    });
+});
+
+describe('channel membership removal', () => {
+    it('leaves a removed channel that is currently open', () => {
+        active.slug = 'design';
+
+        renderHook(() => useChannelSync(1));
+
+        fire(events.channelMembershipRevoked);
+
+        expect(inertia.visit).toHaveBeenCalledWith('/w/acme');
+        expect(inertia.reload).not.toHaveBeenCalled();
+    });
+
+    it('refreshes the sidebar when another channel removes the user', () => {
+        renderHook(() => useChannelSync(1));
+
+        fire(events.channelMembershipRevoked, { channel_id: 8 });
+        settle();
+
+        expect(inertia.visit).not.toHaveBeenCalled();
+        expect(inertia.reload).toHaveBeenCalledWith({ only: ['snack'] });
     });
 });
 

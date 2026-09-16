@@ -4,16 +4,19 @@ namespace App\Http\Controllers\Channels;
 
 use App\Actions\Audit\RecordAuditLog;
 use App\Actions\Channels\AddChannelMembers;
+use App\Actions\Channels\RemoveChannelMember;
 use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Channels\StoreChannelMemberRequest;
 use App\Models\Channel;
+use App\Models\ChannelMember;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 /**
- * Putting other people into a channel.
+ * Adding other people to a channel and removing them again.
  *
  * The admin-gated mirror of {@see ChannelMembershipController}, which is a
  * person enrolling themselves. They are deliberately separate endpoints rather
@@ -59,6 +62,31 @@ class ChannelMemberController extends Controller
         ));
     }
 
+    public function destroy(
+        Workspace $workspace,
+        Channel $channel,
+        ChannelMember $member,
+        Request $request,
+        RemoveChannelMember $removeMember,
+    ): RedirectResponse {
+        $this->authorize('manageMembers', $channel);
+
+        if ($channel->is_default) {
+            return back()->with('error', 'Members cannot be removed from the default channel.');
+        }
+
+        if ($member->user_id === $request->user()->id) {
+            return back()->with('error', 'Use Leave channel to remove yourself.');
+        }
+
+        $subject = $member->user;
+
+        $removeMember->handle($channel, $request->user(), $subject);
+        $this->recordRemoval($workspace, $channel, $request->user(), $subject);
+
+        return back()->with('success', "{$subject->name} removed from #{$channel->slug}.");
+    }
+
     /**
      * One entry per person added, hung off the channel rather than the person,
      * because that is how it will be read back: "who has been in and out of
@@ -84,6 +112,26 @@ class ChannelMemberController extends Controller
                 'user_id' => $subject->id,
                 'username' => $subject->username,
                 'added_by' => $actor->username,
+            ],
+        );
+    }
+
+    private function recordRemoval(
+        Workspace $workspace,
+        Channel $channel,
+        User $actor,
+        User $subject,
+    ): void {
+        $this->audit->handle(
+            workspace: $workspace,
+            action: AuditAction::ChannelMemberRemoved,
+            actor: $actor,
+            auditable: $channel,
+            oldValues: [
+                'channel' => $channel->slug,
+                'user_id' => $subject->id,
+                'username' => $subject->username,
+                'removed_by' => $actor->username,
             ],
         );
     }

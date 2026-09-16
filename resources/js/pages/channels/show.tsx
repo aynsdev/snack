@@ -11,6 +11,7 @@ import type { MentionSource } from '@/components/snack/mention-picker';
 import { MessageComposer } from '@/components/snack/message-composer';
 import { MessageList } from '@/components/snack/message-list';
 import { PinnedBar } from '@/components/snack/pinned-bar';
+import { RemoveChannelMemberButton } from '@/components/snack/remove-channel-member-button';
 import { RightPanel } from '@/components/snack/right-panel';
 import { ThreadPanel } from '@/components/snack/thread-panel';
 import { UserAvatar } from '@/components/snack/user-avatar';
@@ -32,11 +33,11 @@ import { index as mentionable } from '@/routes/channels/mentionable';
 import { store as messageStore } from '@/routes/channels/messages';
 import type {
     Channel,
+    ChannelMembership,
     CanvasDocument,
     Huddle as HuddleType,
     Message,
     MessagePage,
-    SnackUser,
 } from '@/types';
 
 type Props = {
@@ -59,7 +60,7 @@ type Props = {
     /** The newest page; older pages are fetched as the reader scrolls. */
     history: MessagePage;
     /** Deferred: streams in after the channel paints. */
-    members?: SnackUser[];
+    members?: ChannelMembership[];
 };
 
 export default function ChannelShow({
@@ -210,6 +211,8 @@ export default function ChannelShow({
                         channel={channel}
                         members={members}
                         canManage={canManage}
+                        currentUserId={currentUser?.id ?? null}
+                        workspaceSlug={workspace.slug}
                         onAddPeople={() => setAddingPeople(true)}
                     />
                 </RightPanel>
@@ -555,11 +558,15 @@ function ChannelDetails({
     channel,
     members,
     canManage,
+    currentUserId,
+    workspaceSlug,
     onAddPeople,
 }: {
     channel: Channel;
-    members?: SnackUser[];
+    members?: ChannelMembership[];
     canManage: boolean;
+    currentUserId: number | null;
+    workspaceSlug: string;
     onAddPeople: () => void;
 }) {
     return (
@@ -615,19 +622,29 @@ function ChannelDetails({
                     }
                 >
                     <ul className="space-y-0.5">
-                        {(members ?? []).map((member) => (
+                        {(members ?? []).map((membership) => (
                             <li
-                                key={member.id}
+                                key={membership.id}
                                 className="flex items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-accent"
                             >
                                 <UserAvatar
-                                    user={member}
+                                    user={membership.user}
                                     size="sm"
                                     showPresence
                                 />
                                 <span className="min-w-0 flex-1 truncate text-sm">
-                                    {member.name}
+                                    {membership.user.name}
                                 </span>
+                                {canManage &&
+                                    !channel.is_archived &&
+                                    !channel.is_default &&
+                                    membership.user.id !== currentUserId && (
+                                        <RemoveChannelMemberButton
+                                            channel={channel}
+                                            membership={membership}
+                                            workspaceSlug={workspaceSlug}
+                                        />
+                                    )}
                             </li>
                         ))}
                     </ul>

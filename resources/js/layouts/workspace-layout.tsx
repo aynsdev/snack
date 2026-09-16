@@ -108,7 +108,7 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
              * torn down on that click. See use-huddle.tsx.
              */}
             <HuddleProvider>
-                <div className="flex h-dvh overflow-hidden bg-background">
+                <div className="flex h-dvh overflow-hidden overscroll-none bg-background">
                     {/*
                      * Mounted once, here, so the DM and channel lists and their
                      * badges stay current while the reader is somewhere else in the

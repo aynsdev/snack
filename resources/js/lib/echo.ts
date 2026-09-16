@@ -75,6 +75,7 @@ export const events = {
     // Being added to a channel by somebody else, on the newcomer's own private
     // channel — the one subscription they hold before they know it exists.
     channelMembershipGranted: '.channel.membership_granted',
+    channelMembershipRevoked: '.channel.membership_revoked',
     conversationStarted: '.conversation.started',
     conversationActivity: '.conversation.activity',
     conversationRead: '.conversation.read',

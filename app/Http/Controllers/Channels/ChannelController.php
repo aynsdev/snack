@@ -15,6 +15,7 @@ use App\Http\Resources\MessageResource;
 use App\Http\Resources\UserResource;
 use App\Models\Canvas;
 use App\Models\Channel;
+use App\Models\ChannelMember;
 use App\Models\Huddle;
 use App\Models\Message;
 use App\Models\Workspace;
@@ -166,9 +167,20 @@ class ChannelController extends Controller
             'history' => $this->history->page($channel),
 
             // Deferred so the first paint is the conversation, not the roster.
-            'members' => Inertia::defer(fn () => UserResource::collection(
-                $channel->users()->orderBy('name')->limit(100)->get(),
-            )->resolve($request)),
+            'members' => Inertia::defer(fn (): array => $channel->members()
+                ->with('user')
+                ->join('users', 'users.id', '=', 'channel_members.user_id')
+                ->orderBy('users.name')
+                ->select('channel_members.*')
+                ->limit(100)
+                ->get()
+                ->map(fn (ChannelMember $membership): array => [
+                    'id' => $membership->id,
+                    'role' => $membership->role->value,
+                    'joined_at' => $membership->joined_at->toIso8601String(),
+                    'user' => (new UserResource($membership->user))->resolve($request),
+                ])
+                ->all()),
         ]);
     }
 }

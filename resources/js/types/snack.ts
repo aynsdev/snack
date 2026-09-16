@@ -181,6 +181,14 @@ export type Channel = {
     created_at: string | null;
 };
 
+/** One person in a channel, keyed by the membership row the routes address. */
+export type ChannelMembership = {
+    id: number;
+    user: SnackUser;
+    role: ChannelRole;
+    joined_at: string | null;
+};
+
 /**
  * A section of the viewer's channel list.
  *

@@ -563,6 +563,7 @@
      | which would strand anyone who relies on seeing the thumb.
      */
     .snack-scroll {
+        overscroll-behavior: contain;
         scrollbar-width: thin;
         scrollbar-color: var(--color-border) transparent;
     }

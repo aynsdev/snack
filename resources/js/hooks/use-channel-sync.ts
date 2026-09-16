@@ -7,6 +7,7 @@ import { useCurrentWorkspace } from '@/hooks/use-workspace';
 import { channels, events } from '@/lib/echo';
 import { pageIsUnattended, showNotification } from '@/lib/notifications';
 import { show as showChannel } from '@/routes/channels';
+import { show as showWorkspace } from '@/routes/workspaces';
 import type { ChannelSignalEvent } from '@/types';
 
 /** Collapse a burst of arrivals into one refresh. */
@@ -29,6 +30,8 @@ const REFRESH_DELAY_MS = 300;
 export function useChannelSync(userId: number) {
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const notify = useChannelActivityAlert();
+    const current = useCurrentWorkspace();
+    const activeChannelSlug = useActiveChannelSlug();
 
     const refresh = useCallback(() => {
         if (timer.current !== null) {
@@ -87,6 +90,25 @@ export function useChannelSync(userId: number) {
         [events.channelMembershipGranted, events.channelRead],
         () => refresh(),
         [userId, refresh],
+    );
+
+    useEcho<ChannelSignalEvent>(
+        channels.user(userId),
+        [events.channelMembershipRevoked],
+        (payload) => {
+            const activeChannel = current?.channels.find(
+                (channel) => channel.slug === activeChannelSlug,
+            );
+
+            if (activeChannel?.id === payload.channel_id && current !== null) {
+                router.visit(showWorkspace.url(current.workspace.slug));
+
+                return;
+            }
+
+            refresh();
+        },
+        [userId, current, activeChannelSlug, refresh],
     );
 }
 

@@ -11,7 +11,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { store as addMembers } from '@/routes/channels/members';
-import type { Channel, SnackUser } from '@/types';
+import type { Channel, ChannelMembership, SnackUser } from '@/types';
 
 /**
  * Adding people to a channel.
@@ -34,7 +34,7 @@ export function AddChannelMembersDialog({
     channel: Channel;
     workspaceSlug: string;
     /** The roster, when it has arrived. Deferred, so it may not have. */
-    members: SnackUser[] | undefined;
+    members: ChannelMembership[] | undefined;
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }) {
@@ -70,7 +70,7 @@ function AddChannelMembersForm({
 }: {
     channel: Channel;
     workspaceSlug: string;
-    members: SnackUser[] | undefined;
+    members: ChannelMembership[] | undefined;
     onDone: () => void;
 }) {
     const [selected, setSelected] = useState<SnackUser[]>([]);
@@ -117,7 +117,9 @@ function AddChannelMembersForm({
                  * server is the authority either way: re-adding somebody is a
                  * no-op that says so.
                  */
-                excludeIds={(members ?? []).map((member) => member.id)}
+                excludeIds={(members ?? []).map(
+                    (membership) => membership.user.id,
+                )}
                 emptyMessage="Everyone in this workspace is already in this channel."
             />
 
