@@ -1,7 +1,9 @@
 <?php
 
 use App\Enums\ChannelType;
+use App\Http\Resources\AttachmentResource;
 use App\Models\Channel;
+use App\Models\Conversation;
 use App\Models\MessageAttachment;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
@@ -37,12 +39,37 @@ function attachedFile(
     return $attachment;
 }
 
+/**
+ * An attachment on a direct or group message, with bytes on the fake disk.
+ */
+function attachedConversationFile(
+    Conversation $conversation,
+    User $sender,
+    string $contents = 'file contents',
+): MessageAttachment {
+    $message = makeConversationMessage($conversation, $sender);
+
+    $attachment = MessageAttachment::factory()->create([
+        'workspace_id' => $conversation->workspace_id,
+        'message_id' => $message->id,
+        'uploaded_by' => $sender->id,
+        'disk' => 'local',
+        'original_name' => 'budget.pdf',
+        'mime_type' => 'application/pdf',
+    ]);
+
+    Storage::disk('local')->put($attachment->path, $contents);
+
+    return $attachment;
+}
+
 function signedShow(MessageAttachment $attachment, bool $inline = false): string
 {
     return URL::temporarySignedRoute(
         'files.show',
         now()->addHour(),
         ['attachment' => $attachment->id, ...($inline ? ['inline' => 1] : [])],
+        absolute: false,
     );
 }
 
@@ -196,6 +223,34 @@ it('serves a pdf inline when asked, sandboxed like an image', function () {
         ->and($response->headers->get('X-Content-Type-Options'))->toBe('nosniff');
 });
 
+it('serves a direct message pdf inline to a conversation participant', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $participant = joinWorkspace($workspace);
+    $conversation = makeConversation($workspace, [$owner, $participant]);
+    $attachment = attachedConversationFile($conversation, $owner, '%PDF-1.4 fake');
+
+    $response = actingAs($participant)->get(signedShow($attachment, inline: true));
+
+    expect($response->headers->get('Content-Disposition'))->toStartWith('inline')
+        ->and($response->headers->get('Content-Type'))->toBe('application/pdf');
+});
+
+it('uses origin-relative preview urls so queued messages cannot cause mixed content', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $participant = joinWorkspace($workspace);
+    $conversation = makeConversation($workspace, [$owner, $participant]);
+    $attachment = attachedConversationFile($conversation, $owner, '%PDF-1.4 fake');
+
+    $previewUrl = AttachmentResource::payload($attachment)['preview_url'];
+
+    expect($previewUrl)
+        ->toStartWith('/files/')
+        ->not->toStartWith('http://')
+        ->not->toStartWith('https://');
+
+    actingAs($participant)->get($previewUrl)->assertOk();
+});
+
 it('404s a thumbnail that has not been generated', function () {
     [$workspace, $owner] = makeWorkspaceWithOwner();
     $channel = makeChannel($workspace);
@@ -204,8 +259,11 @@ it('404s a thumbnail that has not been generated', function () {
     $attachment = attachedFile($channel, $owner);
 
     actingAs($owner)
-        ->get(URL::temporarySignedRoute('files.thumbnail', now()->addHour(), [
-            'attachment' => $attachment->id,
-        ]))
+        ->get(URL::temporarySignedRoute(
+            'files.thumbnail',
+            now()->addHour(),
+            ['attachment' => $attachment->id],
+            absolute: false,
+        ))
         ->assertNotFound();
 });

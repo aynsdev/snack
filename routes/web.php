@@ -964,7 +964,9 @@ Route::middleware(['auth', 'verified', 'workspace'])
 | slug in the path would break every existing link the moment a workspace was
 | renamed.
 |
-| `signed` bounds how long a copied link keeps working. It is not what grants
+| `signed:relative` bounds how long a copied link keeps working without baking
+| a worker's configured scheme into a URL that may be rendered on another one.
+| It is not what grants
 | access: the controller re-resolves the attachment, finds the message it hangs
 | off, and puts that message through the container policy on every single hit —
 | so a forwarded link is a 404 for someone who was never in the channel, however
@@ -972,7 +974,7 @@ Route::middleware(['auth', 'verified', 'workspace'])
 |
 */
 
-Route::middleware(['auth', 'signed'])->group(function () {
+Route::middleware(['auth', 'signed:relative'])->group(function () {
     Route::get('files/{attachment}', [DownloadController::class, 'show'])->name('files.show');
     Route::get('files/{attachment}/thumbnail', [DownloadController::class, 'thumbnail'])
         ->name('files.thumbnail');

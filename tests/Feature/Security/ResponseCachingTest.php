@@ -98,6 +98,7 @@ it('leaves a deliberately cached attachment alone', function () {
         'files.show',
         now()->addHour(),
         ['attachment' => $attachment->id],
+        absolute: false,
     );
 
     $response = $this->actingAs($owner)->get($url)->assertOk();

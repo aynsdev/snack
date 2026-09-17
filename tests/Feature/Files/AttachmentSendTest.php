@@ -183,12 +183,16 @@ it('carries attachments into a direct message the same way', function () {
 
     $attachment = parkUpload($workspace, $owner, 'receipt.pdf');
 
-    actingAs($owner)
+    $response = actingAs($owner)
         ->postJson(route('conversations.messages.store', [$workspace, $conversation]), [
             'body' => 'Expense',
             'attachment_ids' => [$attachment->id],
         ])
         ->assertCreated();
 
-    expect($attachment->refresh()->message_id)->not->toBeNull();
+    expect($attachment->refresh()->message_id)->not->toBeNull()
+        ->and($response->json('message.attachments'))->toHaveCount(1)
+        ->and($response->json('message.attachments.0.kind'))->toBe('pdf')
+        ->and($response->json('message.attachments.0.preview_url'))->toBeString()
+        ->toContain('inline=1', 'signature=');
 });

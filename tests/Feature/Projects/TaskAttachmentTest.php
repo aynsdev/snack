@@ -67,7 +67,12 @@ it('serves a card’s file to whoever may read the board, and nobody else', func
 
     Storage::disk('local')->put($attachment->path, 'the spec');
 
-    $url = URL::temporarySignedRoute('files.show', now()->addHour(), ['attachment' => $attachment->id]);
+    $url = URL::temporarySignedRoute(
+        'files.show',
+        now()->addHour(),
+        ['attachment' => $attachment->id],
+        absolute: false,
+    );
 
     // A board is readable by the whole workspace, so its files are too — a
     // colleague who is not on the project can still open the spec.

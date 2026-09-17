@@ -28,14 +28,19 @@ use Illuminate\Support\Facades\URL;
  * every page load. Snapping the expiry to a fixed window makes the URL stable
  * for everyone who renders the same file within it, so the browser cache works.
  *
- * # Why these routes are not workspace-prefixed
+ * # Why these routes are relative and not workspace-prefixed
  *
  * Every other route in the app carries `w/{slug}`, so the tenant is settled
  * before the controller runs. A file link cannot: it is minted by a queued
  * broadcast that has no request and therefore no resolved workspace, and it
- * would break the moment a workspace was renamed. Access is instead derived from
- * the message the file hangs off — the same container policy that decides
- * whether the message is visible decides whether its files are.
+ * would break the moment a workspace was renamed. The URL is relative for the
+ * same queue-related reason: a worker cannot know whether the browser reached
+ * the app over HTTP or HTTPS. Baking in `APP_URL` made live-arriving attachment
+ * previews use HTTP on an HTTPS page, which browsers correctly block as mixed
+ * content. A relative signed URL inherits the page's origin while keeping the
+ * path and query tamper-proof. Access is still derived from the message the file
+ * hangs off — the same container policy that decides whether the message is
+ * visible decides whether its files are.
  */
 class AttachmentResource extends JsonResource
 {
@@ -111,7 +116,7 @@ class AttachmentResource extends JsonResource
         return URL::temporarySignedRoute($route, self::expiry(), [
             'attachment' => $attachment->id,
             ...($inline ? ['inline' => 1] : []),
-        ]);
+        ], absolute: false);
     }
 
     /**
