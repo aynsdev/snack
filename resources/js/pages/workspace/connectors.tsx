@@ -9,44 +9,51 @@ import { Label } from '@/components/ui/label';
 import { useClipboard } from '@/hooks/use-clipboard';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
-import { destroy, store } from '@/routes/connectors';
-import type { Connector } from '@/types';
+import { store } from '@/routes/connectors';
+import { destroy as destroyApp } from '@/routes/connectors/apps';
+import { destroy as destroyToken } from '@/routes/connectors/tokens';
+import type { ConnectedApp, ConnectorToken } from '@/types';
 
 type Props = {
-    connectors: Connector[];
+    /** Clients that connected by signing in through the consent screen. */
+    apps: ConnectedApp[];
+    /** Personal tokens made on this page for clients configured by hand. */
+    tokens: ConnectorToken[];
     /** The MCP endpoint, absolute — it is pasted into software elsewhere. */
     server_url: string;
     limit: number;
 };
 
-type ClientId = 'claude-code' | 'claude-desktop' | 'cursor';
+type ClientId = 'claude' | 'claude-code' | 'other';
 
 const CLIENTS: { id: ClientId; label: string }[] = [
+    { id: 'claude', label: 'Claude' },
     { id: 'claude-code', label: 'Claude Code' },
-    { id: 'claude-desktop', label: 'Claude Desktop' },
-    { id: 'cursor', label: 'Cursor / VS Code' },
+    { id: 'other', label: 'Other clients' },
 ];
 
 const TOKEN_PLACEHOLDER = '<your-token>';
 
 /**
- * AI connectors: MCP tokens that let an assistant work in this workspace as
- * the person who created them.
+ * AI connectors: every assistant working in this workspace as the person
+ * looking at the page.
  *
- * The token itself is shown exactly once, from the flash data on the response
- * that issued it, and is gone on the next visit — Sanctum keeps only a hash.
- * The setup snippets fill it in while it is on screen and fall back to a
- * placeholder otherwise, so the instructions stay useful for connecting a
- * second client with a token pasted from somewhere else.
+ * Signing in is the way in for Claude and Claude Code — the client sends the
+ * person to Snack's consent screen, where they pick this workspace — so the
+ * setup instructions lead with it and need no token at all. Tokens remain for
+ * clients that can only send a fixed header.
+ *
+ * A token is shown exactly once, from the flash data on the response that
+ * issued it, and is gone on the next visit.
  */
 export default function WorkspaceConnectors({
-    connectors,
+    apps,
+    tokens,
     server_url,
     limit,
 }: Props) {
     const workspace = useWorkspace();
     const issued = usePage().flash.connector;
-    const token = issued?.token ?? TOKEN_PLACEHOLDER;
 
     return (
         <>
@@ -59,10 +66,10 @@ export default function WorkspaceConnectors({
                             AI connectors
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            Connect Claude, Cursor, or any MCP client to{' '}
-                            {workspace.name}. A connector can search and read
-                            what you can see, and post or file tasks under your
-                            name. It never sees more than you do.
+                            Connect Claude, or any MCP client, to{' '}
+                            {workspace.name}. It can search and read what you
+                            can see, and post or file tasks under your name. It
+                            never sees more than you do.
                         </p>
                     </header>
 
@@ -71,9 +78,54 @@ export default function WorkspaceConnectors({
                         <CopyField id="server-url" value={server_url} />
                     </section>
 
+                    <SetupInstructions
+                        serverUrl={server_url}
+                        token={issued?.token ?? TOKEN_PLACEHOLDER}
+                    />
+
+                    <h2 className="mt-8 mb-3 font-semibold">Connected apps</h2>
+
+                    {apps.length === 0 ? (
+                        <EmptyState
+                            icon={Bot}
+                            title="No apps connected"
+                            description="Apps you connect by signing in, such as Claude, appear here."
+                        />
+                    ) : (
+                        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                            {apps.map((app) => (
+                                <ConnectionRow
+                                    key={app.id}
+                                    name={app.name}
+                                    detail={
+                                        app.connected_at
+                                            ? `Connected ${new Date(app.connected_at).toLocaleDateString()}`
+                                            : 'Connected'
+                                    }
+                                    action="Disconnect"
+                                    onRemove={() =>
+                                        router.delete(
+                                            destroyApp({
+                                                workspace: workspace.slug,
+                                                grant: app.id,
+                                            }),
+                                            { preserveScroll: true },
+                                        )
+                                    }
+                                />
+                            ))}
+                        </ul>
+                    )}
+
+                    <h2 className="mt-8 mb-1 font-semibold">Tokens</h2>
+                    <p className="mb-3 text-sm text-muted-foreground">
+                        For clients that cannot sign in and need a token pasted
+                        into their settings instead.
+                    </p>
+
                     {issued && (
                         <section
-                            className="mb-8 space-y-3 rounded-xl border border-primary/40 bg-primary/5 p-4"
+                            className="mb-4 space-y-3 rounded-xl border border-primary/40 bg-primary/5 p-4"
                             aria-live="polite"
                         >
                             <div className="flex items-center gap-2">
@@ -81,14 +133,13 @@ export default function WorkspaceConnectors({
                                     aria-hidden="true"
                                     className="size-4 text-primary"
                                 />
-                                <h2 className="font-semibold">
+                                <h3 className="font-semibold">
                                     {issued.name} is ready
-                                </h2>
+                                </h3>
                             </div>
                             <p className="text-sm text-muted-foreground">
                                 Copy this token now. It will not be shown again
-                                — if you lose it, revoke this connector and
-                                create another.
+                                — if you lose it, revoke it and create another.
                             </p>
                             <CopyField
                                 id="new-token"
@@ -98,13 +149,11 @@ export default function WorkspaceConnectors({
                         </section>
                     )}
 
-                    <h2 className="mb-3 font-semibold">New connector</h2>
-
                     <Form
                         action={store(workspace.slug)}
                         resetOnSuccess
                         disableWhileProcessing
-                        className="mb-8 rounded-xl border border-border p-4"
+                        className="mb-4 rounded-xl border border-border p-4"
                     >
                         {({ errors, processing }) => (
                             <div className="flex flex-wrap items-end gap-3">
@@ -115,7 +164,7 @@ export default function WorkspaceConnectors({
                                         name="name"
                                         required
                                         maxLength={80}
-                                        placeholder="Claude on my laptop"
+                                        placeholder="Cursor on my laptop"
                                     />
                                     <InputError message={errors.name} />
                                 </div>
@@ -123,7 +172,7 @@ export default function WorkspaceConnectors({
                                 <Button
                                     type="submit"
                                     disabled={
-                                        processing || connectors.length >= limit
+                                        processing || tokens.length >= limit
                                     }
                                 >
                                     <Plus aria-hidden="true" />
@@ -133,23 +182,30 @@ export default function WorkspaceConnectors({
                         )}
                     </Form>
 
-                    <SetupInstructions serverUrl={server_url} token={token} />
-
-                    <h2 className="mt-8 mb-3 font-semibold">Your connectors</h2>
-
-                    {connectors.length === 0 ? (
-                        <EmptyState
-                            icon={Bot}
-                            title="No connectors yet"
-                            description="Create a token above, then add it to your AI client using the instructions for it."
-                        />
-                    ) : (
+                    {tokens.length > 0 && (
                         <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
-                            {connectors.map((connector) => (
-                                <ConnectorRow
-                                    key={connector.id}
-                                    connector={connector}
-                                    workspaceSlug={workspace.slug}
+                            {tokens.map((token) => (
+                                <ConnectionRow
+                                    key={token.id}
+                                    name={token.name}
+                                    detail={[
+                                        token.created_at &&
+                                            `Created ${new Date(token.created_at).toLocaleDateString()}`,
+                                        token.expires_at &&
+                                            `expires ${new Date(token.expires_at).toLocaleDateString()}`,
+                                    ]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    action="Revoke"
+                                    onRemove={() =>
+                                        router.delete(
+                                            destroyToken({
+                                                workspace: workspace.slug,
+                                                token: token.id,
+                                            }),
+                                            { preserveScroll: true },
+                                        )
+                                    }
                                 />
                             ))}
                         </ul>
@@ -167,36 +223,19 @@ function SetupInstructions({
     serverUrl: string;
     token: string;
 }) {
-    const [client, setClient] = useState<ClientId>('claude-code');
+    const [client, setClient] = useState<ClientId>('claude');
 
-    const snippets: Record<ClientId, { hint: string; code: string }> = {
+    const snippets: Record<ClientId, { hint: string; code: string | null }> = {
+        claude: {
+            hint: 'In Claude, open Settings → Connectors → Add custom connector (for a whole organization, an owner does this under Organization settings → Connectors) and paste the server URL above. Choosing Connect brings you here to sign in and pick this workspace.',
+            code: null,
+        },
         'claude-code': {
-            hint: 'Run this in your terminal.',
-            code: `claude mcp add --transport http snack ${serverUrl} \\\n  --header "Authorization: Bearer ${token}"`,
+            hint: 'Run this in your terminal, then run /mcp inside Claude Code and choose Authenticate to sign in.',
+            code: `claude mcp add --transport http snack ${serverUrl}`,
         },
-        'claude-desktop': {
-            hint: 'Add this to claude_desktop_config.json (Settings → Developer → Edit Config), then restart Claude. Requires Node.js.',
-            code: JSON.stringify(
-                {
-                    mcpServers: {
-                        snack: {
-                            command: 'npx',
-                            args: [
-                                '-y',
-                                'mcp-remote',
-                                serverUrl,
-                                '--header',
-                                `Authorization: Bearer ${token}`,
-                            ],
-                        },
-                    },
-                },
-                null,
-                2,
-            ),
-        },
-        cursor: {
-            hint: 'Add this to .cursor/mcp.json, or to .vscode/mcp.json under "servers" instead of "mcpServers".',
+        other: {
+            hint: 'For clients that take a URL and headers — Cursor (.cursor/mcp.json), VS Code (.vscode/mcp.json, under "servers") and others. Create a token below first.',
             code: JSON.stringify(
                 {
                     mcpServers: {
@@ -244,7 +283,7 @@ function SetupInstructions({
 
             <p className="text-sm text-muted-foreground">{current.hint}</p>
 
-            <CodeBlock code={current.code} />
+            {current.code !== null && <CodeBlock code={current.code} />}
         </section>
     );
 }
@@ -330,43 +369,28 @@ function CopyField({
     );
 }
 
-function ConnectorRow({
-    connector,
-    workspaceSlug,
+function ConnectionRow({
+    name,
+    detail,
+    action,
+    onRemove,
 }: {
-    connector: Connector;
-    workspaceSlug: string;
+    name: string;
+    detail: string;
+    action: string;
+    onRemove: () => void;
 }) {
     return (
         <li className="flex flex-wrap items-center gap-4 px-4 py-3">
             <div className="min-w-0 flex-1">
-                <span className="block truncate font-medium">
-                    {connector.name}
-                </span>
+                <span className="block truncate font-medium">{name}</span>
                 <p className="truncate text-sm text-muted-foreground">
-                    {connector.created_at &&
-                        `Created ${new Date(connector.created_at).toLocaleDateString()}`}
-                    {' · '}
-                    {connector.last_used_at
-                        ? `last used ${new Date(connector.last_used_at).toLocaleString()}`
-                        : 'never used'}
+                    {detail}
                 </p>
             </div>
 
-            <Button
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                    router.delete(
-                        destroy({
-                            workspace: workspaceSlug,
-                            token: connector.id,
-                        }),
-                        { preserveScroll: true },
-                    )
-                }
-            >
-                Revoke
+            <Button variant="ghost" size="sm" onClick={onRemove}>
+                {action}
             </Button>
         </li>
     );

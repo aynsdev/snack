@@ -42,6 +42,17 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        /*
+         * Bearer tokens issued by Passport, used only by the MCP server —
+         * see routes/ai.php. Both the OAuth tokens an AI client obtains by
+         * asking the person to sign in, and the personal tokens created on a
+         * workspace's AI connectors page.
+         */
+        'api' => [
+            'driver' => 'passport',
+            'provider' => 'users',
+        ],
     ],
 
     /*

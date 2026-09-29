@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AuthenticateMcpConnector;
 use App\Mcp\Servers\SnackServer;
+use Illuminate\Support\Facades\Route;
 use Laravel\Mcp\Facades\Mcp;
 
 /*
@@ -13,12 +14,23 @@ use Laravel\Mcp\Facades\Mcp;
 | incoming webhooks are: the caller is a program with a bearer token, not a
 | browser with a session and a CSRF token.
 |
-| `auth:sanctum` proves the token is real; AuthenticateMcpConnector then
-| insists it is a connector token, for a workspace its owner still belongs to.
-| A session cookie alone does not get in — see that middleware.
+| `oauthRoutes()` publishes the discovery documents and dynamic client
+| registration an OAuth-capable client (Claude, for one) uses to find Passport
+| and sign the person in. Tokens pasted by hand from the AI connectors page go
+| through the same `auth:api` guard.
+|
+| AuthenticateMcpConnector then insists the token is an MCP token that still
+| resolves to a workspace its owner belongs to.
 |
 */
 
+/*
+ * Throttled because client registration is open to the internet by design —
+ * an MCP client registers itself before anybody has signed in. The redirect
+ * domains it may register are limited in config/mcp.php.
+ */
+Route::middleware('throttle:20,1')->group(fn () => Mcp::oauthRoutes());
+
 Mcp::web('/mcp', SnackServer::class)
-    ->middleware(['auth:sanctum', AuthenticateMcpConnector::class, 'throttle:mcp'])
+    ->middleware(['auth:api', AuthenticateMcpConnector::class, 'throttle:mcp'])
     ->name('mcp');

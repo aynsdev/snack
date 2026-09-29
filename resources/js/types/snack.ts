@@ -1255,12 +1255,19 @@ export type FlashMessages = {
 
 // -- AI connectors -----------------------------------------------------------
 
-/** One of the current person's MCP connector tokens. Never carries the secret. */
-export type Connector = {
+/** An app that connected to the MCP server by signing in. */
+export type ConnectedApp = {
     id: number;
     name: string;
-    last_used_at: string | null;
+    connected_at: string | null;
+};
+
+/** One of the current person's personal MCP tokens. Never carries the secret. */
+export type ConnectorToken = {
+    id: string;
+    name: string;
     created_at: string | null;
+    expires_at: string | null;
 };
 
 /**
@@ -1268,7 +1275,7 @@ export type Connector = {
  * time the plaintext token ever reaches the browser.
  */
 export type ConnectorFlash = {
-    id: number;
+    id: string;
     name: string;
     token: string;
 };

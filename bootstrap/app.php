@@ -64,6 +64,9 @@ return Application::configure(basePath: dirname(__DIR__))
              */
             fn (Request $request) => $request->is('api/*')
                 || $request->is('hooks/*')
+                // The MCP server's callers are programs; a 401 there must stay
+                // a 401 so the client starts OAuth, not a redirect to /login.
+                || $request->is('mcp')
                 || $request->expectsJson(),
         );
     })->create();

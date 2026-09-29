@@ -4,9 +4,9 @@ namespace App\Mcp\Tools;
 
 use App\Ai\BiteContext;
 use App\Ai\Tools\BiteTool;
+use App\Mcp\ConnectorAccess;
 use App\Models\Channel;
 use App\Models\Message;
-use App\Models\PersonalAccessToken;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 use Laravel\Ai\Tools\Request as AiRequest;
@@ -20,12 +20,11 @@ use ReflectionClass;
  *
  * # Who is asking
  *
- * An MCP client connects with a personal access token, and that token was
- * issued for exactly one workspace — see the `personal_access_tokens`
- * migration. So the principal here is always *the person who created the
- * token, inside the workspace they created it for*, resolved fresh on every
- * call from the token itself. Nothing a client sends can name a different
- * workspace, and a person suspended since connecting sees nothing.
+ * An MCP client connects with a Passport token that is tied to exactly one
+ * workspace — see {@see ConnectorAccess}. So the principal here is always *the
+ * person the token belongs to, inside that workspace*, resolved fresh on every
+ * call. Nothing a client sends can name a different workspace, and a person
+ * suspended since connecting sees nothing.
  *
  * {@see App\Http\Middleware\AuthenticateMcpConnector} refuses the same
  * requests one layer up, at the HTTP boundary. This check is here too because
@@ -52,23 +51,15 @@ abstract class SnackTool extends Tool
     {
         $user = $request->user();
 
-        if (! $user instanceof User || $user->isBot()) {
+        if (! $user instanceof User) {
             return null;
         }
 
-        $token = $user->currentAccessToken();
+        $workspace = app(ConnectorAccess::class)->workspaceFor($user);
 
-        if (! $token instanceof PersonalAccessToken || ! $token->isMcpConnector()) {
-            return null;
-        }
-
-        $workspace = $token->workspace;
-
-        if ($workspace === null || ! $user->belongsToWorkspace($workspace)) {
-            return null;
-        }
-
-        return new BiteContext(workspace: $workspace, user: $user, container: null);
+        return $workspace === null
+            ? null
+            : new BiteContext(workspace: $workspace, user: $user, container: null);
     }
 
     /**
@@ -77,7 +68,7 @@ abstract class SnackTool extends Tool
      */
     protected function unauthorized(): Response
     {
-        return Response::error('This connector no longer has access to the workspace. Create a new token from the workspace\'s Connectors page.');
+        return Response::error('This connector no longer has access to the workspace. Reconnect it from the workspace\'s AI connectors page.');
     }
 
     /**

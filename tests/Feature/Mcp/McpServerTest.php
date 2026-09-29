@@ -15,6 +15,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
+use Laravel\Passport\AccessToken;
 
 /**
  * The MCP server: an AI client acting as the person who created its token,
@@ -30,14 +31,24 @@ beforeEach(function () {
 });
 
 /**
- * A connector token for this person, and the person with it applied — the
- * state `auth:sanctum` leaves behind on a real request.
+ * A personal connector token for this person, and the person with it applied —
+ * the state `auth:api` leaves behind on a real request.
+ *
+ * @return array{0: User, 1: string}
  */
 function connectAs(User $user, Workspace $workspace): array
 {
     $issued = app(CreateConnectorToken::class)->handle($workspace, $user, 'Test client');
+    $token = $issued->getToken();
 
-    return [$user->withAccessToken($issued->accessToken), $issued->plainTextToken];
+    $user->withAccessToken(new AccessToken([
+        'oauth_access_token_id' => $token->getKey(),
+        'oauth_client_id' => $token->client_id,
+        'oauth_user_id' => $user->getKey(),
+        'oauth_scopes' => $token->scopes,
+    ]));
+
+    return [$user, $issued->accessToken];
 }
 
 function mcpCall(string $method, array $params = []): array
@@ -60,13 +71,20 @@ describe('the HTTP endpoint', function () {
         $this->postJson('/mcp', mcpCall('tools/list'))->assertUnauthorized();
     });
 
-    it('refuses a sanctum token that is not a connector', function () {
+    it('refuses a token without the MCP scope', function () {
         // A token minted for anything else must not open this door by accident.
-        $token = $this->member->createToken('something else', ['*'])->plainTextToken;
+        app(CreateConnectorToken::class)->handle($this->workspace, $this->member, 'warm up the client');
+        $token = $this->member->createToken('something else')->accessToken;
 
         $this->withToken($token)
             ->postJson('/mcp', mcpCall('tools/list'))
-            ->assertUnauthorized();
+            ->assertForbidden();
+    });
+
+    it('tells an unauthenticated client where to sign in', function () {
+        $this->postJson('/mcp', mcpCall('tools/list'))
+            ->assertUnauthorized()
+            ->assertHeader('WWW-Authenticate');
     });
 
     it('refuses a browser session', function () {

@@ -29,6 +29,7 @@ use App\Http\Controllers\Files\DownloadController;
 use App\Http\Controllers\Files\FileBrowserController;
 use App\Http\Controllers\Huddles\HuddleHistoryController;
 use App\Http\Controllers\InvitationAcceptanceController;
+use App\Http\Controllers\Mcp\AuthorizeWorkspaceController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\Messages\MentionController;
 use App\Http\Controllers\Messages\PinController;
@@ -130,6 +131,16 @@ Route::post('invitations/{token}', [InvitationAcceptanceController::class, 'stor
 | Workspace selection
 |--------------------------------------------------------------------------
 */
+
+/*
+ * The approve half of Snack's OAuth consent screen, which records the
+ * workspace the person chose before handing over to Passport. The screen
+ * itself is Passport's `oauth/authorize` route rendering resources/views/mcp/
+ * authorize.blade.php — see AppServiceProvider::configurePassport().
+ */
+Route::post('oauth/authorize/workspace', AuthorizeWorkspaceController::class)
+    ->middleware(['auth', 'throttle:20,1'])
+    ->name('mcp.authorize.workspace');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('workspaces', [WorkspaceController::class, 'index'])->name('workspaces.index');
@@ -829,20 +840,24 @@ Route::middleware(['auth', 'verified', 'workspace'])
          * AI connectors
          *--------------------------------------------------------------------
          *
-         * The tokens an AI client uses to reach the MCP server (routes/ai.php)
-         * as you. Every member manages only their own — a connector can do
-         * nothing its owner cannot already do by hand — so there is no policy
-         * here, only ownership: the controller resolves `{token}` through the
-         * current person and this workspace, and anything else 404s.
+         * The assistants reaching the MCP server (routes/ai.php) as you: apps
+         * that signed in, and tokens made here by hand. Every member manages
+         * only their own — a connector can do nothing its owner cannot already
+         * do by hand — so there is no policy here, only ownership: the
+         * controller resolves `{token}` and `{grant}` through the current
+         * person and this workspace, and anything else 404s.
          */
         Route::get('connectors', [ConnectorController::class, 'index'])
             ->name('connectors.index');
         Route::post('connectors', [ConnectorController::class, 'store'])
             ->middleware('throttle:20,1')
             ->name('connectors.store');
-        Route::delete('connectors/{token}', [ConnectorController::class, 'destroy'])
-            ->whereNumber('token')
-            ->name('connectors.destroy');
+        Route::delete('connectors/tokens/{token}', [ConnectorController::class, 'destroyToken'])
+            ->where('token', '[A-Za-z0-9]{1,80}')
+            ->name('connectors.tokens.destroy');
+        Route::delete('connectors/apps/{grant}', [ConnectorController::class, 'destroyApp'])
+            ->whereNumber('grant')
+            ->name('connectors.apps.destroy');
 
         /*
          *--------------------------------------------------------------------
