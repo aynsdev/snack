@@ -828,6 +828,13 @@ return [
          * nobody wants — and no model can read one that size anyway.
          */
         'max_file_bytes' => (int) env('SNACK_MCP_MAX_FILE_BYTES', 10 * 1024 * 1024),
+
+        /*
+         * How long a download link an assistant hands out keeps working. The
+         * link still needs a Snack login and a policy check to open — see
+         * SnackTool::downloadUrl() — so this bounds replay, not access.
+         */
+        'download_link_ttl_hours' => (int) env('SNACK_MCP_DOWNLOAD_LINK_TTL_HOURS', 24),
     ],
 
 ];

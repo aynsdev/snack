@@ -21,7 +21,8 @@ class FindFilesTool extends SnackTool
 {
     public function description(): string
     {
-        return (string) static::describe(FindFiles::class)->description();
+        return static::describe(FindFiles::class)->description()
+            ."\n\nTo give the person a file they asked for, call `read_file` with its id: the result includes a download link.";
     }
 
     public function handle(Request $request): Response

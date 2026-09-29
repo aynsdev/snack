@@ -121,3 +121,28 @@ it('reads a file attached to a task the person can see', function () {
         ->assertOk()
         ->assertSee('Click login twice.');
 });
+
+it('hands out a download link that works only for someone allowed to see the file', function () {
+    $asset = Asset::factory()->withFile('image/png', 'logo.png')->create(['workspace_id' => $this->workspace->id]);
+    $file = storeBytes($asset->file, 'fake-png-bytes');
+    [, $token] = connectAs($this->member, $this->workspace);
+
+    $content = $this->withToken($token)
+        ->postJson('/mcp', mcpCall('tools/call', ['name' => 'read_file', 'arguments' => ['file_id' => $file->id]]))
+        ->assertOk()
+        ->json('result.content.0.text');
+
+    expect(preg_match('#(https?://\S+/files/'.$file->id.'\?\S+)#', $content, $match))->toBe(1);
+    $link = $match[1];
+
+    auth()->forgetGuards();
+    $this->flushHeaders();
+
+    // Signed, but still behind the login: a leaked link is not a public file.
+    $this->get($link)->assertRedirect(route('login'));
+
+    $this->actingAs($this->member)->get($link)->assertOk();
+
+    [, $stranger] = makeWorkspaceWithOwner();
+    $this->actingAs($stranger)->get($link)->assertNotFound();
+});

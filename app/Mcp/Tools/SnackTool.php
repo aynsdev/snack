@@ -7,8 +7,10 @@ use App\Ai\Tools\BiteTool;
 use App\Mcp\ConnectorAccess;
 use App\Models\Channel;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\URL;
 use Laravel\Ai\Tools\Request as AiRequest;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -166,5 +168,27 @@ abstract class SnackTool extends Tool
         }
 
         return $line."\n  ".str($message->body)->trim()->replace("\n", "\n  ")->toString();
+    }
+
+    /**
+     * A link the person can click to download a file.
+     *
+     * Snack's own download route, signed so it cannot be guessed — and still
+     * behind the session login and a fresh policy check when it is opened
+     * (see DownloadController). So the link only works for somebody signed in
+     * to Snack who may see the file: an assistant can hand it over without it
+     * becoming a public URL if it ends up in a transcript.
+     *
+     * Longer-lived than the links the app renders, because a person reads a
+     * chat answer later than they read a page.
+     */
+    protected function downloadUrl(MessageAttachment $file): string
+    {
+        return url(URL::temporarySignedRoute(
+            'files.show',
+            now()->addHours((int) config('snack.mcp.download_link_ttl_hours')),
+            ['attachment' => $file->id],
+            absolute: false,
+        ));
     }
 }
