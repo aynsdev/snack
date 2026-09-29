@@ -4,8 +4,10 @@ namespace App\Ai;
 
 use App\Models\Asset;
 use App\Models\MessageAttachment;
+use App\Models\Task;
 use App\Services\MessageVisibility;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Turning a file id the model said back into bytes the asker is allowed to see.
@@ -56,10 +58,10 @@ final readonly class BiteFiles
     /**
      * Whether this person may read these bytes.
      *
-     * A file is readable two ways, and either is enough. It is on the asset
-     * library's shelf, which every member but a guest can see. Or it is
-     * attached to a message they can read, which is the rule the file browser
-     * and search are both built on.
+     * A file is readable three ways, and any is enough. It is on the asset
+     * library's shelf, which every member but a guest can see. It is on a
+     * project card they can open. Or it is attached to a message they can
+     * read, which is the rule the file browser and search are both built on.
      */
     private function readable(BiteContext $context, MessageAttachment $attachment): bool
     {
@@ -72,6 +74,20 @@ final readonly class BiteFiles
             if ($shelved) {
                 return true;
             }
+        }
+
+        /*
+         * A file on a project card is exactly as visible as the card: whoever
+         * may open the task may open what is attached to it.
+         */
+        if ($attachment->task_id !== null) {
+            $task = Task::query()
+                ->whereKey($attachment->task_id)
+                ->whereHas('project', fn (Builder $project) => $project->where('workspace_id', $context->workspace->id))
+                ->with('project.workspace')
+                ->first();
+
+            return $task !== null && Gate::forUser($context->user)->allows('view', $task);
         }
 
         if ($attachment->message_id === null) {

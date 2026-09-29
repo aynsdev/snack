@@ -821,6 +821,13 @@ return [
          * is a live credential; a list of forty is a list nobody audits.
          */
         'max_tokens_per_member' => 10,
+
+        /*
+         * The largest file `read_file` will hand back. It goes to the client
+         * whole, Base64 in a JSON response, so a 200 MB video is a request
+         * nobody wants — and no model can read one that size anyway.
+         */
+        'max_file_bytes' => (int) env('SNACK_MCP_MAX_FILE_BYTES', 10 * 1024 * 1024),
     ],
 
 ];
