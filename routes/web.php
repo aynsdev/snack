@@ -66,6 +66,7 @@ use App\Http\Controllers\WorkspaceController;
 use App\Http\Controllers\Workspaces\AuditLogController;
 use App\Http\Controllers\Workspaces\BiteController;
 use App\Http\Controllers\Workspaces\BiteMemoryController;
+use App\Http\Controllers\Workspaces\ConnectorController;
 use App\Http\Controllers\Workspaces\IncomingWebhookController;
 use App\Http\Controllers\Workspaces\InvitationController;
 use App\Http\Controllers\Workspaces\InviteLinkController;
@@ -822,6 +823,26 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->name('bite-memories.update');
         Route::delete('bite/memories/{biteMemory}', [BiteMemoryController::class, 'destroy'])
             ->name('bite-memories.destroy');
+
+        /*
+         *--------------------------------------------------------------------
+         * AI connectors
+         *--------------------------------------------------------------------
+         *
+         * The tokens an AI client uses to reach the MCP server (routes/ai.php)
+         * as you. Every member manages only their own — a connector can do
+         * nothing its owner cannot already do by hand — so there is no policy
+         * here, only ownership: the controller resolves `{token}` through the
+         * current person and this workspace, and anything else 404s.
+         */
+        Route::get('connectors', [ConnectorController::class, 'index'])
+            ->name('connectors.index');
+        Route::post('connectors', [ConnectorController::class, 'store'])
+            ->middleware('throttle:20,1')
+            ->name('connectors.store');
+        Route::delete('connectors/{token}', [ConnectorController::class, 'destroy'])
+            ->whereNumber('token')
+            ->name('connectors.destroy');
 
         /*
          *--------------------------------------------------------------------

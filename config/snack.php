@@ -797,4 +797,30 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | MCP connectors
+    |--------------------------------------------------------------------------
+    |
+    | The Model Context Protocol server at `/mcp`, which lets an AI client —
+    | Claude, Cursor, anything that speaks MCP — search and post in a workspace
+    | as the person who connected it. See App\Mcp\Servers\SnackServer.
+    |
+    */
+
+    'mcp' => [
+        /*
+         * Tool calls per minute, per person. An assistant answering one
+         * question makes a quick burst of calls; this is set to absorb that and
+         * stop a client stuck in a retry loop.
+         */
+        'rate_limit_per_minute' => (int) env('SNACK_MCP_RATE_LIMIT', 120),
+
+        /*
+         * How many connector tokens one person may hold in one workspace. Each
+         * is a live credential; a list of forty is a list nobody audits.
+         */
+        'max_tokens_per_member' => 10,
+    ],
+
 ];

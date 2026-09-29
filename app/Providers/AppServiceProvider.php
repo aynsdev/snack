@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Actions\Presence\RecordPresence;
+use App\Models\PersonalAccessToken;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Notifications\Channels\WorkspaceDatabaseChannel;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -44,6 +46,9 @@ class AppServiceProvider extends ServiceProvider
         $this->configureNotifications();
         $this->configurePresence();
         $this->configureDevCommands();
+
+        // Sanctum's tokens, plus the workspace an MCP connector is bound to.
+        Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
     }
 
     /**
@@ -180,6 +185,15 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute((int) config('snack.webhooks.rate_limit_per_minute'))
                 ->by(is_string($token) ? 'hook:'.hash('sha256', $token) : 'hook-ip:'.$request->ip());
         });
+
+        /*
+         * The MCP server. An assistant working through a question makes a burst
+         * of tool calls in a few seconds, so this sits above the message-read
+         * limit — but it is still one person's credential, and a client stuck in
+         * a retry loop should hit a ceiling rather than the database.
+         */
+        RateLimiter::for('mcp', fn (Request $request) => Limit::perMinute((int) config('snack.mcp.rate_limit_per_minute', 120))
+            ->by('mcp:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
     }
 
     /**

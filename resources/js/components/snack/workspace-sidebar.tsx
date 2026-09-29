@@ -4,6 +4,7 @@ import {
     Bell,
     BellOff,
     Blocks,
+    Bot,
     ChevronDown,
     ClipboardList,
     Compass,
@@ -79,6 +80,7 @@ import { edit as biteSettings } from '@/routes/bite-settings';
 // workspace logo is its own: this row points at a thing people recognise by
 // sight from the timeline. One file, shared with the bot's stored avatar.
 import { index as browseChannels } from '@/routes/channels';
+import { index as connectorsIndex } from '@/routes/connectors';
 import { index as huddlesIndex } from '@/routes/huddles';
 import { index as workspaceMembers } from '@/routes/members';
 import { edit as notificationPreferences } from '@/routes/notification-preferences';
@@ -1141,6 +1143,18 @@ function SidebarHeader({
                         <Link href={notificationPreferences(workspace.slug)}>
                             <Bell className="mr-2 size-4" />
                             Notification preferences
+                        </Link>
+                    </DropdownMenuItem>
+
+                    {/*
+                     * Also everyone's: a connector acts as the person who made
+                     * it and can reach nothing they cannot, so it is a personal
+                     * setting like the one above rather than an admin one.
+                     */}
+                    <DropdownMenuItem asChild>
+                        <Link href={connectorsIndex(workspace.slug)}>
+                            <Bot className="mr-2 size-4" />
+                            AI connectors
                         </Link>
                     </DropdownMenuItem>
 

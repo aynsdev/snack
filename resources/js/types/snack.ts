@@ -1253,6 +1253,26 @@ export type FlashMessages = {
     entered_workspace: boolean;
 };
 
+// -- AI connectors -----------------------------------------------------------
+
+/** One of the current person's MCP connector tokens. Never carries the secret. */
+export type Connector = {
+    id: number;
+    name: string;
+    last_used_at: string | null;
+    created_at: string | null;
+};
+
+/**
+ * A just-issued connector, flashed on the response that created it. The only
+ * time the plaintext token ever reaches the browser.
+ */
+export type ConnectorFlash = {
+    id: number;
+    name: string;
+    token: string;
+};
+
 // -- Real-time payloads ------------------------------------------------------
 
 /** The member shape published by the presence-channel authorization callbacks. */

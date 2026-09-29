@@ -1,5 +1,5 @@
 import type { Auth } from '@/types/auth';
-import type { FlashMessages, SnackProps } from '@/types/snack';
+import type { ConnectorFlash, FlashMessages, SnackProps } from '@/types/snack';
 
 declare module 'react' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -18,6 +18,13 @@ declare module '@inertiajs/core' {
             flash: FlashMessages;
             sidebarOpen: boolean;
             [key: string]: unknown;
+        };
+        /**
+         * One-time data sent with Inertia::flash() — never persisted to the
+         * history state, which is why a freshly issued credential travels here.
+         */
+        flashDataType: {
+            connector?: ConnectorFlash;
         };
     }
 }
