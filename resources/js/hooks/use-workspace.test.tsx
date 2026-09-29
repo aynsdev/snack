@@ -111,6 +111,7 @@ function makeCurrent(
                 create_projects: true,
                 start_conversations: true,
                 mention_everyone: false,
+                manage_people: false,
                 view_audit_logs: false,
                 is_guest: false,
             },

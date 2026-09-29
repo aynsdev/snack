@@ -27,6 +27,20 @@ use App\Http\Controllers\Conversations\ParticipantController;
 use App\Http\Controllers\FileCanvasStarController;
 use App\Http\Controllers\Files\DownloadController;
 use App\Http\Controllers\Files\FileBrowserController;
+use App\Http\Controllers\Hr\AbsenceController;
+use App\Http\Controllers\Hr\AnnouncementController;
+use App\Http\Controllers\Hr\ClockController;
+use App\Http\Controllers\Hr\ContractController;
+use App\Http\Controllers\Hr\EmployeeController;
+use App\Http\Controllers\Hr\EmployeeRecordController;
+use App\Http\Controllers\Hr\EmploymentHistoryController;
+use App\Http\Controllers\Hr\HolidayController;
+use App\Http\Controllers\Hr\HrDashboardController;
+use App\Http\Controllers\Hr\HrSettingsController;
+use App\Http\Controllers\Hr\LeaveRequestController;
+use App\Http\Controllers\Hr\LeaveReviewController;
+use App\Http\Controllers\Hr\LeaveTypeController;
+use App\Http\Controllers\Hr\TimeEntryController;
 use App\Http\Controllers\Huddles\HuddleHistoryController;
 use App\Http\Controllers\InvitationAcceptanceController;
 use App\Http\Controllers\Mcp\AuthorizeWorkspaceController;
@@ -963,6 +977,95 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->middleware('throttle:messages')
             ->withoutScopedBindings()
             ->name('standup-responses.store');
+
+        /*
+         *--------------------------------------------------------------------
+         * HR
+         *--------------------------------------------------------------------
+         *
+         * Every workspace member is an employee (see WorkspaceMember::booted()).
+         * Everybody uses the self-service half — the clock, leave requests,
+         * holidays, announcements, their own file — and admins run the rest.
+         *
+         * Nested {employmentHistory}, {contract}, {record} and {absence} are
+         * scoped to the {employee} in the path, which is itself scoped to this
+         * workspace, so an id from another file 404s at the router.
+         */
+        Route::prefix('hr')->name('hr.')->group(function () {
+            Route::get('/', [HrDashboardController::class, 'index'])->name('index');
+
+            Route::get('me', [EmployeeController::class, 'me'])->name('me');
+            Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
+            Route::get('employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
+            Route::patch('employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
+
+            Route::post('employees/{employee}/history', [EmploymentHistoryController::class, 'store'])
+                ->name('employees.history.store');
+            Route::delete('employees/{employee}/history/{employmentHistory}', [EmploymentHistoryController::class, 'destroy'])
+                ->name('employees.history.destroy');
+
+            Route::post('employees/{employee}/contracts', [ContractController::class, 'store'])
+                ->middleware('throttle:uploads')
+                ->name('employees.contracts.store');
+            Route::patch('employees/{employee}/contracts/{contract}', [ContractController::class, 'update'])
+                ->middleware('throttle:uploads')
+                ->name('employees.contracts.update');
+            Route::delete('employees/{employee}/contracts/{contract}', [ContractController::class, 'destroy'])
+                ->name('employees.contracts.destroy');
+            Route::get('employees/{employee}/contracts/{contract}/file', [ContractController::class, 'download'])
+                ->name('employees.contracts.download');
+
+            Route::post('employees/{employee}/records', [EmployeeRecordController::class, 'store'])
+                ->middleware('throttle:uploads')
+                ->name('employees.records.store');
+            Route::delete('employees/{employee}/records/{record}', [EmployeeRecordController::class, 'destroy'])
+                ->name('employees.records.destroy');
+            Route::get('employees/{employee}/records/{record}/file', [EmployeeRecordController::class, 'download'])
+                ->name('employees.records.download');
+
+            Route::post('employees/{employee}/absences', [AbsenceController::class, 'store'])
+                ->name('employees.absences.store');
+            Route::delete('employees/{employee}/absences/{absence}', [AbsenceController::class, 'destroy'])
+                ->name('employees.absences.destroy');
+
+            // Leave. Approve and reject are separate endpoints so a repeated
+            // click can never flip a decision — see LeaveReviewController.
+            Route::get('leave', [LeaveRequestController::class, 'index'])->name('leave.index');
+            Route::post('leave', [LeaveRequestController::class, 'store'])
+                ->middleware('throttle:30,1')
+                ->name('leave.store');
+            Route::post('leave/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('leave.cancel');
+            Route::post('leave/{leaveRequest}/approve', [LeaveReviewController::class, 'approve'])->name('leave.approve');
+            Route::post('leave/{leaveRequest}/reject', [LeaveReviewController::class, 'reject'])->name('leave.reject');
+
+            Route::post('leave-types', [LeaveTypeController::class, 'store'])->name('leave-types.store');
+            Route::patch('leave-types/{leaveType}', [LeaveTypeController::class, 'update'])->name('leave-types.update');
+            Route::delete('leave-types/{leaveType}', [LeaveTypeController::class, 'destroy'])->name('leave-types.destroy');
+
+            // The geotagged time clock, and the timesheets it fills.
+            Route::get('time', [TimeEntryController::class, 'index'])->name('time.index');
+            Route::post('time/clock-in', [ClockController::class, 'in'])
+                ->middleware('throttle:20,1')
+                ->name('clock.in');
+            Route::post('time/clock-out', [ClockController::class, 'out'])
+                ->middleware('throttle:20,1')
+                ->name('clock.out');
+            Route::patch('time/{timeEntry}', [TimeEntryController::class, 'update'])->name('time.update');
+            Route::delete('time/{timeEntry}', [TimeEntryController::class, 'destroy'])->name('time.destroy');
+
+            Route::get('holidays', [HolidayController::class, 'index'])->name('holidays.index');
+            Route::post('holidays', [HolidayController::class, 'store'])->name('holidays.store');
+            Route::patch('holidays/{holiday}', [HolidayController::class, 'update'])->name('holidays.update');
+            Route::delete('holidays/{holiday}', [HolidayController::class, 'destroy'])->name('holidays.destroy');
+
+            Route::get('announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
+            Route::post('announcements', [AnnouncementController::class, 'store'])->name('announcements.store');
+            Route::patch('announcements/{announcement}', [AnnouncementController::class, 'update'])->name('announcements.update');
+            Route::delete('announcements/{announcement}', [AnnouncementController::class, 'destroy'])->name('announcements.destroy');
+
+            Route::get('settings', [HrSettingsController::class, 'edit'])->name('settings.edit');
+            Route::patch('settings', [HrSettingsController::class, 'update'])->name('settings.update');
+        });
 
         // Members
         Route::get('members', [MemberController::class, 'index'])->name('members.index');

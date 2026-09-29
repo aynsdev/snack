@@ -3,11 +3,14 @@
 namespace App\Http\Middleware;
 
 use App\Http\Resources\UserResource;
+use App\Models\Employee;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\WorkspaceNavigator;
+use App\Support\Geofence;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Date;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -65,6 +68,13 @@ class HandleInertiaRequests extends Middleware
                     : null,
             ],
             'snack' => fn (): array => $this->snackProps($request),
+
+            /*
+             * The header's time clock. Only inside a workspace, and only for
+             * someone with a live employee file there — everyone else gets null
+             * and the header shows nothing. One indexed query per page.
+             */
+            'clock' => fn (): ?array => $this->clockProps($request),
             'flash' => fn (): array => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
@@ -108,6 +118,47 @@ class HandleInertiaRequests extends Middleware
             'current' => $workspace === null
                 ? null
                 : $this->navigator->payload($workspace, $user),
+        ];
+    }
+
+    /**
+     * @return array{employee_id: int, open_entry: array{id: int, clock_in_at: string}|null, require_location: bool, geofence: array{latitude: float, longitude: float, radius_meters: int, enforced: bool}|null}|null
+     */
+    private function clockProps(Request $request): ?array
+    {
+        $user = $request->user();
+
+        if ($user === null || ! $this->context->isResolved()) {
+            return null;
+        }
+
+        $workspace = $this->context->workspace();
+
+        // One query for both the employee file and any open shift, because
+        // this runs on every page in the workspace.
+        $employee = Employee::query()
+            ->leftJoin('time_entries', fn ($join) => $join
+                ->on('time_entries.employee_id', '=', 'employees.id')
+                ->whereNull('time_entries.clock_out_at'))
+            ->where('employees.workspace_id', $workspace->id)
+            ->where('employees.user_id', $user->id)
+            ->first(['employees.id', 'employees.status', 'time_entries.id as open_entry_id', 'time_entries.clock_in_at as open_clock_in_at']);
+
+        if ($employee === null || ! $employee->status->isEmployed()) {
+            return null;
+        }
+
+        $entryId = $employee->getAttribute('open_entry_id');
+        $clockedInAt = $employee->getAttribute('open_clock_in_at');
+
+        return [
+            'employee_id' => $employee->id,
+            'open_entry' => $entryId === null ? null : [
+                'id' => (int) $entryId,
+                'clock_in_at' => Date::parse((string) $clockedInAt)->toIso8601String(),
+            ],
+            'require_location' => (bool) $workspace->setting('hr.require_location', false),
+            'geofence' => Geofence::forWorkspace($workspace)?->toArray(),
         ];
     }
 

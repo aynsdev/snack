@@ -1,4 +1,5 @@
 import type { Auth } from '@/types/auth';
+import type { HeaderClockState } from '@/types/hr';
 import type { ConnectorFlash, FlashMessages, SnackProps } from '@/types/snack';
 
 declare module 'react' {
@@ -17,6 +18,8 @@ declare module '@inertiajs/core' {
             snack: SnackProps;
             flash: FlashMessages;
             sidebarOpen: boolean;
+            /** The header time clock; null outside a workspace or without an employee file. */
+            clock: HeaderClockState | null;
             [key: string]: unknown;
         };
         /**

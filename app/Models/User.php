@@ -121,6 +121,22 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
     // -- Workspaces ----------------------------------------------------------
 
     /**
+     * @return HasMany<Employee, $this>
+     */
+    public function employments(): HasMany
+    {
+        return $this->hasMany(Employee::class);
+    }
+
+    /**
+     * This person's employee record in a workspace, or null when they have none.
+     */
+    public function employeeIn(Workspace $workspace): ?Employee
+    {
+        return $this->employments()->where('workspace_id', $workspace->id)->first();
+    }
+
+    /**
      * @return HasMany<WorkspaceMember, $this>
      */
     public function workspaceMemberships(): HasMany

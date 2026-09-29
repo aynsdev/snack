@@ -3,6 +3,7 @@ import {
     useActiveConversationId,
     useIsAssetsView,
     useIsDirectMessagesView,
+    useIsHrView,
     useIsProjectsView,
 } from '@/hooks/use-active-channel';
 
@@ -11,7 +12,7 @@ import {
  * project list, or the asset library's folder tree.
  */
 export type SidebarSection =
-    'workspace' | 'direct-messages' | 'projects' | 'assets';
+    'workspace' | 'direct-messages' | 'projects' | 'assets' | 'hr';
 
 const STORAGE_KEY = 'snack:sidebar-section';
 
@@ -43,6 +44,7 @@ export function useSidebarSection(): SidebarSection {
     const isDirectMessagesView = useIsDirectMessagesView();
     const isProjectsView = useIsProjectsView();
     const isAssetsView = useIsAssetsView();
+    const isHrView = useIsHrView();
 
     /*
      * A conversation inherits; everywhere else states. With no conversation in
@@ -63,9 +65,11 @@ export function useSidebarSection(): SidebarSection {
               ? 'projects'
               : isAssetsView
                 ? 'assets'
-                : isDirectMessagesView
-                  ? 'direct-messages'
-                  : 'workspace';
+                : isHrView
+                  ? 'hr'
+                  : isDirectMessagesView
+                    ? 'direct-messages'
+                    : 'workspace';
 
     useEffect(() => {
         /*
@@ -78,7 +82,8 @@ export function useSidebarSection(): SidebarSection {
         if (
             conversationId === null &&
             section !== 'projects' &&
-            section !== 'assets'
+            section !== 'assets' &&
+            section !== 'hr'
         ) {
             remember(section);
         }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Actions\Hr\SyncEmployeeForMember;
 use App\Enums\MemberStatus;
 use App\Enums\NotificationLevel;
 use App\Enums\WorkspaceRole;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Support\Carbon;
 
@@ -30,6 +32,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Workspace $workspace
  * @property-read User $user
+ * @property-read Employee|null $employee
  */
 #[Fillable(['workspace_id', 'user_id', 'role', 'status', 'notification_preferences', 'joined_at'])]
 class WorkspaceMember extends Pivot
@@ -40,6 +43,15 @@ class WorkspaceMember extends Pivot
     public $incrementing = true;
 
     protected $table = 'workspace_members';
+
+    /**
+     * Every workspace member is also an employee — see SyncEmployeeForMember.
+     */
+    protected static function booted(): void
+    {
+        static::created(fn (self $member) => app(SyncEmployeeForMember::class)->joined($member));
+        static::deleted(fn (self $member) => app(SyncEmployeeForMember::class)->left($member));
+    }
 
     /**
      * @return array<string, string>
@@ -70,6 +82,14 @@ class WorkspaceMember extends Pivot
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return HasOne<Employee, $this>
+     */
+    public function employee(): HasOne
+    {
+        return $this->hasOne(Employee::class, 'workspace_member_id');
     }
 
     // -- Scopes --------------------------------------------------------------

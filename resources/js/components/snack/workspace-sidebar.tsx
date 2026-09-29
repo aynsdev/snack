@@ -24,6 +24,8 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { HeaderClock } from '@/components/hr/header-clock';
+import { HrSidebar } from '@/components/hr/hr-sidebar';
 import { AssetSidebar } from '@/components/snack/assets/asset-sidebar';
 import { ChannelListItem } from '@/components/snack/channel-list-item';
 import {
@@ -155,6 +157,7 @@ export function WorkspaceSidebar({
     const isDirectMessages = section === 'direct-messages';
     const isProjects = section === 'projects';
     const isAssets = section === 'assets';
+    const isHr = section === 'hr';
 
     const [composing, setComposing] = useState(false);
     const [dmFilter, setDmFilter] = useState('');
@@ -195,6 +198,37 @@ export function WorkspaceSidebar({
                     className="snack-scroll flex-1 space-y-1 overflow-y-auto px-3 pt-1 pb-4"
                 >
                     <AssetSidebar onNavigate={onNavigate} />
+                </nav>
+
+                <NotificationPermissionPrompt />
+            </div>
+        );
+    }
+
+    if (isHr) {
+        /*
+         * Inside HR the sidebar is HR's own pages, for the reason it is the
+         * project list inside Projects: a channel list beside a timesheet is a
+         * list of rooms none of this is happening in.
+         */
+        return (
+            <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+                <SidebarHeader
+                    onCompose={() => setComposing(true)}
+                    inDrawer={inDrawer}
+                />
+
+                <NewMessageDialog
+                    workspaceSlug={workspace.slug}
+                    open={composing}
+                    onOpenChange={setComposing}
+                />
+
+                <nav
+                    aria-label="HR"
+                    className="snack-scroll flex-1 overflow-y-auto px-3 pt-1 pb-4"
+                >
+                    <HrSidebar onNavigate={onNavigate} />
                 </nav>
 
                 <NotificationPermissionPrompt />
@@ -1232,20 +1266,29 @@ function SidebarHeader({
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            <button
-                type="button"
-                onClick={onCompose}
-                disabled={!workspace.abilities.start_conversations}
-                title={
-                    workspace.abilities.start_conversations
-                        ? 'New message'
-                        : 'Guests cannot start conversations'
-                }
-                className="rounded-lg p-2 transition-colors hover:bg-sidebar-accent disabled:opacity-40"
-            >
-                <SquarePen aria-hidden="true" className="size-[1.125rem]" />
-                <span className="sr-only">New message</span>
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+                {/*
+                 * Not in the phone drawer: the mobile top bar already carries
+                 * the clock, and two of them on one screen would read as two
+                 * shifts.
+                 */}
+                {!inDrawer && <HeaderClock />}
+
+                <button
+                    type="button"
+                    onClick={onCompose}
+                    disabled={!workspace.abilities.start_conversations}
+                    title={
+                        workspace.abilities.start_conversations
+                            ? 'New message'
+                            : 'Guests cannot start conversations'
+                    }
+                    className="rounded-lg p-2 transition-colors hover:bg-sidebar-accent disabled:opacity-40"
+                >
+                    <SquarePen aria-hidden="true" className="size-[1.125rem]" />
+                    <span className="sr-only">New message</span>
+                </button>
+            </div>
         </div>
     );
 }

@@ -143,6 +143,27 @@ enum AuditAction: string
     case BiteMemoryUpdated = 'bite.memory_updated';
     case BiteMemoryDeleted = 'bite.memory_deleted';
 
+    /*
+     * HR, under one subject. Recorded are the changes to somebody's file and
+     * the decisions made about them — approvals, corrections, paperwork — not
+     * the everyday clocking in and asking for leave, which the HR screens
+     * themselves already show with names and dates against them.
+     */
+    case EmployeeUpdated = 'hr.employee_updated';
+    case EmploymentChanged = 'hr.employment_changed';
+    case ContractCreated = 'hr.contract_created';
+    case ContractUpdated = 'hr.contract_updated';
+    case ContractDeleted = 'hr.contract_deleted';
+    case EmployeeRecordCreated = 'hr.record_created';
+    case EmployeeRecordDeleted = 'hr.record_deleted';
+    case AbsenceRecorded = 'hr.absence_recorded';
+    case AbsenceDeleted = 'hr.absence_deleted';
+    case LeaveApproved = 'hr.leave_approved';
+    case LeaveRejected = 'hr.leave_rejected';
+    case TimeEntryUpdated = 'hr.time_entry_updated';
+    case TimeEntryDeleted = 'hr.time_entry_deleted';
+    case HrSettingsUpdated = 'hr.settings_updated';
+
     public function label(): string
     {
         return match ($this) {
@@ -195,6 +216,20 @@ enum AuditAction: string
             self::BiteMemoryDeleted => 'Bite knowledge removed',
             self::AssetDeleted => 'Asset deleted',
             self::AssetFolderDeleted => 'Asset folder deleted',
+            self::EmployeeUpdated => 'Employee file updated',
+            self::EmploymentChanged => 'Employment history recorded',
+            self::ContractCreated => 'Contract added',
+            self::ContractUpdated => 'Contract updated',
+            self::ContractDeleted => 'Contract deleted',
+            self::EmployeeRecordCreated => 'Record filed',
+            self::EmployeeRecordDeleted => 'Record deleted',
+            self::AbsenceRecorded => 'Absence recorded',
+            self::AbsenceDeleted => 'Absence removed',
+            self::LeaveApproved => 'Leave approved',
+            self::LeaveRejected => 'Leave rejected',
+            self::TimeEntryUpdated => 'Time entry corrected',
+            self::TimeEntryDeleted => 'Time entry deleted',
+            self::HrSettingsUpdated => 'HR settings updated',
         };
     }
 

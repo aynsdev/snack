@@ -128,6 +128,7 @@ export type WorkspaceAbilities = {
     create_projects: boolean;
     start_conversations: boolean;
     mention_everyone: boolean;
+    manage_people: boolean;
     view_audit_logs: boolean;
     is_guest: boolean;
 };
