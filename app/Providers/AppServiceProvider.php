@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Actions\Presence\RecordPresence;
+use App\Mcp\OAuthClientRepository;
 use App\Models\OAuthToken;
 use App\Models\User;
 use App\Models\Workspace;
@@ -22,6 +23,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Passport\ClientRepository;
 use Laravel\Passport\Passport;
 
 class AppServiceProvider extends ServiceProvider
@@ -33,6 +35,10 @@ class AppServiceProvider extends ServiceProvider
     {
         // One workspace context per request, populated by ResolveWorkspace.
         $this->app->scoped(WorkspaceContext::class);
+
+        // A client id that is not a UUID is "no such client", not a 500 —
+        // see OAuthClientRepository.
+        $this->app->bind(ClientRepository::class, OAuthClientRepository::class);
     }
 
     /**

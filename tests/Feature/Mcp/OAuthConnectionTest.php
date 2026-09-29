@@ -67,7 +67,27 @@ it('publishes the discovery documents a client starts from', function () {
     $this->getJson('/.well-known/oauth-authorization-server')
         ->assertOk()
         ->assertJsonPath('registration_endpoint', url('/oauth/register'))
-        ->assertJsonPath('code_challenge_methods_supported', ['S256']);
+        ->assertJsonPath('code_challenge_methods_supported', ['S256'])
+        // Without this, RFC 8414 reads as "client_secret_basic only", which
+        // contradicts the public clients registration creates.
+        ->assertJsonPath('token_endpoint_auth_methods_supported', ['none']);
+
+    $this->getJson('/.well-known/oauth-authorization-server/mcp')
+        ->assertOk()
+        ->assertJsonPath('token_endpoint_auth_methods_supported', ['none']);
+});
+
+it('answers a client id that is not a uuid with invalid_client, not a crash', function () {
+    // A newer MCP client may identify itself by a metadata document URL.
+    $this->get('/oauth/authorize?'.http_build_query([
+        'client_id' => 'https://claude.ai/oauth/client-metadata.json',
+        'redirect_uri' => $this->redirect,
+        'response_type' => 'code',
+        'scope' => Registrar::OAUTH_SCOPE,
+        'state' => 'xyz',
+        'code_challenge' => str_repeat('a', 43),
+        'code_challenge_method' => 'S256',
+    ]))->assertUnauthorized()->assertJsonPath('error', 'invalid_client');
 });
 
 it('lets Claude register itself', function () {
