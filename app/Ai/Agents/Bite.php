@@ -275,6 +275,10 @@ class Bite implements Agent, Conversational, HasTools
          */
         $root = $this->context->message?->parent_message_id;
 
+        if ($root === null && $this->context->container === null) {
+            return [];
+        }
+
         $query = $root !== null
             ? Message::query()->where(fn ($group) => $group
                 ->where('parent_message_id', $root)

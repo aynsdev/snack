@@ -99,6 +99,15 @@ enum AuditAction: string
 
     case WebhookDeleted = 'webhook.deleted';
 
+    /*
+     * A member connecting an AI client to the workspace over MCP, or cutting
+     * one off. Recorded because a connector reads what its owner can read and
+     * posts under their name, and "which assistants can reach this workspace"
+     * is a question an admin should be able to answer from the log.
+     */
+    case ConnectorCreated = 'connector.created';
+    case ConnectorRevoked = 'connector.revoked';
+
     case MessageDeletedByAdmin = 'message.deleted_by_admin';
 
     /*
@@ -177,6 +186,8 @@ enum AuditAction: string
             self::WebhookSigningDisabled => 'Webhook signing no longer required',
             self::WebhookSecretRotated => 'Webhook signing secret replaced',
             self::WebhookDeleted => 'Webhook deleted',
+            self::ConnectorCreated => 'AI connector created',
+            self::ConnectorRevoked => 'AI connector revoked',
             self::MessageDeletedByAdmin => 'Message removed by admin',
             self::BiteSettingsUpdated => 'Bite settings updated',
             self::BiteMemoryCreated => 'Bite knowledge added',

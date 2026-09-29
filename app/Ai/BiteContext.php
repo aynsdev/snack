@@ -46,7 +46,12 @@ final readonly class BiteContext
     public function __construct(
         public Workspace $workspace,
         public User $user,
-        public Channel|Conversation $container,
+        /*
+         * Null when the tools run outside a conversation — the MCP server,
+         * where an external assistant is the one asking and there is no channel
+         * to reply into. Tools must not depend on it.
+         */
+        public Channel|Conversation|null $container,
         /**
          * The message that summoned Bite, when there was one.
          *
@@ -111,6 +116,10 @@ final readonly class BiteContext
     {
         if ($this->container instanceof Channel) {
             return '#'.$this->container->name;
+        }
+
+        if ($this->container === null) {
+            return 'an external assistant';
         }
 
         return 'a direct message';

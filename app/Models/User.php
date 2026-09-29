@@ -20,6 +20,8 @@ use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
+use Laravel\Passport\Contracts\OAuthenticatable;
+use Laravel\Passport\HasApiTokens;
 
 /**
  * @property int $id
@@ -50,10 +52,10 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
     'timezone', 'status_message', 'status_emoji', 'status_expires_at',
 ])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
-class User extends Authenticatable implements PasskeyUser
+class User extends Authenticatable implements OAuthenticatable, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+    use HasApiTokens, HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
     /**
      * Mirrors the column default so a just-created instance already carries a

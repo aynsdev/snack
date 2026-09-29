@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Actions\Presence\RecordPresence;
+use App\Models\OAuthToken;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Notifications\Channels\WorkspaceDatabaseChannel;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Passport\Passport;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -44,6 +46,37 @@ class AppServiceProvider extends ServiceProvider
         $this->configureNotifications();
         $this->configurePresence();
         $this->configureDevCommands();
+        $this->configurePassport();
+    }
+
+    /**
+     * Passport, which exists here for one reason: letting AI clients reach
+     * the MCP server. See routes/ai.php.
+     *
+     * The consent screen is Snack's own rather than Passport's, because it
+     * asks a question Passport does not know about — which workspace the
+     * assistant should work in. See App\Http\Controllers\Mcp\AuthorizeWorkspaceController.
+     *
+     * OAuth access tokens are short-lived and refreshed by the client, so a
+     * disconnected assistant is locked out within the hour even by a path that
+     * forgot to revoke. Personal tokens from the connectors page keep
+     * Passport's year: they are pasted into config files by hand, and a
+     * credential that silently expires monthly is one people stop trusting.
+     */
+    protected function configurePassport(): void
+    {
+        Passport::useTokenModel(OAuthToken::class);
+
+        Passport::authorizationView(fn (array $parameters) => response()->view('mcp.authorize', [
+            ...$parameters,
+            // Active memberships only — see User::workspaces().
+            'workspaces' => $parameters['user']->workspaces()
+                ->orderBy('name')
+                ->get(['workspaces.id', 'workspaces.name', 'workspaces.slug']),
+        ]));
+
+        Passport::tokensExpireIn(now()->addHour());
+        Passport::refreshTokensExpireIn(now()->addDays(90));
     }
 
     /**
@@ -180,6 +213,15 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute((int) config('snack.webhooks.rate_limit_per_minute'))
                 ->by(is_string($token) ? 'hook:'.hash('sha256', $token) : 'hook-ip:'.$request->ip());
         });
+
+        /*
+         * The MCP server. An assistant working through a question makes a burst
+         * of tool calls in a few seconds, so this sits above the message-read
+         * limit — but it is still one person's credential, and a client stuck in
+         * a retry loop should hit a ceiling rather than the database.
+         */
+        RateLimiter::for('mcp', fn (Request $request) => Limit::perMinute((int) config('snack.mcp.rate_limit_per_minute', 120))
+            ->by('mcp:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
     }
 
     /**
