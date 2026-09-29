@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Mcp\AuthorizationServerMetadataController;
 use App\Http\Middleware\AuthenticateMcpConnector;
 use App\Mcp\Servers\SnackServer;
 use Illuminate\Support\Facades\Route;
@@ -30,6 +31,16 @@ use Laravel\Mcp\Facades\Mcp;
  * domains it may register are limited in config/mcp.php.
  */
 Route::middleware('throttle:20,1')->group(fn () => Mcp::oauthRoutes());
+
+/*
+ * Registered after oauthRoutes() so these replace the package's version of the
+ * same two URLs — see AuthorizationServerMetadataController for what it adds.
+ */
+Route::get('.well-known/oauth-authorization-server', AuthorizationServerMetadataController::class)
+    ->name('mcp.oauth.authorization-server');
+Route::get('.well-known/oauth-authorization-server/{path}', AuthorizationServerMetadataController::class)
+    ->where('path', '.*')
+    ->name('mcp.oauth.authorization-server.nested');
 
 Mcp::web('/mcp', SnackServer::class)
     ->middleware(['auth:api', AuthenticateMcpConnector::class, 'throttle:mcp'])
