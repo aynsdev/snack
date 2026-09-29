@@ -209,3 +209,13 @@ export function useIsHuddlesView(): boolean {
 
     return /^\/w\/[^/]+\/huddles(?:[/?#]|$)/.test(currentUrl);
 }
+
+/**
+ * Whether the current page is anywhere in HR — the overview, the clock, leave,
+ * or an employee file.
+ */
+export function useIsHrView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    return /^\/w\/[^/]+\/hr(?:[/?#]|$)/.test(currentUrl);
+}

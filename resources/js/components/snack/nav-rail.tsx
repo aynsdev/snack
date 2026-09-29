@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     Bookmark,
+    BriefcaseBusiness,
     Folder,
     House,
     Images,
@@ -29,6 +30,7 @@ import {
     useIsCanvasesView,
     useIsFilesView,
     useIsHomeView,
+    useIsHrView,
     useIsProjectsView,
     useIsSavedView,
 } from '@/hooks/use-active-channel';
@@ -44,6 +46,7 @@ import { index as activityIndex } from '@/routes/activity';
 import { index as assetsIndex } from '@/routes/assets';
 import { index as dmsIndex } from '@/routes/conversations';
 import { index as filesIndex } from '@/routes/files';
+import { index as hrIndex } from '@/routes/hr';
 import { index as projectsIndex } from '@/routes/projects';
 import { index as savedIndex } from '@/routes/saved';
 import { show as showWorkspace } from '@/routes/workspaces';
@@ -94,6 +97,7 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
     const isCanvases = useIsCanvasesView();
     const isProjects = useIsProjectsView();
     const isAssets = useIsAssetsView();
+    const isHr = useIsHrView();
 
     const directMessages = Object.values(unread.conversations).reduce(
         (total, counts) => total + counts.messages,
@@ -210,6 +214,19 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
                     label="Assets"
                     href={assetsIndex(workspace.slug)}
                     isActive={isAssets}
+                    onNavigate={onNavigate}
+                />
+
+                {/*
+                 * HR: every member is an employee, so everybody gets the
+                 * clock, leave, holidays and announcements here; admins also
+                 * get the employee files and approvals behind it.
+                 */}
+                <NavRailItem
+                    icon={BriefcaseBusiness}
+                    label="HR"
+                    href={hrIndex(workspace.slug)}
+                    isActive={isHr}
                     onNavigate={onNavigate}
                 />
             </ul>

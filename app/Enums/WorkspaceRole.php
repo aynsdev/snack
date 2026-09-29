@@ -97,6 +97,15 @@ enum WorkspaceRole: string
     }
 
     /**
+     * May run HR: employee files, contracts, leave approvals, time sheets,
+     * holidays, and announcements. Everybody else only sees their own.
+     */
+    public function canManagePeople(): bool
+    {
+        return $this->isAtLeast(self::Admin);
+    }
+
+    /**
      * May read the workspace audit log.
      */
     public function canViewAuditLogs(): bool

@@ -2,6 +2,7 @@ import { router, usePage } from '@inertiajs/react';
 import { PanelLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { HeaderClock } from '@/components/hr/header-clock';
 import { ChannelSync } from '@/components/snack/channel-sync';
 import { ConversationSync } from '@/components/snack/conversation-sync';
 import { HuddleTray } from '@/components/snack/huddle/huddle-tray';
@@ -191,19 +192,23 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
 
                     <div className="flex min-w-0 flex-1 flex-col">
                         {isMobile && (
-                            <button
-                                type="button"
-                                onClick={() => setSidebarOpen(true)}
-                                className="flex items-center gap-2 border-b border-border px-4 py-2.5 text-sm hover:bg-accent md:hidden"
-                            >
-                                <PanelLeft
-                                    aria-hidden="true"
-                                    className="size-4"
-                                />
-                                <span className="font-medium">
-                                    {current.workspace.name}
-                                </span>
-                            </button>
+                            <div className="flex items-center gap-2 border-b border-border pr-3 md:hidden">
+                                <button
+                                    type="button"
+                                    onClick={() => setSidebarOpen(true)}
+                                    className="flex min-w-0 flex-1 items-center gap-2 px-4 py-2.5 text-sm hover:bg-accent"
+                                >
+                                    <PanelLeft
+                                        aria-hidden="true"
+                                        className="size-4 shrink-0"
+                                    />
+                                    <span className="truncate font-medium">
+                                        {current.workspace.name}
+                                    </span>
+                                </button>
+
+                                <HeaderClock />
+                            </div>
                         )}
 
                         <main className="flex min-h-0 flex-1">{children}</main>
