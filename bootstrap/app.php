@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\LeaveInertiaForOAuth;
 use App\Http\Middleware\PreventSharedCaching;
 use App\Http\Middleware\ResolveWorkspace;
 use Illuminate\Foundation\Application;
@@ -40,6 +41,10 @@ return Application::configure(basePath: dirname(__DIR__))
              * the test that pins the order.
              */
             PreventSharedCaching::class,
+
+            // Before Inertia's own middleware, so the OAuth consent screen is
+            // never fetched as an Inertia visit — see the class.
+            LeaveInertiaForOAuth::class,
 
             HandleAppearance::class,
             HandleInertiaRequests::class,

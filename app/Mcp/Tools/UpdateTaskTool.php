@@ -39,8 +39,8 @@ type, title, description, due date, or story points. Only the fields you pass
 are changed. Pass the task reference, such as ENG-42.
 
 - `status`: a column name from `get_project`, such as "Done".
-- `assignee`: @username of a project member, or "none" to unassign. The new
-  assignee is notified.
+- `assignee`: @username of a project member, "me" for the connected person,
+  or "none" to unassign. The new assignee is notified.
 - `due_on`: a date (2026-10-31), or "none" to clear it.
 
 Only change what the person asked you to change.
@@ -92,7 +92,7 @@ class UpdateTaskTool extends SnackTool
             if (strtolower(trim((string) $arguments['assignee'])) === 'none') {
                 $attributes['assignee_id'] = null;
             } else {
-                $person = $this->projectMember($project, $arguments['assignee']);
+                $person = $this->projectMember($project, $arguments['assignee'], $context->user);
 
                 if ($person === null) {
                     return Response::error("Nobody on {$project->key} matches [{$arguments['assignee']}]. They must be a member of the project to be assigned. Nothing was changed.");
@@ -149,7 +149,7 @@ class UpdateTaskTool extends SnackTool
         return [
             'task' => $schema->string()->description('The task reference, such as ENG-42.')->required(),
             'status' => $schema->string()->description('Move to this column, by name.'),
-            'assignee' => $schema->string()->description('@username of a project member, or "none".'),
+            'assignee' => $schema->string()->description('@username of a project member, "me", or "none".'),
             'priority' => $schema->string()->enum(TaskPriority::values()),
             'type' => $schema->string()->enum(TaskType::values()),
             'title' => $schema->string()->description('A new one-line title.'),

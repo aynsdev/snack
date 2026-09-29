@@ -6,8 +6,10 @@ use App\Mcp\Servers\SnackServer;
 use App\Mcp\Tools\CommentOnTaskTool;
 use App\Mcp\Tools\GetProjectTool;
 use App\Mcp\Tools\GetTaskTool;
+use App\Mcp\Tools\ListMyTasksTool;
 use App\Mcp\Tools\ListTasksTool;
 use App\Mcp\Tools\UpdateTaskTool;
+use App\Mcp\Tools\WhoAmITool;
 use App\Models\TaskComment;
 
 /**
@@ -129,4 +131,47 @@ it('comments as the person', function () {
     expect(TaskComment::query()->sole())
         ->author_id->toBe($this->member->id)
         ->body->toBe('Looking into it');
+});
+
+it('tells the assistant who it is connected as', function () {
+    [$user] = connectAs($this->member, $this->workspace);
+
+    SnackServer::actingAs($user)
+        ->tool(WhoAmITool::class)
+        ->assertOk()
+        ->assertSee(["@{$this->member->username}", 'ENG (Engineering)']);
+});
+
+it('lists the person\'s own open tasks across projects', function () {
+    $design = makeProject($this->workspace, $this->owner, ['name' => 'Design', 'key' => 'DES']);
+    addToProject($design, $this->member);
+
+    makeTask($this->project, $this->owner, ['title' => 'Mine on ENG', 'assignee_id' => $this->member->id]);
+    makeTask($design, $this->owner, ['title' => 'Mine on DES', 'assignee_id' => $this->member->id]);
+    makeTask($design, $this->owner, ['title' => 'Somebody else\'s', 'assignee_id' => $this->owner->id]);
+
+    [$user] = connectAs($this->member, $this->workspace);
+
+    SnackServer::actingAs($user)
+        ->tool(ListMyTasksTool::class)
+        ->assertOk()
+        ->assertSee(['Mine on ENG', 'Mine on DES'])
+        ->assertDontSee('Somebody else');
+});
+
+it('understands "me" as an assignee', function () {
+    makeTask($this->project, $this->owner, ['title' => 'Mine', 'assignee_id' => $this->member->id]);
+    [$user] = connectAs($this->member, $this->workspace);
+
+    SnackServer::actingAs($user)
+        ->tool(ListTasksTool::class, ['project' => 'ENG', 'scope' => 'all', 'assignee' => 'me'])
+        ->assertOk()
+        ->assertSee('Mine')
+        ->assertDontSee('Fix the login redirect');
+
+    SnackServer::actingAs($user)
+        ->tool(UpdateTaskTool::class, ['task' => $this->task->reference(), 'assignee' => 'me'])
+        ->assertOk();
+
+    expect($this->task->fresh()->assignee_id)->toBe($this->member->id);
 });

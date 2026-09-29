@@ -179,3 +179,30 @@ it('refuses an approval without the consent screen\'s token', function () {
 
     expect(McpGrant::query()->count())->toBe(0);
 });
+
+it('sends an Inertia visit to the consent screen as a full page load', function () {
+    /*
+     * After logging in, Fortify redirects to oauth/authorize and Inertia
+     * follows that redirect as an XHR. The consent screen is Blade, so Inertia
+     * would show it in a sandboxed dialog where its form cannot submit.
+     */
+    $client = registerClaude($this->redirect);
+    $url = '/oauth/authorize?'.http_build_query([
+        'client_id' => $client->getKey(),
+        'redirect_uri' => $this->redirect,
+        'response_type' => 'code',
+        'scope' => Registrar::OAUTH_SCOPE,
+        'state' => 'xyz',
+        'code_challenge' => str_repeat('a', 43),
+        'code_challenge_method' => 'S256',
+    ]);
+
+    $location = $this->actingAs($this->member)
+        ->get($url, ['X-Inertia' => 'true'])
+        ->assertStatus(409)
+        ->headers->get('X-Inertia-Location');
+
+    // The same request, loaded for real (the query comes back sorted).
+    expect($location)->toStartWith(url('/oauth/authorize?'))
+        ->and($location)->toContain('client_id='.$client->getKey());
+});

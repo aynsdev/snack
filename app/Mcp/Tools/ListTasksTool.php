@@ -33,7 +33,8 @@ active sprint, for a sprint project) and leaves finished work out.
 - `scope`: `board` (default) — the current board; `backlog` — tasks not in any
   sprint; `all` — everything.
 - `status`: a column name from `get_project`, such as "In review".
-- `assignee`: @username, or "none" for unassigned tasks.
+- `assignee`: @username, "me" for the connected person, or "none" for
+  unassigned tasks.
 
 Each row starts with the task reference (ENG-42) that `get_task`,
 `update_task`, and `comment_on_task` take.
@@ -83,7 +84,7 @@ class ListTasksTool extends SnackTool
         if (strtolower($assignee) === 'none') {
             $query->whereNull('assignee_id');
         } elseif ($assignee !== '') {
-            $person = $this->projectMember($project, $assignee);
+            $person = $this->projectMember($project, $assignee, $context->user);
 
             if ($person === null) {
                 return Response::error("Nobody on {$project->key} matches [{$assignee}].");
@@ -135,7 +136,7 @@ class ListTasksTool extends SnackTool
             'project' => $schema->string()->description('The project key (ENG) or name.')->required(),
             'scope' => $schema->string()->description('Which tasks: board (default), backlog, or all.')->enum(['board', 'backlog', 'all']),
             'status' => $schema->string()->description('Optional: only tasks in this column, by name.'),
-            'assignee' => $schema->string()->description('Optional: @username, or "none" for unassigned.'),
+            'assignee' => $schema->string()->description('Optional: @username, "me", or "none" for unassigned.'),
             'type' => $schema->string()->description('Optional: only this type.')->enum(TaskType::values()),
             'priority' => $schema->string()->description('Optional: only this priority.')->enum(TaskPriority::values()),
             'include_done' => $schema->boolean()->description('Include finished tasks. Defaults to false unless a status is given.'),

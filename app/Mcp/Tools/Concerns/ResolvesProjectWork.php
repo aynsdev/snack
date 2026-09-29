@@ -78,17 +78,25 @@ trait ResolvesProjectWork
     }
 
     /**
-     * A member of the project by @username or exact name.
+     * A member of the project by @username, exact name, or "me".
      *
      * Username first, and both exact: "Chris" must not assign work to
      * whichever Christopher the database returns first.
      */
-    protected function projectMember(Project $project, mixed $named): ?User
+    protected function projectMember(Project $project, mixed $named, ?User $me = null): ?User
     {
         $name = is_string($named) ? trim(ltrim(trim($named), '@')) : '';
 
         if ($name === '') {
             return null;
+        }
+
+        /*
+         * "Me" is the person the token belongs to — the one name an assistant
+         * cannot otherwise resolve, since it is not told whose account it is.
+         */
+        if ($me !== null && in_array(strtolower($name), ['me', 'myself'], true)) {
+            return $project->hasMember($me) ? $me : null;
         }
 
         return $project->users()->where('users.username', $name)->first()
