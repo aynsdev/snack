@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Connectors\CreateConnectorToken;
 use App\Actions\Projects\CreateProject;
 use App\Enums\ChannelRole;
 use App\Enums\ChannelType;
@@ -44,6 +45,7 @@ use App\Models\WorkspaceMember;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\Events\BroadcastNotificationCreated;
 use Illuminate\Support\Facades\Event;
+use Laravel\Passport\AccessToken;
 use Tests\TestCase;
 
 /*
@@ -340,4 +342,42 @@ function makeHuddle(Channel|Conversation $container, array $participants = []): 
         ->startedBy($participants[0] ?? User::factory()->create())
         ->withParticipants($participants)
         ->create();
+}
+
+/*
+|--------------------------------------------------------------------------
+| MCP
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * A personal connector token for this person, and the person with it applied —
+ * the state `auth:api` leaves behind on a real request.
+ *
+ * @return array{0: User, 1: string}
+ */
+function connectAs(User $user, Workspace $workspace): array
+{
+    $issued = app(CreateConnectorToken::class)->handle($workspace, $user, 'Test client');
+    $token = $issued->getToken();
+
+    $user->withAccessToken(new AccessToken([
+        'oauth_access_token_id' => $token->getKey(),
+        'oauth_client_id' => $token->client_id,
+        'oauth_user_id' => $user->getKey(),
+        'oauth_scopes' => $token->scopes,
+    ]));
+
+    return [$user, $issued->accessToken];
+}
+
+/**
+ * A JSON-RPC request body for the MCP endpoint.
+ *
+ * @param  array<string, mixed>  $params
+ * @return array<string, mixed>
+ */
+function mcpCall(string $method, array $params = []): array
+{
+    return ['jsonrpc' => '2.0', 'id' => 1, 'method' => $method, 'params' => $params];
 }

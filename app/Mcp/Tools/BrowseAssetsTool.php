@@ -29,7 +29,8 @@ Browse the workspace's asset library — its logos, brand files, templates, and
 company documents — one folder at a time. With no folder, lists the top level.
 Pass a folder id or name from a previous call to open it.
 
-Each file is listed with a file id that `read_file` takes. To search the
+Each file is listed with a file id that `read_file` takes, and a download
+link to give the person when they want the file itself. To search the
 library by name instead, use `find_files`.
 TEXT)]
 #[IsReadOnly]
@@ -86,12 +87,13 @@ class BrowseAssetsTool extends SnackTool
             ->limit(200)
             ->get()
             ->map(fn (Asset $asset): string => sprintf(
-                '- file #%d %s (%s, %s)%s',
+                "- file #%d %s (%s, %s)%s\n  download: %s",
                 $asset->file->id,
                 $asset->name,
                 $asset->file->original_name,
                 $asset->file->humanSize(),
                 $asset->description ? " — {$asset->description}" : '',
+                $this->downloadUrl($asset->file),
             ))
             ->implode("\n");
 

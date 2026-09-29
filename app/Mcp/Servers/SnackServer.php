@@ -46,7 +46,8 @@ is up front: call `whoami` whenever a request says "me", "my", or "I".
 - Use `browse_workspace` to turn a name ("the design channel", "Ada", "the
   mobile project") into the exact channel, @username, or project key.
 - For files, `find_files` searches by name, `browse_assets` walks the asset
-  library's folders, and `read_file` opens any file id they return.
+  library's folders, and `read_file` opens any file id they return. When the
+  person wants a file itself, give them the download link those tools return.
 - For project work, `list_my_tasks` lists the person's own tasks across every
   project, `get_project` shows a board's columns and people, `list_tasks` lists
   its cards (assignee "me" works), and `get_task` opens one by reference

@@ -36,6 +36,9 @@ Read a file's contents by its file id — from `find_files`, `browse_assets`,
 `get_task`, or a message. Text files (Markdown, CSV, JSON, code, plain text)
 come back as text, images as images, and PDFs as an attached document.
 Other kinds of file cannot be read; their name, type, and size are returned.
+
+Every result includes a download link. When the person asks for a file —
+"give me the logo", "send me the contract" — give them that link.
 TEXT)]
 #[IsReadOnly]
 class ReadFileTool extends SnackTool
@@ -54,20 +57,22 @@ class ReadFileTool extends SnackTool
             return Response::error('There is no file with that id that this person can read. Use `find_files` or `browse_assets` to get a valid id.');
         }
 
-        $summary = "[{$file->original_name}] {$file->mime_type}, {$file->humanSize()}";
+        $summary = "[{$file->original_name}] {$file->mime_type}, {$file->humanSize()}\n"
+            .'Download link (give this to the person when they want the file; it opens for them while signed in to Snack): '
+            .$this->downloadUrl($file);
 
         if (! $file->isTextual() && ! $file->isImage() && ! $file->isPdf()) {
-            return Response::text("{$summary}. This kind of file cannot be read here; describe it by its name and type.");
+            return Response::text("{$summary}\n\nThis kind of file cannot be read here; describe it by its name and type.");
         }
 
         if ($file->size > (int) config('snack.mcp.max_file_bytes')) {
-            return Response::text("{$summary}. It is too large to read here.");
+            return Response::text("{$summary}\n\nIt is too large to read here.");
         }
 
         $bytes = $this->bytes($file);
 
         if ($bytes === null) {
-            return Response::error("{$summary} could not be read from storage.");
+            return Response::error("[{$file->original_name}] could not be read from storage.");
         }
 
         if ($file->isTextual()) {

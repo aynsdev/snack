@@ -12,10 +12,8 @@ use App\Mcp\Tools\ReadThreadTool;
 use App\Mcp\Tools\SendMessageTool;
 use App\Models\Message;
 use App\Models\Task;
-use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
-use Laravel\Passport\AccessToken;
 
 /**
  * The MCP server: an AI client acting as the person who created its token,
@@ -29,32 +27,6 @@ beforeEach(function () {
     $this->channel = makeChannel($this->workspace, ChannelType::Public, ['name' => 'general', 'slug' => 'general']);
     addToChannel($this->channel, $this->member);
 });
-
-/**
- * A personal connector token for this person, and the person with it applied —
- * the state `auth:api` leaves behind on a real request.
- *
- * @return array{0: User, 1: string}
- */
-function connectAs(User $user, Workspace $workspace): array
-{
-    $issued = app(CreateConnectorToken::class)->handle($workspace, $user, 'Test client');
-    $token = $issued->getToken();
-
-    $user->withAccessToken(new AccessToken([
-        'oauth_access_token_id' => $token->getKey(),
-        'oauth_client_id' => $token->client_id,
-        'oauth_user_id' => $user->getKey(),
-        'oauth_scopes' => $token->scopes,
-    ]));
-
-    return [$user, $issued->accessToken];
-}
-
-function mcpCall(string $method, array $params = []): array
-{
-    return ['jsonrpc' => '2.0', 'id' => 1, 'method' => $method, 'params' => $params];
-}
 
 describe('the HTTP endpoint', function () {
     it('lists the tools for a connector token', function () {
