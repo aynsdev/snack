@@ -91,7 +91,7 @@ class TimeEntryController extends Controller
             'clock_out_at' => $timeEntry->clock_out_at?->toIso8601String(),
         ];
 
-        $timeEntry->update($request->validated());
+        $timeEntry->update($request->times());
 
         $audit->handle($workspace, AuditAction::TimeEntryUpdated, $request->user(), $timeEntry, $before, [
             'employee' => $timeEntry->employee->user->name,

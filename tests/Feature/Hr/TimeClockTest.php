@@ -115,6 +115,23 @@ it('lets HR correct a time entry', function () {
     expect($entry->fresh()->minutesWorked())->toBe(510);
 });
 
+it('keeps the instant a corrected shift was sent in, whatever its offset', function () {
+    $entry = $this->employee->timeEntries()->create(['workspace_id' => $this->workspace->id, 'clock_in_at' => now()]);
+
+    // 7:00 AM to 5:00 PM in Manila, sent as UTC the way the browser does.
+    $this->actingAs($this->owner)
+        ->patch("{$this->base}/{$entry->id}", [
+            'clock_in_at' => '2026-09-29T23:00:00.000Z',
+            'clock_out_at' => '2026-09-30T09:00:00.000Z',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $entry->refresh();
+
+    expect($entry->clock_in_at->toIso8601String())->toBe('2026-09-30T07:00:00+08:00')
+        ->and($entry->clock_out_at->toIso8601String())->toBe('2026-09-30T17:00:00+08:00');
+});
+
 it('saves the geofence in HR settings', function () {
     $this->actingAs($this->owner)
         ->patch("/w/{$this->workspace->slug}/hr/settings", [
