@@ -106,6 +106,13 @@ export default function ConversationShow({
         [conversation.participants, currentUser?.id],
     );
 
+    // Shared by the timeline's composer and the thread panel's, so a reply can
+    // @mention the same people a top-level message can.
+    const mentionSource = useMemo<MentionSource>(
+        () => ({ kind: 'local', people: others }),
+        [others],
+    );
+
     // Memoized for the same reason `others` is; the huddle provider's callbacks
     // close over it.
     const huddleTarget = useMemo<HuddleTarget>(
@@ -176,6 +183,7 @@ export default function ConversationShow({
                     pinned={pinned}
                     history={history}
                     others={others}
+                    mentionSource={mentionSource}
                     onOpenThread={(message) =>
                         setPanel({ kind: 'thread', rootId: message.id })
                     }
@@ -210,6 +218,7 @@ export default function ConversationShow({
                         conversation: conversation.id,
                     })}
                     containerName={conversation.display_name}
+                    mentionSource={mentionSource}
                     currentUser={currentUser}
                     canPost={canPost}
                     onClose={() => setPanel(null)}
@@ -232,6 +241,7 @@ function ConversationTimeline({
     pinned,
     history,
     others,
+    mentionSource,
     onOpenThread,
 }: {
     conversation: Conversation;
@@ -240,6 +250,7 @@ function ConversationTimeline({
     pinned: Message[];
     history: MessagePage;
     others: SnackUser[];
+    mentionSource: MentionSource;
     onOpenThread: (message: Message) => void;
 }) {
     const workspace = useWorkspace();
@@ -278,11 +289,6 @@ function ConversationTimeline({
     const biteReplying = useBiteReplying({
         channelName: channels.conversation(conversation.id),
     });
-
-    const mentionSource = useMemo<MentionSource>(
-        () => ({ kind: 'local', people: others }),
-        [others],
-    );
 
     const pins = usePins({
         broadcastChannel: channels.conversation(conversation.id),

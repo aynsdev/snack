@@ -58,7 +58,8 @@ export type NotificationReason =
  * `all` is the three lists interleaved by time rather than a fourth list of its
  * own, which is why the page can render every tab from the same rows.
  */
-export type ActivityTab = 'all' | 'notifications' | 'mentions' | 'threads';
+export type ActivityTab =
+    'all' | 'unread' | 'notifications' | 'mentions' | 'threads';
 
 /** Mirrors App\Enums\ProjectRole. */
 export type ProjectRole = 'lead' | 'member';
@@ -557,6 +558,11 @@ export type Attachment = {
     download_url: string;
     thumbnail_url: string | null;
     preview_url: string | null;
+    /**
+     * Where the inline player streams a video from, with range support. Null
+     * for anything that is not a browser-playable video.
+     */
+    stream_url: string | null;
     created_at: string | null;
 };
 

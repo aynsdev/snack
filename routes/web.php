@@ -1117,6 +1117,8 @@ Route::middleware(['auth', 'signed:relative'])->group(function () {
     Route::get('files/{attachment}', [DownloadController::class, 'show'])->name('files.show');
     Route::get('files/{attachment}/thumbnail', [DownloadController::class, 'thumbnail'])
         ->name('files.thumbnail');
+    Route::get('files/{attachment}/play', [DownloadController::class, 'play'])
+        ->name('files.play');
 });
 
 require __DIR__.'/settings.php';

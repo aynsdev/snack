@@ -41,14 +41,27 @@ class ActivityFeed
      * exists because {@see NotificationRecipients} already established that this
      * person could see the message when it was written.
      *
+     * `$unreadOnly` is the Unread tab: the rows the rail's badge is counting,
+     * bounded by their own, larger limit so that a backlog never hides the very
+     * rows the badge says are waiting.
+     *
      * @return array<int, array<string, mixed>>
      */
-    public function notifications(Workspace $workspace, User $user, Request $request, ?int $limit = null): array
-    {
+    public function notifications(
+        Workspace $workspace,
+        User $user,
+        Request $request,
+        ?int $limit = null,
+        bool $unreadOnly = false,
+    ): array {
         $notifications = Notification::query()
             ->forWorkspace($workspace, $user)
+            ->when($unreadOnly, fn ($query) => $query
+                ->whereNull('read_at')
+                ->limit((int) config('snack.notifications.unread_limit', 200)))
             ->latest()
-            ->limit($limit ?? (int) config('snack.notifications.list_limit', 50))
+            ->when(! $unreadOnly, fn ($query) => $query
+                ->limit($limit ?? (int) config('snack.notifications.list_limit', 50)))
             ->get();
 
         return NotificationResource::collection(

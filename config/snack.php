@@ -419,6 +419,13 @@ return [
         'inline_preview_max_size' => 25 * 1024 * 1024,
 
         /*
+         * How long the bucket URL an inline video player is redirected to stays
+         * valid. Long enough to watch a recording end to end — the player keeps
+         * seeking against it — and nothing more.
+         */
+        'stream_url_ttl_minutes' => 120,
+
+        /*
          * How long a download link stays valid. Long enough to click, short
          * enough that a URL pasted somewhere else stops working — the signature
          * is a convenience, not the authorization, which is re-checked on every
@@ -606,6 +613,10 @@ return [
 
     'notifications' => [
         'list_limit' => 50,
+
+        // The Unread tab's ceiling. Higher than the history's, because every
+        // row the badge counts should be reachable from the tab it points at.
+        'unread_limit' => 200,
 
         'idle_minutes' => (int) env('SNACK_NOTIFICATION_IDLE_MINUTES', 10),
 

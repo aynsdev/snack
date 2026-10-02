@@ -93,7 +93,27 @@ export default function ChannelShow({
     const [addingPeople, setAddingPeople] = useState(false);
 
     /*
-     * Memoized for the reason `mentionSource` below is: an object rebuilt every
+     * Memoized for the same reason `endpoints` is in use-channel-messages: an
+     * object rebuilt every render gives every hook that depends on it a fresh
+     * identity, which is how the mention picker ended up re-fetching in a loop.
+     *
+     * Built here rather than in the timeline because the thread panel's
+     * composer needs the same roster — a reply can @mention as well.
+     */
+    const mentionSource = useMemo<MentionSource>(
+        () => ({
+            kind: 'remote',
+            url: (term) =>
+                mentionable.url(
+                    { workspace: workspace.slug, channel: channel.slug },
+                    { query: { q: term } },
+                ),
+        }),
+        [workspace.slug, channel.slug],
+    );
+
+    /*
+     * Memoized for the reason `mentionSource` above is: an object rebuilt every
      * render gives every hook depending on it a fresh identity, and this one is
      * read by the huddle provider's callbacks.
      */
@@ -196,6 +216,7 @@ export default function ChannelShow({
                     canPin={canPin}
                     pinned={pinned}
                     history={history}
+                    mentionSource={mentionSource}
                     onOpenThread={(message) =>
                         setPanel({ kind: 'thread', rootId: message.id })
                     }
@@ -233,6 +254,7 @@ export default function ChannelShow({
                         channel: channel.slug,
                     })}
                     containerName={`#${channel.slug}`}
+                    mentionSource={mentionSource}
                     currentUser={currentUser}
                     canPost={canPost && channel.is_member}
                     onClose={() => setPanel(null)}
@@ -254,6 +276,7 @@ function ChannelTimeline({
     canPin,
     pinned,
     history,
+    mentionSource,
     onOpenThread,
 }: {
     channel: Channel;
@@ -261,6 +284,7 @@ function ChannelTimeline({
     canPin: boolean;
     pinned: Message[];
     history: MessagePage;
+    mentionSource: MentionSource;
     onOpenThread: (message: Message) => void;
 }) {
     const workspace = useWorkspace();
@@ -292,23 +316,6 @@ function ChannelTimeline({
     const biteReplying = useBiteReplying({
         channelName: channels.channel(channel.id),
     });
-
-    /*
-     * Memoized for the same reason `endpoints` is in use-channel-messages: an
-     * object rebuilt every render gives every hook that depends on it a fresh
-     * identity, which is how the mention picker ended up re-fetching in a loop.
-     */
-    const mentionSource = useMemo<MentionSource>(
-        () => ({
-            kind: 'remote',
-            url: (term) =>
-                mentionable.url(
-                    { workspace: workspace.slug, channel: channel.slug },
-                    { query: { q: term } },
-                ),
-        }),
-        [workspace.slug, channel.slug],
-    );
 
     const pins = usePins({
         broadcastChannel: channels.channel(channel.id),

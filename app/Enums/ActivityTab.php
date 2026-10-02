@@ -15,6 +15,12 @@ enum ActivityTab: string
     /** Everything, interleaved newest first. */
     case All = 'all';
 
+    /**
+     * Only what still needs reading — the rows behind the rail's badge, with
+     * nothing already handled in the way of finding them.
+     */
+    case Unread = 'unread';
+
     case Notifications = 'notifications';
 
     case Mentions = 'mentions';
@@ -25,6 +31,7 @@ enum ActivityTab: string
     {
         return match ($this) {
             self::All => 'All',
+            self::Unread => 'Unread',
             self::Notifications => 'Notifications',
             self::Mentions => 'Mentions',
             self::Threads => 'Threads',
@@ -36,9 +43,17 @@ enum ActivityTab: string
         return $this === self::All;
     }
 
+    /**
+     * Whether the notification list is cut down to the rows still unread.
+     */
+    public function isUnreadOnly(): bool
+    {
+        return $this === self::Unread;
+    }
+
     public function includesNotifications(): bool
     {
-        return $this === self::All || $this === self::Notifications;
+        return $this === self::All || $this === self::Unread || $this === self::Notifications;
     }
 
     public function includesMentions(): bool

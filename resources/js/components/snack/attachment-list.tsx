@@ -29,7 +29,7 @@ const KIND_ICONS: Record<AttachmentKind, typeof FileIcon> = {
 /**
  * The files attached to a message.
  *
- * Images render as previews and everything else as a chip, because those are two
+ * Images render as previews, videos as players, and everything else as a chip, because those are two
  * genuinely different things to a reader: a screenshot is the message, and a
  * spreadsheet is a thing to open later. Collapsing both into one row of
  * filenames would bury the first; previewing both would fill the timeline with
@@ -58,8 +58,14 @@ export function AttachmentList({
     const pdfs = attachments.filter(
         (file) => file.kind === 'pdf' && file.preview_url !== null,
     );
+    const videos = attachments.filter(
+        (file) => file.kind === 'video' && file.stream_url !== null,
+    );
     const others = attachments.filter(
-        (file) => !images.includes(file) && !pdfs.includes(file),
+        (file) =>
+            !images.includes(file) &&
+            !pdfs.includes(file) &&
+            !videos.includes(file),
     );
 
     return (
@@ -95,6 +101,10 @@ export function AttachmentList({
                     ))}
                 </div>
             )}
+
+            {videos.map((file) => (
+                <VideoPreview key={file.id} attachment={file} />
+            ))}
 
             {others.map((file) => (
                 <FileChip key={file.id} attachment={file} />
@@ -227,6 +237,53 @@ function ImagePreview({
 
             <span className="sr-only">Open {attachment.name}</span>
         </button>
+    );
+}
+
+/**
+ * A video, played where it was sent.
+ *
+ * `preload="metadata"` fetches the first frame and the duration through a range
+ * request and nothing more, so a timeline full of recordings costs a few
+ * kilobytes each until somebody presses play. The native controls bring
+ * fullscreen, scrubbing, and picture-in-picture without reimplementing any of
+ * them, which is why there is no dialog here as there is for images.
+ */
+function VideoPreview({ attachment }: { attachment: Attachment }) {
+    return (
+        <figure className="w-full max-w-lg overflow-hidden rounded-lg border border-border bg-card">
+            <video
+                src={attachment.stream_url ?? undefined}
+                controls
+                playsInline
+                preload="metadata"
+                aria-label={attachment.name}
+                className="max-h-80 w-full bg-black"
+            />
+
+            <figcaption className="flex items-center gap-2.5 px-3 py-2">
+                <FileVideo
+                    aria-hidden="true"
+                    className="size-4 shrink-0 text-brand"
+                />
+                <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                        {attachment.name}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                        {attachment.human_size}
+                    </span>
+                </span>
+                <a
+                    href={attachment.download_url}
+                    download={attachment.name}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand"
+                >
+                    <Download aria-hidden="true" className="size-4" />
+                    <span className="sr-only">Download {attachment.name}</span>
+                </a>
+            </figcaption>
+        </figure>
     );
 }
 

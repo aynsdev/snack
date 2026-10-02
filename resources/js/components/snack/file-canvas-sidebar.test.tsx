@@ -67,6 +67,7 @@ function makeFile(overrides: Partial<FileRow> = {}): FileRow {
         is_animated: false,
         download_url: '/files/4?signature=signed',
         preview_url: '/files/4?inline=1&signature=signed',
+        stream_url: null,
         thumbnail_url: null,
         created_at: '2026-07-31T09:00:00+00:00',
         uploader: null,

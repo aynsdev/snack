@@ -59,7 +59,7 @@ class ActivityController extends Controller
              * the empty states depend on the difference.
              */
             'notifications' => $tab->includesNotifications()
-                ? $this->feed->notifications($workspace, $user, $request, $limit)
+                ? $this->feed->notifications($workspace, $user, $request, $limit, unreadOnly: $tab->isUnreadOnly())
                 : null,
 
             'mentions' => $tab->includesMentions()

@@ -18,6 +18,7 @@ function makeAttachment(overrides: Partial<Attachment> = {}): Attachment {
         download_url: '/files/1?signature=abc',
         thumbnail_url: null,
         preview_url: null,
+        stream_url: null,
         created_at: '2026-07-31T09:00:00+00:00',
         ...overrides,
     };
@@ -35,6 +36,49 @@ describe('AttachmentList', () => {
         const { container } = render(<AttachmentList attachments={[]} />);
 
         expect(container).toBeEmptyDOMElement();
+    });
+
+    it('plays a video inline rather than offering it as a download', () => {
+        const { container } = render(
+            <AttachmentList
+                attachments={[
+                    makeAttachment({
+                        name: 'demo.mp4',
+                        mime_type: 'video/mp4',
+                        kind: 'video',
+                        stream_url: '/files/1/play?signature=abc',
+                    }),
+                ]}
+            />,
+        );
+
+        const video = container.querySelector('video');
+
+        expect(video).toHaveAttribute('src', '/files/1/play?signature=abc');
+        // Metadata only: a timeline of clips must not download them all.
+        expect(video).toHaveAttribute('preload', 'metadata');
+        expect(
+            screen.getByRole('link', { name: /download demo\.mp4/i }),
+        ).toHaveAttribute('href', '/files/1?signature=abc');
+    });
+
+    it('falls back to a chip for a video the browser cannot play', () => {
+        const { container } = render(
+            <AttachmentList
+                attachments={[
+                    makeAttachment({
+                        name: 'raw.mkv',
+                        mime_type: 'video/x-matroska',
+                        kind: 'video',
+                    }),
+                ]}
+            />,
+        );
+
+        expect(container.querySelector('video')).toBeNull();
+        expect(
+            screen.getByRole('link', { name: /raw\.mkv/ }),
+        ).toBeInTheDocument();
     });
 
     it('renders a non-image as a download chip', () => {
