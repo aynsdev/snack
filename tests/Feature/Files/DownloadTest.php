@@ -267,3 +267,66 @@ it('404s a thumbnail that has not been generated', function () {
         ))
         ->assertNotFound();
 });
+
+/**
+ * A video in the timeline plays inline, and seeking needs `Range`: Safari will
+ * not play from a server that cannot answer one at all.
+ */
+it('streams a playable video with range support', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $channel = makeChannel($workspace);
+    addToChannel($channel, $owner);
+
+    $attachment = attachedFile($channel, $owner, str_repeat('v', 1000));
+    $attachment->update(['original_name' => 'demo.mp4', 'mime_type' => 'video/mp4']);
+
+    $streamUrl = AttachmentResource::payload($attachment->fresh())['stream_url'];
+
+    expect($streamUrl)->toStartWith('/files/');
+
+    $response = actingAs($owner)->get($streamUrl, ['Range' => 'bytes=0-99']);
+
+    $response->assertStatus(206);
+
+    expect($response->headers->get('Content-Type'))->toBe('video/mp4')
+        ->and($response->headers->get('Content-Range'))->toBe('bytes 0-99/1000')
+        ->and($response->headers->get('X-Content-Type-Options'))->toBe('nosniff');
+});
+
+it('offers no player for anything a browser cannot play', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $channel = makeChannel($workspace);
+    addToChannel($channel, $owner);
+
+    $attachment = attachedFile($channel, $owner);
+
+    expect(AttachmentResource::payload($attachment)['stream_url'])->toBeNull();
+
+    actingAs($owner)
+        ->get(URL::temporarySignedRoute(
+            'files.play',
+            now()->addHour(),
+            ['attachment' => $attachment->id],
+            absolute: false,
+        ))
+        ->assertNotFound();
+});
+
+it('refuses a video to someone who cannot read its message', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $channel = makeChannel($workspace, ChannelType::Private);
+    addToChannel($channel, $owner);
+    $outsider = joinWorkspace($workspace);
+
+    $attachment = attachedFile($channel, $owner);
+    $attachment->update(['mime_type' => 'video/mp4']);
+
+    actingAs($outsider)
+        ->get(URL::temporarySignedRoute(
+            'files.play',
+            now()->addHour(),
+            ['attachment' => $attachment->id],
+            absolute: false,
+        ))
+        ->assertNotFound();
+});

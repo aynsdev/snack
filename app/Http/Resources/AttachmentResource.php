@@ -104,6 +104,16 @@ class AttachmentResource extends JsonResource
                 ? self::signed('files.show', $attachment, inline: true)
                 : null,
 
+            /*
+             * Where an inline player reads a video from. No size ceiling: the
+             * player asks for byte ranges, so a 200 MB clip costs its metadata
+             * until somebody presses play — unlike an image, which is fetched
+             * whole the moment it scrolls into view.
+             */
+            'stream_url' => $attachment->isPlayableVideo()
+                ? self::signed('files.play', $attachment)
+                : null,
+
             'created_at' => $attachment->created_at?->toIso8601String(),
         ];
     }

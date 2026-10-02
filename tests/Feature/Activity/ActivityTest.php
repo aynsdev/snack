@@ -208,3 +208,79 @@ it('keeps the standalone pages serving the same lists', function () {
     $this->get(route('threads.index', $workspace))
         ->assertInertia(fn ($page) => $page->component('threads/index')->has('threads', 1));
 });
+
+it('lists only what is still unread on the Unread tab', function () {
+    [$workspace, $owner] = seedActivity();
+
+    // Already handled: on the history, but not among what is waiting.
+    Notification::query()->create([
+        'id' => (string) Str::uuid(),
+        'type' => NotificationReason::Mention->value,
+        'notifiable_type' => $owner->getMorphClass(),
+        'notifiable_id' => $owner->id,
+        'workspace_id' => $workspace->id,
+        'data' => ['preview' => 'old news'],
+        'read_at' => now(),
+    ]);
+
+    $this->actingAs($owner);
+
+    visitActivity($workspace, 'unread')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('tab', 'unread')
+            ->has('notifications', 1)
+            ->where('notifications.0.is_read', false)
+            ->where('mentions', null)
+            ->where('threads', null)
+            ->where('snack.current.unread.notifications', 1));
+});
+
+it('reaches every unread row the badge counts, however far back', function () {
+    [$workspace, $owner] = seedActivity();
+
+    config(['snack.activity.merged_limit' => 1]);
+
+    // Newer, read rows that push the unread one off the All tab's slice.
+    foreach (range(1, 3) as $minutes) {
+        Notification::query()->create([
+            'id' => (string) Str::uuid(),
+            'type' => NotificationReason::Mention->value,
+            'notifiable_type' => $owner->getMorphClass(),
+            'notifiable_id' => $owner->id,
+            'workspace_id' => $workspace->id,
+            'data' => ['preview' => 'read already'],
+            'read_at' => now(),
+            'created_at' => now()->addMinutes($minutes),
+        ]);
+    }
+
+    $this->actingAs($owner);
+
+    visitActivity($workspace)
+        ->assertInertia(fn ($page) => $page
+            ->where('notifications.0.is_read', true)
+            ->where('snack.current.unread.notifications', 1));
+
+    visitActivity($workspace, 'unread')
+        ->assertInertia(fn ($page) => $page
+            ->has('notifications', 1)
+            ->where('notifications.0.is_read', false));
+});
+
+it('does not badge a notification whose message was deleted', function () {
+    [$workspace, $owner] = seedActivity();
+
+    Message::query()->where('body', 'hey @owner')->first()->delete();
+
+    $this->actingAs($owner);
+
+    /*
+     * The list hides it, so counting it would light a badge for a row that
+     * cannot be found or opened — a count that never clears.
+     */
+    visitActivity($workspace, 'unread')
+        ->assertInertia(fn ($page) => $page
+            ->has('notifications', 0)
+            ->where('snack.current.unread.notifications', 0));
+});

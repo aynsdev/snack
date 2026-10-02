@@ -1,5 +1,12 @@
 import { Form, Head, Link } from '@inertiajs/react';
-import { AtSign, Bell, CheckCheck, Inbox, MessagesSquare } from 'lucide-react';
+import {
+    AtSign,
+    Bell,
+    CheckCheck,
+    Inbox,
+    MailOpen,
+    MessagesSquare,
+} from 'lucide-react';
 import { useMemo } from 'react';
 import { EmptyState } from '@/components/snack/empty-state';
 import { MentionRow } from '@/components/snack/mention-row';
@@ -7,7 +14,11 @@ import { NotificationRow } from '@/components/snack/notification-row';
 import { ThreadRow } from '@/components/snack/thread-row';
 import { Button } from '@/components/ui/button';
 import { useNotifications } from '@/hooks/use-notifications';
-import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
+import {
+    useCurrentUser,
+    useUnreadState,
+    useWorkspace,
+} from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import { index as activityIndex } from '@/routes/activity';
 import { update as markAllRead } from '@/routes/notifications/read';
@@ -63,7 +74,14 @@ export default function ActivityIndex({
         [live, mentions, threads],
     );
 
-    const unread = live.filter((entry) => !entry.is_read).length;
+    /*
+     * The server's count, not the rows on screen. The two used to be the same
+     * number only when every unread row fitted in the page: on All, with twenty
+     * of each kind, an older unread row lit the rail's badge while this header
+     * said nothing and "Mark all read" stayed hidden — a count with no way to
+     * find or clear what it was counting. The Unread tab lists those rows.
+     */
+    const unread = useUnreadState().notifications;
 
     return (
         <>
@@ -80,19 +98,13 @@ export default function ActivityIndex({
                             Activity
                         </h1>
 
-                        {unread > 0 && (
-                            <span className="rounded-full bg-mention px-1.5 py-0.5 text-[0.6875rem] leading-none font-bold text-mention-foreground tabular-nums">
-                                {unread}
-                            </span>
-                        )}
-
                         {/*
-                         * Only where it applies. Mentions and threads are read
-                         * by opening what they point at, so a button offering to
-                         * clear them from here would be a promise this page
-                         * cannot keep.
+                         * Offered on every tab, because what it clears is the
+                         * badge — notifications, which every mention and
+                         * followed reply also raises — rather than the list
+                         * currently open.
                          */}
-                        {notifications !== null && unread > 0 && (
+                        {unread > 0 && (
                             <Form
                                 {...markAllRead.form(workspace.slug)}
                                 className="ml-auto"
@@ -119,6 +131,7 @@ export default function ActivityIndex({
                                 label={label}
                                 icon={icon}
                                 isActive={value === tab}
+                                count={value === 'unread' ? unread : 0}
                             />
                         ))}
                     </nav>
@@ -175,6 +188,7 @@ const TABS: {
     icon: typeof Bell;
 }[] = [
     { value: 'all', label: 'All', icon: Inbox },
+    { value: 'unread', label: 'Unread', icon: MailOpen },
     { value: 'notifications', label: 'Notifications', icon: Bell },
     { value: 'mentions', label: 'Mentions', icon: AtSign },
     { value: 'threads', label: 'Threads', icon: MessagesSquare },
@@ -186,12 +200,14 @@ function ActivityTabLink({
     label,
     icon: Icon,
     isActive,
+    count,
 }: {
     workspaceSlug: string;
     tab: ActivityTab;
     label: string;
     icon: typeof Bell;
     isActive: boolean;
+    count: number;
 }) {
     return (
         <Link
@@ -213,6 +229,12 @@ function ActivityTabLink({
         >
             <Icon aria-hidden="true" className="size-4" />
             {label}
+            {count > 0 && (
+                <span className="rounded-full bg-mention px-1.5 py-0.5 text-[0.6875rem] leading-none font-bold text-mention-foreground tabular-nums">
+                    {count > 99 ? '99+' : count}
+                    <span className="sr-only"> unread</span>
+                </span>
+            )}
         </Link>
     );
 }
@@ -297,6 +319,12 @@ const EMPTY_STATES: Record<
         title: 'Nothing waiting',
         description:
             'Mentions, direct messages, and replies in threads you follow all land here — so catching up is one list rather than three.',
+    },
+    unread: {
+        icon: CheckCheck,
+        title: 'All caught up',
+        description:
+            'Everything raised to you has been read. New mentions, direct messages, and thread replies show up here until you open them.',
     },
     notifications: {
         icon: Bell,

@@ -1,5 +1,6 @@
 import { Bell, BellOff, Loader2 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import type { MentionSource } from '@/components/snack/mention-picker';
 import { MessageComposer } from '@/components/snack/message-composer';
 import {
     MessageItem,
@@ -36,6 +37,7 @@ export function ThreadPanel({
     workspaceSlug,
     sendUrl,
     containerName,
+    mentionSource,
     currentUser,
     canPost,
     onClose,
@@ -46,6 +48,8 @@ export function ThreadPanel({
     sendUrl: string;
     /** For the composer placeholder: "Reply in #design". */
     containerName: string;
+    /** Who the reply composer can @mention — the same roster as the container's. */
+    mentionSource?: MentionSource;
     currentUser: SnackUser | null;
     canPost: boolean;
     onClose: () => void;
@@ -225,6 +229,7 @@ export function ThreadPanel({
 
                         <MessageComposer
                             channelName={`this thread in ${containerName}`}
+                            mentionSource={mentionSource}
                             replying={replying}
                             workspaceSlug={workspaceSlug}
                             disabled={!canPost}

@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -113,6 +114,54 @@ class DownloadController extends Controller
             str_ends_with($attachment->thumbnail_path, '.png') ? 'image/png' : 'image/jpeg',
             inline: true,
         );
+    }
+
+    /**
+     * A video, for the timeline's inline player.
+     *
+     * # Why not {@see show()}
+     *
+     * A player seeks with `Range` requests, and Safari refuses to play at all
+     * from a server that does not answer them. `show()` streams the file from
+     * the first byte to the last, so it can never return a partial response.
+     *
+     * Object storage answers ranges itself, so a cloud disk redirects to a
+     * short-lived URL on the bucket. That URL lives on the bucket's domain, not
+     * this origin, so the sandbox headers `show()` sends are not needed there.
+     * A local disk hands back the file itself, which Symfony serves with range
+     * support built in.
+     */
+    public function play(MessageAttachment $attachment, Request $request): Response
+    {
+        $this->authorizeAccess($attachment, $request->user());
+
+        abort_unless($attachment->isPlayableVideo(), 404);
+
+        $disk = Storage::disk($attachment->disk);
+
+        abort_unless($disk->exists($attachment->path), 404);
+
+        if (config("filesystems.disks.{$attachment->disk}.driver") === 'local') {
+            return response()->file($disk->path($attachment->path), [
+                'Content-Type' => $attachment->mime_type,
+                'X-Content-Type-Options' => 'nosniff',
+                'Content-Security-Policy' => "default-src 'none'; sandbox",
+                'Cache-Control' => 'private, max-age=3600',
+            ]);
+        }
+
+        $url = $disk->temporaryUrl(
+            $attachment->path,
+            now()->addMinutes((int) config('snack.uploads.stream_url_ttl_minutes', 120)),
+            [
+                'ResponseContentType' => $attachment->mime_type,
+                'ResponseContentDisposition' => 'inline',
+            ],
+        );
+
+        // Never cached: the redirect target expires, and a cached hop to a
+        // dead URL would break the player until the cache did.
+        return redirect()->away($url)->header('Cache-Control', 'no-store');
     }
 
     /**

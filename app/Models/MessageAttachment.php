@@ -233,6 +233,24 @@ class MessageAttachment extends Model
         return str_starts_with($this->mime_type, 'video/');
     }
 
+    /**
+     * Whether a browser's own `<video>` element can play this in the timeline.
+     *
+     * A short allowlist rather than `isVideo()`: an AVI or MKV is a video too,
+     * but no browser decodes it, and a player that only ever shows an error is
+     * worse than the download chip it replaced. None of these formats can carry
+     * script, which is what makes serving them inline safe.
+     */
+    public function isPlayableVideo(): bool
+    {
+        return in_array(strtolower($this->mime_type), [
+            'video/mp4',
+            'video/webm',
+            'video/ogg',
+            'video/quicktime',
+        ], true);
+    }
+
     public function isAudio(): bool
     {
         return str_starts_with($this->mime_type, 'audio/');

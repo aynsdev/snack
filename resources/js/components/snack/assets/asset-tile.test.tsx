@@ -18,6 +18,7 @@ function makeFile(overrides: Partial<Attachment> = {}): Attachment {
         download_url: '/files/1?signature=abc',
         thumbnail_url: null,
         preview_url: null,
+        stream_url: null,
         created_at: '2026-08-01T09:00:00+00:00',
         ...overrides,
     };

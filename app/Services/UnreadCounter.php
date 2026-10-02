@@ -184,6 +184,11 @@ class UnreadCounter
      * mention while leaving the inbox row standing: the badge went on counting
      * messages the reader had already answered. {@see App\Actions\Notifications\MarkNotificationsRead::forContainer()}
      * is what closed that, so both now clear from the same read pointer.
+     *
+     * Rows whose message has since been deleted are not counted. The list
+     * already leaves them out — see {@see ActivityFeed::withoutDeletedMessages()}
+     * — so counting them lit a badge for rows nobody could find, let alone
+     * open and clear.
      */
     public function notificationCount(Workspace $workspace, User $user): int
     {
@@ -192,6 +197,13 @@ class UnreadCounter
             ->where('notifiable_id', $user->getKey())
             ->where('workspace_id', $workspace->id)
             ->whereNull('read_at')
+            ->where(fn ($query) => $query
+                ->whereNull('data->message_id')
+                ->orWhereExists(fn ($messages) => $messages
+                    ->selectRaw('1')
+                    ->from('messages')
+                    ->whereRaw("messages.id = (notifications.data->>'message_id')::bigint")
+                    ->whereNull('messages.deleted_at')))
             ->count();
     }
 
