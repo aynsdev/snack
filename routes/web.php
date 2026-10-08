@@ -40,6 +40,10 @@ use App\Http\Controllers\Hr\DocumentController;
 use App\Http\Controllers\Hr\EmployeeController;
 use App\Http\Controllers\Hr\EmployeeRecordController;
 use App\Http\Controllers\Hr\EmploymentHistoryController;
+use App\Http\Controllers\Hr\EquipmentAssignmentController;
+use App\Http\Controllers\Hr\EquipmentCategoryController;
+use App\Http\Controllers\Hr\EquipmentController;
+use App\Http\Controllers\Hr\EquipmentRequestController;
 use App\Http\Controllers\Hr\HolidayController;
 use App\Http\Controllers\Hr\HrAnalyticsController;
 use App\Http\Controllers\Hr\HrDashboardController;
@@ -1119,6 +1123,23 @@ Route::middleware(['auth', 'verified', 'workspace'])
             Route::post('resignations/{resignation}/withdraw', [ResignationController::class, 'withdraw'])->name('resignations.withdraw');
             Route::post('resignations/{resignation}/accept', [ResignationController::class, 'accept'])->name('resignations.accept');
             Route::post('resignations/{resignation}/reject', [ResignationController::class, 'reject'])->name('resignations.reject');
+
+            Route::get('my-equipment', [EquipmentRequestController::class, 'mine'])->name('my-equipment');
+            Route::post('equipment-requests', [EquipmentRequestController::class, 'store'])->middleware('throttle:30,1')->name('equipment-requests.store');
+            Route::post('equipment-requests/{equipmentRequest}/cancel', [EquipmentRequestController::class, 'cancel'])->name('equipment-requests.cancel');
+            Route::post('equipment-requests/{equipmentRequest}/approve', [EquipmentRequestController::class, 'approve'])->name('equipment-requests.approve');
+            Route::post('equipment-requests/{equipmentRequest}/reject', [EquipmentRequestController::class, 'reject'])->name('equipment-requests.reject');
+            Route::post('equipment-assignments/{equipmentAssignment}/request-return', [EquipmentAssignmentController::class, 'requestReturn'])->name('equipment-assignments.request-return');
+            Route::post('equipment-assignments/{equipmentAssignment}/return', [EquipmentAssignmentController::class, 'takeBack'])->name('equipment-assignments.return');
+
+            Route::get('equipment', [EquipmentController::class, 'index'])->name('equipment.index');
+            Route::post('equipment', [EquipmentController::class, 'store'])->name('equipment.store');
+            Route::patch('equipment/{equipment}', [EquipmentController::class, 'update'])->name('equipment.update');
+            Route::delete('equipment/{equipment}', [EquipmentController::class, 'destroy'])->name('equipment.destroy');
+            Route::post('equipment/{equipment}/assign', [EquipmentAssignmentController::class, 'store'])->name('equipment.assign');
+            Route::post('equipment-categories', [EquipmentCategoryController::class, 'store'])->name('equipment-categories.store');
+            Route::patch('equipment-categories/{equipmentCategory}', [EquipmentCategoryController::class, 'update'])->name('equipment-categories.update');
+            Route::delete('equipment-categories/{equipmentCategory}', [EquipmentCategoryController::class, 'destroy'])->name('equipment-categories.destroy');
 
             Route::get('holidays', [HolidayController::class, 'index'])->name('holidays.index');
             Route::post('holidays', [HolidayController::class, 'store'])->name('holidays.store');

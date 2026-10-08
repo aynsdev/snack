@@ -9,6 +9,7 @@ import {
     LayoutDashboard,
     Megaphone,
     Network,
+    Package,
     Plane,
     Settings,
     UserMinus,
@@ -24,11 +25,13 @@ import {
     dashboard as hrDashboard,
     index as hrIndex,
     me as myProfile,
+    myEquipment,
     orgChart,
 } from '@/routes/hr';
 import { index as announcementsIndex } from '@/routes/hr/announcements';
 import { index as documentsIndex } from '@/routes/hr/documents';
 import { index as employeesIndex } from '@/routes/hr/employees';
+import { index as equipmentIndex } from '@/routes/hr/equipment';
 import { index as holidaysIndex } from '@/routes/hr/holidays';
 import { index as leaveIndex } from '@/routes/hr/leave';
 import { index as offboardingIndex } from '@/routes/hr/offboarding';
@@ -99,6 +102,12 @@ export function HrSidebar({ onNavigate }: { onNavigate?: () => void }) {
             href: documentsIndex(workspace.slug),
             match: /^\/documents/,
         },
+        {
+            label: 'My equipment',
+            icon: Package,
+            href: myEquipment(workspace.slug),
+            match: /^\/my-equipment/,
+        },
     ];
 
     const company: Item[] = [
@@ -152,6 +161,12 @@ export function HrSidebar({ onNavigate }: { onNavigate?: () => void }) {
             icon: UserMinus,
             href: offboardingIndex(workspace.slug),
             match: /^\/offboarding/,
+        },
+        {
+            label: 'Assets',
+            icon: Package,
+            href: equipmentIndex(workspace.slug),
+            match: /^\/equipment/,
         },
         {
             label: 'HR settings',

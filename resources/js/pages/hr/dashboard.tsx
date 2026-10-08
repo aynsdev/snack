@@ -34,6 +34,7 @@ import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { index as documentsIndex } from '@/routes/hr/documents';
 import { show as showEmployee } from '@/routes/hr/employees';
+import { index as equipmentIndex } from '@/routes/hr/equipment';
 import { index as leaveIndex } from '@/routes/hr/leave';
 import { index as offboardingIndex } from '@/routes/hr/offboarding';
 import { index as onboardingIndex } from '@/routes/hr/onboarding';
@@ -95,6 +96,8 @@ type Props = {
         attendance: number;
         documents: number;
         resignations: number;
+        equipment: number;
+        returns: number;
     };
     checklists: { onboarding: number; offboarding: number };
     late_arrivals: (Person & {
@@ -159,6 +162,19 @@ export default function HrDashboard({
                     ? plural(pending_requests.resignations, 'resignation')
                     : '',
             href: offboardingIndex(workspace.slug).url,
+        },
+        {
+            label: [
+                pending_requests.equipment > 0
+                    ? plural(pending_requests.equipment, 'equipment request')
+                    : '',
+                pending_requests.returns > 0
+                    ? plural(pending_requests.returns, 'equipment return')
+                    : '',
+            ]
+                .filter(Boolean)
+                .join(' · '),
+            href: equipmentIndex(workspace.slug).url,
         },
     ].filter((queue) => queue.label !== '');
     const departmentTotal = departments.reduce(

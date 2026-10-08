@@ -188,6 +188,15 @@ enum AuditAction: string
     case ChecklistTemplateDeleted = 'hr.checklist_template_deleted';
     case ResignationAccepted = 'hr.resignation_accepted';
     case ResignationRejected = 'hr.resignation_rejected';
+    case EquipmentCreated = 'hr.equipment_created';
+    case EquipmentUpdated = 'hr.equipment_updated';
+    case EquipmentDeleted = 'hr.equipment_deleted';
+    case EquipmentAssigned = 'hr.equipment_assigned';
+    case EquipmentReturned = 'hr.equipment_returned';
+    case EquipmentCategorySaved = 'hr.equipment_category_saved';
+    case EquipmentCategoryDeleted = 'hr.equipment_category_deleted';
+    case EquipmentRequestApproved = 'hr.equipment_request_approved';
+    case EquipmentRequestRejected = 'hr.equipment_request_rejected';
 
     public function label(): string
     {
@@ -280,6 +289,15 @@ enum AuditAction: string
             self::ChecklistTemplateDeleted => 'Checklist template deleted',
             self::ResignationAccepted => 'Resignation accepted',
             self::ResignationRejected => 'Resignation rejected',
+            self::EquipmentCreated => 'Equipment added',
+            self::EquipmentUpdated => 'Equipment updated',
+            self::EquipmentDeleted => 'Equipment deleted',
+            self::EquipmentAssigned => 'Equipment handed over',
+            self::EquipmentReturned => 'Equipment returned',
+            self::EquipmentCategorySaved => 'Equipment category saved',
+            self::EquipmentCategoryDeleted => 'Equipment category deleted',
+            self::EquipmentRequestApproved => 'Equipment request approved',
+            self::EquipmentRequestRejected => 'Equipment request rejected',
         };
     }
 

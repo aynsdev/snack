@@ -251,6 +251,22 @@ class Employee extends Model
         return $this->hasMany(Resignation::class);
     }
 
+    /**
+     * @return HasMany<EquipmentAssignment, $this>
+     */
+    public function equipmentAssignments(): HasMany
+    {
+        return $this->hasMany(EquipmentAssignment::class);
+    }
+
+    /**
+     * @return HasMany<EquipmentRequest, $this>
+     */
+    public function equipmentRequests(): HasMany
+    {
+        return $this->hasMany(EquipmentRequest::class);
+    }
+
     // -- Scopes --------------------------------------------------------------
 
     /**

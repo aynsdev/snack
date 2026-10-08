@@ -206,7 +206,7 @@ export type Shift = {
     is_default: boolean;
 };
 
-export type HrRequestType = 'shift' | 'work_type' | 'attendance';
+export type HrRequestType = 'shift' | 'work_type' | 'attendance' | 'equipment';
 
 export type HrRequest = {
     id: number;
@@ -214,6 +214,8 @@ export type HrRequest = {
     kind: string;
     summary: string;
     employee: PersonSummary;
+    /** Equipment requests only: the kind of item asked for. */
+    equipment_category_id?: number;
     reason: string | null;
     status: string;
     status_label: string;
@@ -322,6 +324,7 @@ export type EmployeeChecklist = {
     completed_at: string | null;
     done: number;
     total: number;
+    equipment_held: number | null;
     tasks: ChecklistTask[];
     can_close: boolean;
 };
@@ -350,4 +353,48 @@ export type Resignation = {
     review_note: string | null;
     created_at: string | null;
     can: { withdraw: boolean; review: boolean };
+};
+
+export type EquipmentAssignment = {
+    id: number;
+    equipment?: {
+        id: number;
+        name: string;
+        tracking_code: string | null;
+        serial_number: string | null;
+        category: string;
+    };
+    employee?: PersonSummary;
+    assigned_on: string;
+    assigned_by: string | null;
+    condition_out: string | null;
+    return_requested_at: string | null;
+    returned_on: string | null;
+    returned_by: string | null;
+    condition_in: string | null;
+    can: { request_return: boolean; take_back: boolean };
+};
+
+export type Equipment = {
+    id: number;
+    category_id: number;
+    category: string;
+    name: string;
+    tracking_code: string | null;
+    serial_number: string | null;
+    purchased_on: string | null;
+    cost: string | null;
+    status: 'available' | 'assigned' | 'in_repair' | 'retired';
+    status_label: string;
+    warranty_expires_on: string | null;
+    notes: string | null;
+    holder: EquipmentAssignment | null;
+    history: EquipmentAssignment[];
+};
+
+export type EquipmentCategory = {
+    id: number;
+    name: string;
+    description: string | null;
+    count: number;
 };
