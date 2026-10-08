@@ -1,6 +1,7 @@
 import { Link } from '@inertiajs/react';
 import {
     CalendarDays,
+    ChartColumn,
     Clock,
     Megaphone,
     Pin,
@@ -22,6 +23,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
+import { dashboard as hrDashboard } from '@/routes/hr';
 import { index as announcementsIndex } from '@/routes/hr/announcements';
 import { index as employeesIndex } from '@/routes/hr/employees';
 import { index as holidaysIndex } from '@/routes/hr/holidays';
@@ -93,14 +95,24 @@ export default function HrOverview({
                     : 'Company news and holidays.'
             }
             actions={
-                employee && (
-                    <Button asChild>
-                        <Link href={leaveIndex(workspace.slug)}>
-                            <Plane aria-hidden="true" />
-                            Request leave
-                        </Link>
-                    </Button>
-                )
+                <>
+                    {stats && (
+                        <Button asChild variant="outline">
+                            <Link href={hrDashboard(workspace.slug)}>
+                                <ChartColumn aria-hidden="true" />
+                                HR dashboard
+                            </Link>
+                        </Button>
+                    )}
+                    {employee && (
+                        <Button asChild>
+                            <Link href={leaveIndex(workspace.slug)}>
+                                <Plane aria-hidden="true" />
+                                Request leave
+                            </Link>
+                        </Button>
+                    )}
+                </>
             }
         >
             {stats && (

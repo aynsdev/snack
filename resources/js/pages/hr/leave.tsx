@@ -18,16 +18,15 @@ import {
     StatusPill,
     todayString,
 } from '@/components/hr/hr-ui';
+import { LeaveReviewDialog } from '@/components/hr/leave-review-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import {
-    approve as approveLeave,
     cancel as cancelLeave,
     index as leaveIndex,
-    reject as rejectLeave,
     store as storeLeave,
 } from '@/routes/hr/leave';
 import type { LeaveBalance, LeaveRequest, LeaveType, Option } from '@/types/hr';
@@ -312,7 +311,7 @@ export default function LeavePage({
             )}
 
             {reviewing && (
-                <ReviewDialog
+                <LeaveReviewDialog
                     key={`${reviewing.request.id}-${reviewing.decision}`}
                     request={reviewing.request}
                     decision={reviewing.decision}
@@ -511,55 +510,6 @@ function RequestDialog({
                     </p>
                 )}
             </div>
-        </FormDialog>
-    );
-}
-
-function ReviewDialog({
-    request,
-    decision,
-    onClose,
-}: {
-    request: LeaveRequest;
-    decision: 'approve' | 'reject';
-    onClose: () => void;
-}) {
-    const workspace = useWorkspace();
-    const form = useForm({ note: '' });
-    const route = decision === 'approve' ? approveLeave : rejectLeave;
-
-    function submit(event: FormEvent) {
-        event.preventDefault();
-        form.post(
-            route({ workspace: workspace.slug, leaveRequest: request.id }).url,
-            { preserveScroll: true, onSuccess: onClose },
-        );
-    }
-
-    return (
-        <FormDialog
-            title={decision === 'approve' ? 'Approve leave' : 'Reject leave'}
-            description={`${request.employee.name} · ${request.leave_type.name} · ${formatDateRange(request.starts_on, request.ends_on)} (${formatDays(request.days)})`}
-            onClose={onClose}
-            onSubmit={submit}
-            processing={form.processing}
-            submitLabel={decision === 'approve' ? 'Approve' : 'Reject'}
-        >
-            <Field
-                label="Note to the employee"
-                htmlFor="review-note"
-                error={form.errors.note}
-            >
-                <Textarea
-                    id="review-note"
-                    value={form.data.note}
-                    onChange={(event) =>
-                        form.setData('note', event.target.value)
-                    }
-                    rows={3}
-                    placeholder="Optional"
-                />
-            </Field>
         </FormDialog>
     );
 }

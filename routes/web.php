@@ -35,6 +35,7 @@ use App\Http\Controllers\Hr\EmployeeController;
 use App\Http\Controllers\Hr\EmployeeRecordController;
 use App\Http\Controllers\Hr\EmploymentHistoryController;
 use App\Http\Controllers\Hr\HolidayController;
+use App\Http\Controllers\Hr\HrAnalyticsController;
 use App\Http\Controllers\Hr\HrDashboardController;
 use App\Http\Controllers\Hr\HrSettingsController;
 use App\Http\Controllers\Hr\LeaveRequestController;
@@ -993,6 +994,7 @@ Route::middleware(['auth', 'verified', 'workspace'])
          */
         Route::prefix('hr')->name('hr.')->group(function () {
             Route::get('/', [HrDashboardController::class, 'index'])->name('index');
+            Route::get('dashboard', [HrAnalyticsController::class, 'index'])->name('dashboard');
 
             Route::get('me', [EmployeeController::class, 'me'])->name('me');
             Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
