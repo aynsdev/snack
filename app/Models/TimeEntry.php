@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $workspace_id
  * @property int $employee_id
+ * @property int|null $shift_id
  * @property Carbon $clock_in_at
  * @property string|null $clock_in_latitude
  * @property string|null $clock_in_longitude
@@ -23,14 +24,18 @@ use Illuminate\Support\Carbon;
  * @property string|null $clock_out_longitude
  * @property float|null $clock_out_accuracy
  * @property bool|null $clock_out_within_geofence
+ * @property int|null $late_minutes
+ * @property int|null $early_out_minutes
+ * @property int|null $overtime_minutes
  * @property string|null $note
  * @property-read Employee $employee
+ * @property-read Shift|null $shift
  */
 #[Fillable([
-    'workspace_id', 'employee_id',
+    'workspace_id', 'employee_id', 'shift_id',
     'clock_in_at', 'clock_in_latitude', 'clock_in_longitude', 'clock_in_accuracy', 'clock_in_within_geofence',
     'clock_out_at', 'clock_out_latitude', 'clock_out_longitude', 'clock_out_accuracy', 'clock_out_within_geofence',
-    'note',
+    'late_minutes', 'early_out_minutes', 'overtime_minutes', 'note',
 ])]
 class TimeEntry extends Model
 {
@@ -50,6 +55,9 @@ class TimeEntry extends Model
             'clock_out_accuracy' => 'float',
             'clock_in_within_geofence' => 'boolean',
             'clock_out_within_geofence' => 'boolean',
+            'late_minutes' => 'integer',
+            'early_out_minutes' => 'integer',
+            'overtime_minutes' => 'integer',
         ];
     }
 
@@ -67,6 +75,16 @@ class TimeEntry extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    /**
+     * The shift the entry was measured against.
+     *
+     * @return BelongsTo<Shift, $this>
+     */
+    public function shift(): BelongsTo
+    {
+        return $this->belongsTo(Shift::class);
     }
 
     public function isOpen(): bool

@@ -10,6 +10,7 @@ use App\Enums\EmployeeRecordType;
 use App\Enums\EmploymentChange;
 use App\Enums\EmploymentStatus;
 use App\Enums\EmploymentType;
+use App\Enums\WorkType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Hr\UpdateEmployeeRequest;
 use App\Http\Resources\Hr\AbsenceResource;
@@ -20,6 +21,7 @@ use App\Http\Resources\Hr\EmploymentHistoryResource;
 use App\Http\Resources\Hr\LeaveRequestResource;
 use App\Http\Resources\Hr\TimeEntryResource;
 use App\Models\Employee;
+use App\Models\Shift;
 use App\Models\Workspace;
 use App\Services\Hr\LeaveBalances;
 use Illuminate\Database\Eloquent\Builder;
@@ -93,7 +95,7 @@ class EmployeeController extends Controller
     {
         $this->authorize('view', $employee);
 
-        $employee->load(['user', 'membership', 'manager.user']);
+        $employee->load(['user', 'membership', 'manager.user', 'shift']);
         $canManage = $request->user()->can('update', $employee);
 
         return Inertia::render('hr/employees/show', [
@@ -127,8 +129,14 @@ class EmployeeController extends Controller
                 ->sortBy('name')
                 ->values()
                 ->all() : [],
+            'shifts' => $workspace->shifts()
+                ->orderBy('starts_at')
+                ->get()
+                ->map(fn (Shift $shift): array => ['value' => (string) $shift->id, 'label' => "{$shift->name} ({$shift->hours()})"])
+                ->all(),
             'options' => [
                 'employment_types' => EmploymentType::options(),
+                'work_types' => WorkType::options(),
                 'statuses' => EmploymentStatus::options(),
                 'changes' => EmploymentChange::options(),
                 'contract_statuses' => ContractStatus::options(),

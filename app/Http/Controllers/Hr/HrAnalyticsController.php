@@ -36,6 +36,8 @@ class HrAnalyticsController extends Controller
             'out_this_week' => $stats->outThisWeek(),
             'celebrations' => $stats->celebrations(),
             'expiring_contracts' => $stats->expiringContracts(),
+            'pending_requests' => $stats->pendingRequests(),
+            'late_arrivals' => $stats->lateArrivals(),
             'pending_leave' => LeaveRequestResource::collection(
                 $workspace->leaveRequests()
                     ->where('status', LeaveStatus::Pending)

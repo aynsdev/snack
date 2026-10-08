@@ -7,6 +7,7 @@ use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Hr\UpdateHrSettingsRequest;
 use App\Http\Resources\Hr\LeaveTypeResource;
+use App\Http\Resources\Hr\ShiftResource;
 use App\Models\LeaveType;
 use App\Models\Workspace;
 use App\Support\Geofence;
@@ -16,7 +17,8 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Where people may clock in from, and which kinds of leave exist.
+ * Where people may clock in from, which kinds of leave exist, and the shifts
+ * people are scheduled on.
  */
 class HrSettingsController extends Controller
 {
@@ -32,6 +34,7 @@ class HrSettingsController extends Controller
             'leave_types' => LeaveTypeResource::collection(
                 $workspace->leaveTypes()->orderByRaw('archived_at is not null')->orderBy('name')->get(),
             )->resolve($request),
+            'shifts' => ShiftResource::collection($workspace->shifts()->orderBy('starts_at')->get())->resolve($request),
         ]);
     }
 

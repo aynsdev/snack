@@ -74,8 +74,10 @@ type Props = {
     balances: LeaveBalance[];
     time_entries: TimeEntry[];
     managers: { id: number; name: string }[];
+    shifts: Option[];
     options: {
         employment_types: Option[];
+        work_types: Option[];
         statuses: Option[];
         changes: Option[];
         contract_statuses: Option[];
@@ -215,7 +217,13 @@ type Ids = { workspace: string; employee: number };
 
 // -- Profile ----------------------------------------------------------------
 
-function ProfileTab({ employee, managers, options, can_manage }: Props) {
+function ProfileTab({
+    employee,
+    managers,
+    shifts,
+    options,
+    can_manage,
+}: Props) {
     const workspace = useWorkspace();
     const form = useForm({
         employee_number: employee.employee_number ?? '',
@@ -224,6 +232,8 @@ function ProfileTab({ employee, managers, options, can_manage }: Props) {
         employment_type: employee.employment_type,
         status: employee.status,
         manager_id: employee.manager ? String(employee.manager.id) : '',
+        shift_id: employee.shift ? String(employee.shift.id) : '',
+        work_type: employee.work_type,
         hired_on: employee.hired_on ?? '',
         terminated_on: employee.terminated_on ?? '',
         birth_date: employee.birth_date ?? '',
@@ -243,6 +253,13 @@ function ProfileTab({ employee, managers, options, can_manage }: Props) {
                             ['Department', employee.department],
                             ['Type', employee.employment_type_label],
                             ['Manager', employee.manager?.name],
+                            [
+                                'Shift',
+                                employee.shift
+                                    ? `${employee.shift.name} (${employee.shift.hours})`
+                                    : 'Workspace default',
+                            ],
+                            ['Works', employee.work_type_label],
                             ['Hired', formatDate(employee.hired_on)],
                             ['Employee number', employee.employee_number],
                         ]}
@@ -278,6 +295,7 @@ function ProfileTab({ employee, managers, options, can_manage }: Props) {
         form.transform((data) => ({
             ...data,
             manager_id: data.manager_id === '' ? null : Number(data.manager_id),
+            shift_id: data.shift_id === '' ? null : Number(data.shift_id),
         }));
         form.patch(
             updateEmployee({ workspace: workspace.slug, employee: employee.id })
@@ -341,6 +359,24 @@ function ProfileTab({ employee, managers, options, can_manage }: Props) {
                         error={form.errors.manager_id}
                         allowEmpty
                         emptyLabel="No manager"
+                    />
+                    <SelectField
+                        id="employee-shift"
+                        label="Shift"
+                        value={form.data.shift_id}
+                        onChange={(value) => form.setData('shift_id', value)}
+                        options={shifts}
+                        error={form.errors.shift_id}
+                        allowEmpty
+                        emptyLabel="Workspace default"
+                    />
+                    <SelectField
+                        id="employee-work_type"
+                        label="Work type"
+                        value={form.data.work_type}
+                        onChange={(value) => form.setData('work_type', value)}
+                        options={options.work_types}
+                        error={form.errors.work_type}
                     />
                     {text('employee_number', 'Employee number')}
                     {text('hired_on', 'Hired on', 'date')}

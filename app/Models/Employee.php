@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enums\EmploymentStatus;
 use App\Enums\EmploymentType;
 use App\Enums\LeaveStatus;
+use App\Enums\WorkType;
+use App\Services\Hr\ShiftResolver;
 use Database\Factories\EmployeeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,10 +29,12 @@ use Illuminate\Support\Carbon;
  * @property int $user_id
  * @property int|null $workspace_member_id
  * @property int|null $manager_id
+ * @property int|null $shift_id
  * @property string|null $employee_number
  * @property string|null $job_title
  * @property string|null $department
  * @property EmploymentType $employment_type
+ * @property WorkType $work_type
  * @property EmploymentStatus $status
  * @property Carbon|null $hired_on
  * @property Carbon|null $terminated_on
@@ -45,10 +49,11 @@ use Illuminate\Support\Carbon;
  * @property-read User $user
  * @property-read WorkspaceMember|null $membership
  * @property-read Employee|null $manager
+ * @property-read Shift|null $shift
  */
 #[Fillable([
-    'workspace_id', 'user_id', 'workspace_member_id', 'manager_id', 'employee_number',
-    'job_title', 'department', 'employment_type', 'status', 'hired_on', 'terminated_on',
+    'workspace_id', 'user_id', 'workspace_member_id', 'manager_id', 'shift_id', 'employee_number',
+    'job_title', 'department', 'employment_type', 'work_type', 'status', 'hired_on', 'terminated_on',
     'birth_date', 'phone', 'address', 'emergency_contact_name', 'emergency_contact_phone',
 ])]
 class Employee extends Model
@@ -63,6 +68,7 @@ class Employee extends Model
     {
         return [
             'employment_type' => EmploymentType::class,
+            'work_type' => WorkType::class,
             'status' => EmploymentStatus::class,
             'hired_on' => 'date',
             'terminated_on' => 'date',
@@ -102,6 +108,17 @@ class Employee extends Model
     public function manager(): BelongsTo
     {
         return $this->belongsTo(self::class, 'manager_id');
+    }
+
+    /**
+     * The shift the person normally works. Null falls back to the workspace's
+     * default — see {@see ShiftResolver}.
+     *
+     * @return BelongsTo<Shift, $this>
+     */
+    public function shift(): BelongsTo
+    {
+        return $this->belongsTo(Shift::class);
     }
 
     /**
@@ -168,6 +185,30 @@ class Employee extends Model
     public function openTimeEntry(): HasOne
     {
         return $this->hasOne(TimeEntry::class)->whereNull('clock_out_at');
+    }
+
+    /**
+     * @return HasMany<ShiftRequest, $this>
+     */
+    public function shiftRequests(): HasMany
+    {
+        return $this->hasMany(ShiftRequest::class);
+    }
+
+    /**
+     * @return HasMany<WorkTypeRequest, $this>
+     */
+    public function workTypeRequests(): HasMany
+    {
+        return $this->hasMany(WorkTypeRequest::class);
+    }
+
+    /**
+     * @return HasMany<AttendanceRequest, $this>
+     */
+    public function attendanceRequests(): HasMany
+    {
+        return $this->hasMany(AttendanceRequest::class);
     }
 
     // -- Scopes --------------------------------------------------------------

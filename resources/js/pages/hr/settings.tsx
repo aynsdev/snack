@@ -11,6 +11,7 @@ import {
     Section,
     SelectField,
 } from '@/components/hr/hr-ui';
+import { ShiftsSection } from '@/components/hr/shifts-section';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,12 +24,13 @@ import {
     update as updateLeaveType,
 } from '@/routes/hr/leave-types';
 import { update as updateSettings } from '@/routes/hr/settings';
-import type { Geofence, LeaveType } from '@/types/hr';
+import type { Geofence, LeaveType, Shift } from '@/types/hr';
 
 type Props = {
     geofence: Geofence | null;
     require_location: boolean;
     leave_types: LeaveType[];
+    shifts: Shift[];
 };
 
 const COLORS = Object.keys(LEAVE_COLORS).map((color) => ({
@@ -37,12 +39,14 @@ const COLORS = Object.keys(LEAVE_COLORS).map((color) => ({
 }));
 
 /**
- * Where people may clock in from, and which kinds of leave exist.
+ * Where people may clock in from, the shifts they work, and which kinds of
+ * leave exist.
  */
 export default function HrSettingsPage({
     geofence,
     require_location,
     leave_types,
+    shifts,
 }: Props) {
     const [editing, setEditing] = useState<LeaveType | 'new' | null>(null);
     const workspace = useWorkspace();
@@ -53,6 +57,8 @@ export default function HrSettingsPage({
                 geofence={geofence}
                 requireLocation={require_location}
             />
+
+            <ShiftsSection shifts={shifts} />
 
             <Section
                 title="Leave types"

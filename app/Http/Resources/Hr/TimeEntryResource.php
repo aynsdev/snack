@@ -30,6 +30,9 @@ class TimeEntryResource extends JsonResource
             'is_open' => $this->isOpen(),
             'clock_in_location' => $this->location('clock_in'),
             'clock_out_location' => $this->location('clock_out'),
+            'late_minutes' => $this->late_minutes,
+            'early_out_minutes' => $this->early_out_minutes,
+            'overtime_minutes' => $this->overtime_minutes,
             'note' => $this->note,
         ];
     }

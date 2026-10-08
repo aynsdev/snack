@@ -349,3 +349,15 @@ export function todayString(): string {
 export function mapsUrl(latitude: number, longitude: number): string {
     return `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=17/${latitude}/${longitude}`;
 }
+
+/** `datetime-local` wants local wall-clock time with no zone. */
+export function toLocalInput(iso: string | null): string {
+    if (!iso) {
+        return '';
+    }
+
+    const date = new Date(iso);
+    const pad = (value: number) => String(value).padStart(2, '0');
+
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}

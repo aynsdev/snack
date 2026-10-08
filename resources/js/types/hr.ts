@@ -27,6 +27,9 @@ export type Employee = {
     department: string | null;
     employment_type: string;
     employment_type_label: string;
+    work_type: string;
+    work_type_label: string;
+    shift?: { id: number; name: string; hours: string } | null;
     status: string;
     status_label: string;
     hired_on: string | null;
@@ -142,6 +145,9 @@ export type TimeEntry = {
     is_open: boolean;
     clock_in_location: GeoStamp | null;
     clock_out_location: GeoStamp | null;
+    late_minutes: number | null;
+    early_out_minutes: number | null;
+    overtime_minutes: number | null;
     note: string | null;
 };
 
@@ -186,4 +192,34 @@ export type HeaderClockState = {
     open_entry: { id: number; clock_in_at: string } | null;
     require_location: boolean;
     geofence: Geofence | null;
+};
+
+export type Shift = {
+    id: number;
+    name: string;
+    starts_at: string;
+    ends_at: string;
+    hours: string;
+    grace_minutes: number;
+    /** ISO weekdays, 1 (Monday) to 7 (Sunday). */
+    days: number[];
+    is_default: boolean;
+};
+
+export type HrRequestType = 'shift' | 'work_type' | 'attendance';
+
+export type HrRequest = {
+    id: number;
+    type: HrRequestType;
+    kind: string;
+    summary: string;
+    employee: PersonSummary;
+    reason: string | null;
+    status: string;
+    status_label: string;
+    reviewer: string | null;
+    reviewed_at: string | null;
+    review_note: string | null;
+    created_at: string | null;
+    can: { cancel: boolean; review: boolean };
 };

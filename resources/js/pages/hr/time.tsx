@@ -17,6 +17,7 @@ import {
     PersonAvatar,
     Section,
     SelectField,
+    toLocalInput,
 } from '@/components/hr/hr-ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +35,7 @@ type Filters = {
     to: string;
     scope: 'mine' | 'team';
     employee: number | null;
+    flag: 'late' | 'early' | null;
 };
 
 type Props = {
@@ -173,6 +175,26 @@ export default function TimePage({
                             className="w-48"
                         />
                     )}
+                    <SelectField
+                        id="time-flag"
+                        label="Show"
+                        value={filters.flag ?? ''}
+                        onChange={(value) =>
+                            apply({
+                                flag:
+                                    value === ''
+                                        ? null
+                                        : (value as 'late' | 'early'),
+                            })
+                        }
+                        options={[
+                            { value: 'late', label: 'Late arrivals' },
+                            { value: 'early', label: 'Left early' },
+                        ]}
+                        allowEmpty
+                        emptyLabel="All shifts"
+                        className="w-40"
+                    />
                     <Button variant="outline" onClick={() => apply({})}>
                         Apply
                     </Button>
@@ -266,6 +288,10 @@ export default function TimePage({
                                         </td>
                                         <td className="py-2 pr-3 tabular-nums">
                                             {formatTime(entry.clock_in_at)}
+                                            <PunctualityNote
+                                                minutes={entry.late_minutes}
+                                                label="late"
+                                            />
                                         </td>
                                         <td className="py-2 pr-3 tabular-nums">
                                             {entry.is_open ? (
@@ -273,7 +299,24 @@ export default function TimePage({
                                                     Working
                                                 </span>
                                             ) : (
-                                                formatTime(entry.clock_out_at)
+                                                <>
+                                                    {formatTime(
+                                                        entry.clock_out_at,
+                                                    )}
+                                                    <PunctualityNote
+                                                        minutes={
+                                                            entry.early_out_minutes
+                                                        }
+                                                        label="early"
+                                                    />
+                                                    <PunctualityNote
+                                                        minutes={
+                                                            entry.overtime_minutes
+                                                        }
+                                                        label="overtime"
+                                                        tone="neutral"
+                                                    />
+                                                </>
                                             )}
                                         </td>
                                         <td className="py-2 pr-3">
@@ -359,18 +402,6 @@ export default function TimePage({
             )}
         </HrPage>
     );
-}
-
-/** `datetime-local` wants local wall-clock time with no zone. */
-function toLocalInput(iso: string | null): string {
-    if (!iso) {
-        return '';
-    }
-
-    const date = new Date(iso);
-    const pad = (value: number) => String(value).padStart(2, '0');
-
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function CorrectionDialog({
@@ -463,5 +494,36 @@ function CorrectionDialog({
                 </Field>
             </div>
         </FormDialog>
+    );
+}
+
+/**
+ * How a clock-in or -out measured against the shift: "25m late". Nothing is
+ * shown when on time or when the day was not scheduled.
+ */
+function PunctualityNote({
+    minutes,
+    label,
+    tone = 'warning',
+}: {
+    minutes: number | null;
+    label: string;
+    tone?: 'warning' | 'neutral';
+}) {
+    if (minutes === null || minutes === 0) {
+        return null;
+    }
+
+    return (
+        <span
+            className={cn(
+                'block text-xs',
+                tone === 'warning'
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-muted-foreground',
+            )}
+        >
+            {formatMinutes(minutes)} {label}
+        </span>
     );
 }
