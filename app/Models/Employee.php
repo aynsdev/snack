@@ -235,6 +235,22 @@ class Employee extends Model
         return $this->hasMany(PolicyAcknowledgement::class);
     }
 
+    /**
+     * @return HasMany<EmployeeChecklist, $this>
+     */
+    public function checklists(): HasMany
+    {
+        return $this->hasMany(EmployeeChecklist::class);
+    }
+
+    /**
+     * @return HasMany<Resignation, $this>
+     */
+    public function resignations(): HasMany
+    {
+        return $this->hasMany(Resignation::class);
+    }
+
     // -- Scopes --------------------------------------------------------------
 
     /**

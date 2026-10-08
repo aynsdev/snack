@@ -24,6 +24,7 @@ class UpdateHrSettingsRequest extends FormRequest
             'geofence.longitude' => ['required_with:geofence', 'numeric', 'between:-180,180'],
             'geofence.radius_meters' => ['required_with:geofence', 'integer', 'min:10', 'max:50000'],
             'geofence.enforced' => ['boolean'],
+            'auto_onboarding' => ['boolean'],
         ];
     }
 }

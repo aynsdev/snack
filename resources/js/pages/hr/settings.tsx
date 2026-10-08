@@ -2,6 +2,7 @@ import { router, useForm } from '@inertiajs/react';
 import { Crosshair, LoaderCircle, Pencil, Plus } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
+import { ChecklistTemplatesSection } from '@/components/hr/checklist-templates-section';
 import { DeleteButton, FormDialog } from '@/components/hr/hr-dialogs';
 import {
     Field,
@@ -24,13 +25,15 @@ import {
     update as updateLeaveType,
 } from '@/routes/hr/leave-types';
 import { update as updateSettings } from '@/routes/hr/settings';
-import type { Geofence, LeaveType, Shift } from '@/types/hr';
+import type { ChecklistTemplate, Geofence, LeaveType, Shift } from '@/types/hr';
 
 type Props = {
     geofence: Geofence | null;
     require_location: boolean;
     leave_types: LeaveType[];
     shifts: Shift[];
+    checklist_templates: ChecklistTemplate[];
+    auto_onboarding: boolean;
 };
 
 const COLORS = Object.keys(LEAVE_COLORS).map((color) => ({
@@ -47,6 +50,8 @@ export default function HrSettingsPage({
     require_location,
     leave_types,
     shifts,
+    checklist_templates,
+    auto_onboarding,
 }: Props) {
     const [editing, setEditing] = useState<LeaveType | 'new' | null>(null);
     const workspace = useWorkspace();
@@ -59,6 +64,11 @@ export default function HrSettingsPage({
             />
 
             <ShiftsSection shifts={shifts} />
+
+            <ChecklistTemplatesSection
+                templates={checklist_templates}
+                autoOnboarding={auto_onboarding}
+            />
 
             <Section
                 title="Leave types"

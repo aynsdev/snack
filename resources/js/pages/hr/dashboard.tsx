@@ -35,6 +35,8 @@ import { useWorkspace } from '@/hooks/use-workspace';
 import { index as documentsIndex } from '@/routes/hr/documents';
 import { show as showEmployee } from '@/routes/hr/employees';
 import { index as leaveIndex } from '@/routes/hr/leave';
+import { index as offboardingIndex } from '@/routes/hr/offboarding';
+import { index as onboardingIndex } from '@/routes/hr/onboarding';
 import { index as requestsIndex } from '@/routes/hr/requests';
 import { index as timeIndex } from '@/routes/hr/time';
 import type { LeaveRequest } from '@/types/hr';
@@ -92,7 +94,9 @@ type Props = {
         work_type: number;
         attendance: number;
         documents: number;
+        resignations: number;
     };
+    checklists: { onboarding: number; offboarding: number };
     late_arrivals: (Person & {
         employee_id: number;
         times: number;
@@ -119,6 +123,7 @@ export default function HrDashboard({
     pending_leave,
     pending_requests,
     late_arrivals,
+    checklists,
 }: Props) {
     const workspace = useWorkspace();
     const [reviewing, setReviewing] = useState<{
@@ -147,6 +152,13 @@ export default function HrDashboard({
                     ? plural(pending_requests.documents, 'uploaded document')
                     : '',
             href: documentsIndex(workspace.slug).url,
+        },
+        {
+            label:
+                pending_requests.resignations > 0
+                    ? plural(pending_requests.resignations, 'resignation')
+                    : '',
+            href: offboardingIndex(workspace.slug).url,
         },
     ].filter((queue) => queue.label !== '');
     const departmentTotal = departments.reduce(
@@ -383,6 +395,45 @@ export default function HrDashboard({
                 </div>
 
                 <aside className="space-y-6">
+                    <Section title="Coming and going">
+                        <ul className="space-y-2 text-sm">
+                            <li>
+                                <Link
+                                    href={onboardingIndex(workspace.slug)}
+                                    className="flex items-center justify-between rounded-lg hover:bg-accent"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <UserPlus
+                                            aria-hidden="true"
+                                            className="size-4 text-muted-foreground"
+                                        />
+                                        Onboarding
+                                    </span>
+                                    <span className="font-medium tabular-nums">
+                                        {checklists.onboarding}
+                                    </span>
+                                </Link>
+                            </li>
+                            <li>
+                                <Link
+                                    href={offboardingIndex(workspace.slug)}
+                                    className="flex items-center justify-between rounded-lg hover:bg-accent"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <UserMinus
+                                            aria-hidden="true"
+                                            className="size-4 text-muted-foreground"
+                                        />
+                                        Offboarding
+                                    </span>
+                                    <span className="font-medium tabular-nums">
+                                        {checklists.offboarding}
+                                    </span>
+                                </Link>
+                            </li>
+                        </ul>
+                    </Section>
+
                     <Section title="Out this week">
                         {out_this_week.length === 0 ? (
                             <p className="text-sm text-muted-foreground">

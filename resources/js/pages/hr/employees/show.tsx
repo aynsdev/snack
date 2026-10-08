@@ -2,6 +2,10 @@ import { Link, router, useForm } from '@inertiajs/react';
 import { ArrowLeft, Download, FileText, Pencil, Plus } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
+import {
+    ChecklistCard,
+    StartChecklistDialog,
+} from '@/components/hr/checklist-card';
 import { DisciplinaryTab } from '@/components/hr/disciplinary-tab';
 import {
     DeleteButton,
@@ -24,6 +28,7 @@ import {
     StatusPill,
     todayString,
 } from '@/components/hr/hr-ui';
+import { ResignationBanner, ResignDialog } from '@/components/hr/resignation';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -55,14 +60,17 @@ import {
 } from '@/routes/hr/employees/records';
 import type {
     Absence,
+    ChecklistTemplate,
     Contract,
     DisciplinaryAction,
     Employee,
+    EmployeeChecklist,
     EmployeeRecord,
     EmploymentHistoryEntry,
     LeaveBalance,
     LeaveRequest,
     Option,
+    Resignation,
     TimeEntry,
 } from '@/types/hr';
 
@@ -76,6 +84,10 @@ type Props = {
     balances: LeaveBalance[];
     time_entries: TimeEntry[];
     disciplinary_actions: DisciplinaryAction[];
+    checklists: EmployeeChecklist[];
+    checklist_templates: ChecklistTemplate[];
+    resignation: Resignation | null;
+    can_resign: boolean;
     managers: { id: number; name: string }[];
     shifts: Option[];
     options: {
@@ -97,6 +109,7 @@ type Tab =
     | 'contracts'
     | 'records'
     | 'disciplinary'
+    | 'checklists'
     | 'leave'
     | 'time';
 
@@ -118,6 +131,7 @@ export default function EmployeeShow(props: Props) {
     const { employee, can_manage } = props;
     const workspace = useWorkspace();
     const [tab, setTab] = useState<Tab>('profile');
+    const [resigning, setResigning] = useState(false);
 
     const tabs: { id: Tab; label: string; count?: number }[] = [
         { id: 'profile', label: 'Profile' },
@@ -143,6 +157,15 @@ export default function EmployeeShow(props: Props) {
         },
         { id: 'leave', label: 'Leave & absences' },
         { id: 'time', label: 'Time' },
+        ...(can_manage
+            ? [
+                  {
+                      id: 'checklists' as Tab,
+                      label: 'Onboarding & offboarding',
+                      count: props.checklists.length,
+                  },
+              ]
+            : []),
     ];
 
     const ids = { workspace: workspace.slug, employee: employee.id };
@@ -162,14 +185,25 @@ export default function EmployeeShow(props: Props) {
                 </span>
             }
             actions={
-                can_manage && (
-                    <Button variant="ghost" size="sm" asChild>
-                        <Link href={employeesIndex(workspace.slug)}>
-                            <ArrowLeft aria-hidden="true" />
-                            All employees
-                        </Link>
-                    </Button>
-                )
+                <>
+                    {props.can_resign && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setResigning(true)}
+                        >
+                            Resign
+                        </Button>
+                    )}
+                    {can_manage && (
+                        <Button variant="ghost" size="sm" asChild>
+                            <Link href={employeesIndex(workspace.slug)}>
+                                <ArrowLeft aria-hidden="true" />
+                                All employees
+                            </Link>
+                        </Button>
+                    )}
+                </>
             }
         >
             <div className="flex items-center gap-3">
@@ -185,6 +219,10 @@ export default function EmployeeShow(props: Props) {
                     </p>
                 </div>
             </div>
+
+            {props.resignation && (
+                <ResignationBanner resignation={props.resignation} />
+            )}
 
             <div
                 role="tablist"
@@ -232,7 +270,16 @@ export default function EmployeeShow(props: Props) {
                 )}
                 {tab === 'leave' && <LeaveTab {...props} ids={ids} />}
                 {tab === 'time' && <TimeTab entries={props.time_entries} />}
+                {tab === 'checklists' && can_manage && (
+                    <ChecklistsTab
+                        checklists={props.checklists}
+                        templates={props.checklist_templates}
+                        employeeId={employee.id}
+                    />
+                )}
             </div>
+
+            {resigning && <ResignDialog onClose={() => setResigning(false)} />}
         </HrPage>
     );
 }
@@ -1526,6 +1573,69 @@ function TimeTab({ entries }: { entries: TimeEntry[] }) {
                         </li>
                     ))}
                 </ul>
+            )}
+        </Section>
+    );
+}
+
+// -- Onboarding & offboarding ------------------------------------------------
+
+function ChecklistsTab({
+    checklists,
+    templates,
+    employeeId,
+}: {
+    checklists: EmployeeChecklist[];
+    templates: ChecklistTemplate[];
+    employeeId: number;
+}) {
+    const [starting, setStarting] = useState<
+        'onboarding' | 'offboarding' | null
+    >(null);
+
+    return (
+        <Section
+            title="Onboarding & offboarding"
+            action={
+                <div className="flex gap-1.5">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setStarting('onboarding')}
+                    >
+                        Start onboarding
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setStarting('offboarding')}
+                    >
+                        Start offboarding
+                    </Button>
+                </div>
+            }
+        >
+            {checklists.length === 0 ? (
+                <EmptyNote>Nothing started yet.</EmptyNote>
+            ) : (
+                <ul className="space-y-2">
+                    {checklists.map((checklist) => (
+                        <ChecklistCard
+                            key={checklist.id}
+                            checklist={checklist}
+                            defaultOpen={checklist.status === 'in_progress'}
+                        />
+                    ))}
+                </ul>
+            )}
+
+            {starting && (
+                <StartChecklistDialog
+                    kind={starting}
+                    templates={templates}
+                    employeeId={employeeId}
+                    onClose={() => setStarting(null)}
+                />
             )}
         </Section>
     );

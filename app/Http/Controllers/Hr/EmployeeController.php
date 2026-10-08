@@ -11,18 +11,23 @@ use App\Enums\EmployeeRecordType;
 use App\Enums\EmploymentChange;
 use App\Enums\EmploymentStatus;
 use App\Enums\EmploymentType;
+use App\Enums\ResignationStatus;
 use App\Enums\WorkType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Hr\UpdateEmployeeRequest;
 use App\Http\Resources\Hr\AbsenceResource;
+use App\Http\Resources\Hr\ChecklistTemplateResource;
 use App\Http\Resources\Hr\ContractResource;
 use App\Http\Resources\Hr\DisciplinaryActionResource;
+use App\Http\Resources\Hr\EmployeeChecklistResource;
 use App\Http\Resources\Hr\EmployeeRecordResource;
 use App\Http\Resources\Hr\EmployeeResource;
 use App\Http\Resources\Hr\EmploymentHistoryResource;
 use App\Http\Resources\Hr\LeaveRequestResource;
+use App\Http\Resources\Hr\ResignationResource;
 use App\Http\Resources\Hr\TimeEntryResource;
 use App\Models\Employee;
+use App\Models\Resignation;
 use App\Models\Shift;
 use App\Models\Workspace;
 use App\Services\Hr\LeaveBalances;
@@ -119,6 +124,20 @@ class EmployeeController extends Controller
                 $employee->leaveRequests()->with(['employee.user', 'leaveType', 'reviewer', 'workspace'])->orderByDesc('starts_on')->limit(50)->get(),
             )->resolve($request),
             'balances' => LeaveBalances::for($employee, $workspace),
+            'checklists' => $canManage ? EmployeeChecklistResource::collection(
+                $employee->checklists()
+                    ->with(['employee.user', 'tasks.assignee', 'tasks.completer', 'tasks.checklist.workspace', 'workspace'])
+                    ->latest()
+                    ->get(),
+            )->resolve($request) : [],
+            'checklist_templates' => $canManage ? ChecklistTemplateResource::collection(
+                $workspace->checklistTemplates()->with('tasks')->orderByDesc('is_default')->orderBy('name')->get(),
+            )->resolve($request) : [],
+            'resignation' => ($resignation = $employee->resignations()->whereIn('status', [ResignationStatus::Pending, ResignationStatus::Approved])->latest()->with(['employee.user', 'workspace', 'reviewer'])->first()) === null
+                ? null
+                : (new ResignationResource($resignation))->resolve($request),
+            'can_resign' => $employee->user_id === $request->user()->id
+                && $request->user()->can('create', [Resignation::class, $workspace]),
             'disciplinary_actions' => DisciplinaryActionResource::collection(
                 $employee->disciplinaryActions()->with('issuer')->orderByDesc('starts_on')->orderByDesc('id')->get(),
             )->resolve($request),

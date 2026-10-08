@@ -372,7 +372,9 @@ describe('requests page and dashboard', function () {
             ->get("{$this->base}/dashboard")
             ->assertInertia(fn (Assert $page) => $page
                 ->where('kpis.pending_approvals', 2)
-                ->where('pending_requests', ['shift' => 1, 'work_type' => 0, 'attendance' => 1, 'documents' => 0])
+                ->where('pending_requests.shift', 1)
+                ->where('pending_requests.work_type', 0)
+                ->where('pending_requests.attendance', 1)
                 ->where('late_arrivals.0.employee_id', $this->employee->id)
                 ->where('late_arrivals.0.minutes', 40));
     });

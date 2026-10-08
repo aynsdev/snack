@@ -406,6 +406,41 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<ChecklistTemplate, $this>
+     */
+    public function checklistTemplates(): HasMany
+    {
+        return $this->hasMany(ChecklistTemplate::class);
+    }
+
+    /**
+     * @return HasMany<EmployeeChecklist, $this>
+     */
+    public function employeeChecklists(): HasMany
+    {
+        return $this->hasMany(EmployeeChecklist::class);
+    }
+
+    /**
+     * Every step of every checklist. Scopes `{employeeChecklistTask}` route
+     * binding to the tenant.
+     *
+     * @return HasManyThrough<EmployeeChecklistTask, EmployeeChecklist, $this>
+     */
+    public function employeeChecklistTasks(): HasManyThrough
+    {
+        return $this->hasManyThrough(EmployeeChecklistTask::class, EmployeeChecklist::class);
+    }
+
+    /**
+     * @return HasMany<Resignation, $this>
+     */
+    public function resignations(): HasMany
+    {
+        return $this->hasMany(Resignation::class);
+    }
+
+    /**
      * @return HasMany<Holiday, $this>
      */
     public function holidays(): HasMany

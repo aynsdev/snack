@@ -2,8 +2,10 @@
 
 namespace App\Actions\Hr;
 
+use App\Enums\ChecklistKind;
 use App\Enums\EmploymentChange;
 use App\Enums\EmploymentStatus;
+use App\Models\ChecklistTemplate;
 use App\Models\Employee;
 use App\Models\User;
 use App\Models\WorkspaceMember;
@@ -54,6 +56,8 @@ class SyncEmployeeForMember
                 'employment_type' => $employee->employment_type,
             ]);
 
+            $this->startOnboarding($employee);
+
             return $employee;
         }
 
@@ -103,5 +107,31 @@ class SyncEmployeeForMember
             'employment_type' => $employee->employment_type,
             'notes' => 'Removed from the workspace.',
         ]);
+    }
+
+    /**
+     * Starts a new hire's onboarding from the default template, when the
+     * workspace has asked for that. Nobody started it, so HR's steps go to
+     * the workspace owner.
+     *
+     * Never allowed to fail the join: a missing template or a message that
+     * cannot be sent is reported, and the person still joins.
+     */
+    private function startOnboarding(Employee $employee): void
+    {
+        $workspace = $employee->workspace;
+
+        if (! (bool) $workspace->setting('hr.auto_onboarding', false)) {
+            return;
+        }
+
+        rescue(function () use ($employee, $workspace): void {
+            ChecklistTemplate::seedDefaultsFor($workspace);
+            $template = ChecklistTemplate::defaultFor($workspace, ChecklistKind::Onboarding);
+
+            if ($template !== null) {
+                app(StartChecklist::class)->handle($employee, $template, null, today(), $employee->hired_on);
+            }
+        });
     }
 }

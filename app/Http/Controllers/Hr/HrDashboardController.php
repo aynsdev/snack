@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Hr;
 use App\Enums\LeaveStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Hr\AnnouncementResource;
+use App\Http\Resources\Hr\ChecklistTaskResource;
 use App\Http\Resources\Hr\LeaveRequestResource;
 use App\Http\Resources\Hr\TimeEntryResource;
 use App\Models\Employee;
+use App\Models\EmployeeChecklistTask;
 use App\Models\Holiday;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
@@ -19,8 +21,9 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * HR home: your clock, your leave, what the company announced, the next
- * holidays, and — for admins — what is waiting on them.
+ * HR home: your clock, your leave, your onboarding and offboarding steps,
+ * what the company announced, the next holidays, and — for admins — what is
+ * waiting on them.
  */
 class HrDashboardController extends Controller
 {
@@ -72,6 +75,17 @@ class HrDashboardController extends Controller
                 'pending_leave' => $workspace->leaveRequests()->where('status', LeaveStatus::Pending)->count(),
                 'clocked_in' => $workspace->timeEntries()->whereNull('clock_out_at')->count(),
             ] : null,
+            'my_tasks' => ChecklistTaskResource::collection(
+                EmployeeChecklistTask::query()
+                    ->where('assignee_id', $user->id)
+                    ->whereNull('completed_at')
+                    ->whereIn('employee_checklist_id', $workspace->employeeChecklists()->inProgress()->select('id'))
+                    ->with(['checklist.employee.user', 'checklist.workspace'])
+                    ->orderByRaw('due_on is null')
+                    ->orderBy('due_on')
+                    ->limit(20)
+                    ->get(),
+            )->resolve($request),
             'can_manage' => $canManage,
         ]);
     }

@@ -287,3 +287,67 @@ export type CompanyPolicy = {
     acknowledged_count: number | null;
     can: { acknowledge: boolean };
 };
+
+export type ChecklistAssignee = 'hr' | 'manager' | 'employee';
+
+export type ChecklistTask = {
+    id: number;
+    title: string;
+    description: string | null;
+    assignee_role: ChecklistAssignee;
+    assignee: string | null;
+    due_on: string | null;
+    is_overdue: boolean;
+    completed_at: string | null;
+    completed_by: string | null;
+    checklist?: {
+        id: number;
+        kind: 'onboarding' | 'offboarding';
+        kind_label: string;
+        employee: string;
+    };
+    can_toggle: boolean;
+};
+
+export type EmployeeChecklist = {
+    id: number;
+    kind: 'onboarding' | 'offboarding';
+    kind_label: string;
+    name: string;
+    status: string;
+    status_label: string;
+    employee: PersonSummary & { job_title: string | null };
+    starts_on: string;
+    target_on: string | null;
+    completed_at: string | null;
+    done: number;
+    total: number;
+    tasks: ChecklistTask[];
+    can_close: boolean;
+};
+
+export type ChecklistTemplate = {
+    id: number;
+    kind: 'onboarding' | 'offboarding';
+    name: string;
+    is_default: boolean;
+    tasks: {
+        title: string;
+        description: string | null;
+        assignee_role: ChecklistAssignee;
+        due_offset_days: number;
+    }[];
+};
+
+export type Resignation = {
+    id: number;
+    employee: PersonSummary;
+    reason: string;
+    last_day_on: string;
+    status: string;
+    status_label: string;
+    reviewer: string | null;
+    review_note: string | null;
+    created_at: string | null;
+    can: { withdraw: boolean; review: boolean };
+};

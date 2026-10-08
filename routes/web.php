@@ -30,6 +30,8 @@ use App\Http\Controllers\Files\FileBrowserController;
 use App\Http\Controllers\Hr\AbsenceController;
 use App\Http\Controllers\Hr\AnnouncementController;
 use App\Http\Controllers\Hr\AttendanceRequestController;
+use App\Http\Controllers\Hr\ChecklistController;
+use App\Http\Controllers\Hr\ChecklistTemplateController;
 use App\Http\Controllers\Hr\ClockController;
 use App\Http\Controllers\Hr\CompanyPolicyController;
 use App\Http\Controllers\Hr\ContractController;
@@ -47,6 +49,7 @@ use App\Http\Controllers\Hr\LeaveRequestController;
 use App\Http\Controllers\Hr\LeaveReviewController;
 use App\Http\Controllers\Hr\LeaveTypeController;
 use App\Http\Controllers\Hr\OrgChartController;
+use App\Http\Controllers\Hr\ResignationController;
 use App\Http\Controllers\Hr\ShiftController;
 use App\Http\Controllers\Hr\ShiftRequestController;
 use App\Http\Controllers\Hr\TimeEntryController;
@@ -1101,6 +1104,21 @@ Route::middleware(['auth', 'verified', 'workspace'])
             Route::get('policies/{companyPolicy}/file', [CompanyPolicyController::class, 'download'])->name('policies.download');
 
             Route::get('org-chart', [OrgChartController::class, 'index'])->name('org-chart');
+
+            Route::get('onboarding', [ChecklistController::class, 'onboarding'])->name('onboarding.index');
+            Route::get('offboarding', [ChecklistController::class, 'offboarding'])->name('offboarding.index');
+            Route::post('checklists', [ChecklistController::class, 'store'])->name('checklists.store');
+            Route::post('checklists/{employeeChecklist}/complete', [ChecklistController::class, 'complete'])->name('checklists.complete');
+            Route::post('checklists/{employeeChecklist}/cancel', [ChecklistController::class, 'cancel'])->name('checklists.cancel');
+            Route::post('checklist-tasks/{employeeChecklistTask}/toggle', [ChecklistController::class, 'toggle'])->name('checklists.tasks.toggle');
+            Route::post('checklist-templates', [ChecklistTemplateController::class, 'store'])->name('checklist-templates.store');
+            Route::patch('checklist-templates/{checklistTemplate}', [ChecklistTemplateController::class, 'update'])->name('checklist-templates.update');
+            Route::delete('checklist-templates/{checklistTemplate}', [ChecklistTemplateController::class, 'destroy'])->name('checklist-templates.destroy');
+
+            Route::post('resignations', [ResignationController::class, 'store'])->middleware('throttle:10,1')->name('resignations.store');
+            Route::post('resignations/{resignation}/withdraw', [ResignationController::class, 'withdraw'])->name('resignations.withdraw');
+            Route::post('resignations/{resignation}/accept', [ResignationController::class, 'accept'])->name('resignations.accept');
+            Route::post('resignations/{resignation}/reject', [ResignationController::class, 'reject'])->name('resignations.reject');
 
             Route::get('holidays', [HolidayController::class, 'index'])->name('holidays.index');
             Route::post('holidays', [HolidayController::class, 'store'])->name('holidays.store');
