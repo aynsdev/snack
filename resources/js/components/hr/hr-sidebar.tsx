@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
+    ChartColumn,
     Clock,
     LayoutDashboard,
     Megaphone,
@@ -13,7 +14,11 @@ import type { LucideIcon } from 'lucide-react';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
-import { index as hrIndex, me as myProfile } from '@/routes/hr';
+import {
+    dashboard as hrDashboard,
+    index as hrIndex,
+    me as myProfile,
+} from '@/routes/hr';
 import { index as announcementsIndex } from '@/routes/hr/announcements';
 import { index as employeesIndex } from '@/routes/hr/employees';
 import { index as holidaysIndex } from '@/routes/hr/holidays';
@@ -88,6 +93,12 @@ export function HrSidebar({ onNavigate }: { onNavigate?: () => void }) {
     ];
 
     const admin: Item[] = [
+        {
+            label: 'Dashboard',
+            icon: ChartColumn,
+            href: hrDashboard(workspace.slug),
+            match: /^\/dashboard/,
+        },
         {
             label: 'Employees',
             icon: Users,
