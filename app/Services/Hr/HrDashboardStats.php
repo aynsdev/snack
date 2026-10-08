@@ -58,9 +58,10 @@ final class HrDashboardStats
     }
 
     /**
-     * Shift, work-type, and attendance requests waiting on HR, by kind.
+     * Shift, work-type, and attendance requests, and uploaded documents,
+     * waiting on HR, by kind.
      *
-     * @return array{shift: int, work_type: int, attendance: int}
+     * @return array{shift: int, work_type: int, attendance: int, documents: int}
      */
     public function pendingRequests(): array
     {
@@ -68,6 +69,7 @@ final class HrDashboardStats
             'shift' => $this->workspace->shiftRequests()->pending()->count(),
             'work_type' => $this->workspace->workTypeRequests()->pending()->count(),
             'attendance' => $this->workspace->attendanceRequests()->pending()->count(),
+            'documents' => $this->workspace->documentSubmissions()->awaitingReview()->count(),
         ];
     }
 

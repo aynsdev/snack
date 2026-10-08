@@ -2,10 +2,13 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
     ChartColumn,
+    BookOpen,
     ClipboardList,
     Clock,
+    FileStack,
     LayoutDashboard,
     Megaphone,
+    Network,
     Plane,
     Settings,
     UserRound,
@@ -19,11 +22,14 @@ import {
     dashboard as hrDashboard,
     index as hrIndex,
     me as myProfile,
+    orgChart,
 } from '@/routes/hr';
 import { index as announcementsIndex } from '@/routes/hr/announcements';
+import { index as documentsIndex } from '@/routes/hr/documents';
 import { index as employeesIndex } from '@/routes/hr/employees';
 import { index as holidaysIndex } from '@/routes/hr/holidays';
 import { index as leaveIndex } from '@/routes/hr/leave';
+import { index as policiesIndex } from '@/routes/hr/policies';
 import { index as requestsIndex } from '@/routes/hr/requests';
 import { edit as hrSettings } from '@/routes/hr/settings';
 import { index as timeIndex } from '@/routes/hr/time';
@@ -83,6 +89,12 @@ export function HrSidebar({ onNavigate }: { onNavigate?: () => void }) {
             href: requestsIndex(workspace.slug),
             match: /^\/requests/,
         },
+        {
+            label: 'Documents',
+            icon: FileStack,
+            href: documentsIndex(workspace.slug),
+            match: /^\/documents/,
+        },
     ];
 
     const company: Item[] = [
@@ -97,6 +109,18 @@ export function HrSidebar({ onNavigate }: { onNavigate?: () => void }) {
             icon: Megaphone,
             href: announcementsIndex(workspace.slug),
             match: /^\/announcements/,
+        },
+        {
+            label: 'Policies',
+            icon: BookOpen,
+            href: policiesIndex(workspace.slug),
+            match: /^\/policies/,
+        },
+        {
+            label: 'Org chart',
+            icon: Network,
+            href: orgChart(workspace.slug),
+            match: /^\/org-chart/,
         },
     ];
 

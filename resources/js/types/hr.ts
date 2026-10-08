@@ -223,3 +223,67 @@ export type HrRequest = {
     created_at: string | null;
     can: { cancel: boolean; review: boolean };
 };
+
+export type DocumentSubmission = {
+    id: number;
+    employee?: PersonSummary;
+    request?: {
+        id: number;
+        title: string;
+        description: string | null;
+        allowed_formats: string[];
+        max_size_mb: number;
+        due_on: string | null;
+    };
+    status: 'pending' | 'submitted' | 'approved' | 'rejected';
+    status_label: string;
+    file_name: string | null;
+    has_file: boolean;
+    expires_on: string | null;
+    submitted_at: string | null;
+    reviewer: string | null;
+    review_note: string | null;
+    can: { upload: boolean; review: boolean };
+};
+
+export type DocumentRequest = {
+    id: number;
+    title: string;
+    description: string | null;
+    allowed_formats: string[];
+    max_size_mb: number;
+    due_on: string | null;
+    created_by: string | null;
+    created_at: string | null;
+    total: number;
+    uploaded: number;
+    approved: number;
+    submissions: DocumentSubmission[];
+};
+
+export type DisciplinaryAction = {
+    id: number;
+    type: string;
+    type_label: string;
+    description: string;
+    starts_on: string;
+    duration_days: number | null;
+    ends_on: string | null;
+    issued_by: string | null;
+    file_name: string | null;
+    has_file: boolean;
+};
+
+export type CompanyPolicy = {
+    id: number;
+    title: string;
+    body: string;
+    requires_acknowledgement: boolean;
+    file_name: string | null;
+    has_file: boolean;
+    author: string | null;
+    updated_at: string | null;
+    acknowledged: boolean;
+    acknowledged_count: number | null;
+    can: { acknowledge: boolean };
+};

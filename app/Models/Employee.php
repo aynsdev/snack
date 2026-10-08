@@ -211,6 +211,30 @@ class Employee extends Model
         return $this->hasMany(AttendanceRequest::class);
     }
 
+    /**
+     * @return HasMany<DocumentSubmission, $this>
+     */
+    public function documentSubmissions(): HasMany
+    {
+        return $this->hasMany(DocumentSubmission::class);
+    }
+
+    /**
+     * @return HasMany<DisciplinaryAction, $this>
+     */
+    public function disciplinaryActions(): HasMany
+    {
+        return $this->hasMany(DisciplinaryAction::class);
+    }
+
+    /**
+     * @return HasMany<PolicyAcknowledgement, $this>
+     */
+    public function policyAcknowledgements(): HasMany
+    {
+        return $this->hasMany(PolicyAcknowledgement::class);
+    }
+
     // -- Scopes --------------------------------------------------------------
 
     /**

@@ -6,6 +6,7 @@ use App\Actions\Audit\RecordAuditLog;
 use App\Enums\AbsenceType;
 use App\Enums\AuditAction;
 use App\Enums\ContractStatus;
+use App\Enums\DisciplinaryActionType;
 use App\Enums\EmployeeRecordType;
 use App\Enums\EmploymentChange;
 use App\Enums\EmploymentStatus;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Hr\UpdateEmployeeRequest;
 use App\Http\Resources\Hr\AbsenceResource;
 use App\Http\Resources\Hr\ContractResource;
+use App\Http\Resources\Hr\DisciplinaryActionResource;
 use App\Http\Resources\Hr\EmployeeRecordResource;
 use App\Http\Resources\Hr\EmployeeResource;
 use App\Http\Resources\Hr\EmploymentHistoryResource;
@@ -117,6 +119,9 @@ class EmployeeController extends Controller
                 $employee->leaveRequests()->with(['employee.user', 'leaveType', 'reviewer', 'workspace'])->orderByDesc('starts_on')->limit(50)->get(),
             )->resolve($request),
             'balances' => LeaveBalances::for($employee, $workspace),
+            'disciplinary_actions' => DisciplinaryActionResource::collection(
+                $employee->disciplinaryActions()->with('issuer')->orderByDesc('starts_on')->orderByDesc('id')->get(),
+            )->resolve($request),
             'time_entries' => TimeEntryResource::collection(
                 $employee->timeEntries()->latest('clock_in_at')->limit(30)->get(),
             )->resolve($request),
@@ -142,6 +147,7 @@ class EmployeeController extends Controller
                 'contract_statuses' => ContractStatus::options(),
                 'record_types' => EmployeeRecordType::options(),
                 'absence_types' => AbsenceType::options(),
+                'disciplinary_types' => DisciplinaryActionType::options(),
             ],
             'can_manage' => $canManage,
         ]);
