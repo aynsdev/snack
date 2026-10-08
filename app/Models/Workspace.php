@@ -441,6 +441,44 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<EquipmentCategory, $this>
+     */
+    public function equipmentCategories(): HasMany
+    {
+        return $this->hasMany(EquipmentCategory::class);
+    }
+
+    /**
+     * Company equipment — HR's assets. Not to be confused with
+     * {@see assets()}, the shared file library.
+     *
+     * @return HasMany<Equipment, $this>
+     */
+    public function equipment(): HasMany
+    {
+        return $this->hasMany(Equipment::class);
+    }
+
+    /**
+     * @return HasMany<EquipmentRequest, $this>
+     */
+    public function equipmentRequests(): HasMany
+    {
+        return $this->hasMany(EquipmentRequest::class);
+    }
+
+    /**
+     * Every hand-over of every item. Scopes `{equipmentAssignment}` route
+     * binding to the tenant.
+     *
+     * @return HasManyThrough<EquipmentAssignment, Equipment, $this>
+     */
+    public function equipmentAssignments(): HasManyThrough
+    {
+        return $this->hasManyThrough(EquipmentAssignment::class, Equipment::class);
+    }
+
+    /**
      * @return HasMany<Holiday, $this>
      */
     public function holidays(): HasMany

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Hr;
 
+use App\Enums\ChecklistKind;
 use App\Models\EmployeeChecklist;
 use App\Models\EmployeeChecklistTask;
 use Illuminate\Http\Request;
@@ -37,6 +38,10 @@ class EmployeeChecklistResource extends JsonResource
             'done' => $this->tasks->filter(fn (EmployeeChecklistTask $task): bool => $task->isDone())->count(),
             'total' => $this->tasks->count(),
             'tasks' => ChecklistTaskResource::collection($this->tasks)->resolve($request),
+            // What the person leaving still has to hand back.
+            'equipment_held' => $this->kind === ChecklistKind::Offboarding && $this->status->isInProgress()
+                ? $this->employee->equipmentAssignments()->open()->count()
+                : null,
             'can_close' => $request->user()?->can('close', $this->resource) ?? false,
         ];
     }

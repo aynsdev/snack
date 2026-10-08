@@ -170,6 +170,15 @@ export function ChecklistCard({
                 )}
             </div>
 
+            {checklist.equipment_held !== null &&
+                checklist.equipment_held > 0 && (
+                    <p className="-mt-1 px-3 pb-3 text-xs text-amber-600 dark:text-amber-400">
+                        Still has {checklist.equipment_held} company{' '}
+                        {checklist.equipment_held === 1 ? 'item' : 'items'} to
+                        hand back.
+                    </p>
+                )}
+
             {open && (
                 <div className="border-t border-border">
                     <ul className="divide-y divide-border">

@@ -66,7 +66,10 @@ function requestUrl(
     request: HrRequest,
     action: 'cancel' | 'approve' | 'reject',
 ): string {
-    return ROUTES[request.type][action]([workspace, request.id]).url;
+    // Equipment requests have their own page; only these three appear here.
+    const type = request.type as keyof typeof ROUTES;
+
+    return ROUTES[type][action]([workspace, request.id]).url;
 }
 
 /**

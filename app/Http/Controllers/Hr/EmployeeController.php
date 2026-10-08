@@ -23,6 +23,7 @@ use App\Http\Resources\Hr\EmployeeChecklistResource;
 use App\Http\Resources\Hr\EmployeeRecordResource;
 use App\Http\Resources\Hr\EmployeeResource;
 use App\Http\Resources\Hr\EmploymentHistoryResource;
+use App\Http\Resources\Hr\EquipmentAssignmentResource;
 use App\Http\Resources\Hr\LeaveRequestResource;
 use App\Http\Resources\Hr\ResignationResource;
 use App\Http\Resources\Hr\TimeEntryResource;
@@ -138,6 +139,14 @@ class EmployeeController extends Controller
                 : (new ResignationResource($resignation))->resolve($request),
             'can_resign' => $employee->user_id === $request->user()->id
                 && $request->user()->can('create', [Resignation::class, $workspace]),
+            'equipment' => EquipmentAssignmentResource::collection(
+                $employee->equipmentAssignments()
+                    ->with(['equipment.category', 'equipment.workspace', 'employee.user', 'assigner', 'returner'])
+                    ->orderByRaw('returned_on is not null')
+                    ->latest('assigned_on')
+                    ->limit(50)
+                    ->get(),
+            )->resolve($request),
             'disciplinary_actions' => DisciplinaryActionResource::collection(
                 $employee->disciplinaryActions()->with('issuer')->orderByDesc('starts_on')->orderByDesc('id')->get(),
             )->resolve($request),

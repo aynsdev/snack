@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Hr;
 
 use App\Models\AttendanceRequest;
+use App\Models\EquipmentRequest;
 use App\Models\HrRequest;
 use App\Models\ShiftRequest;
 use App\Models\WorkTypeRequest;
@@ -10,7 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * One shift, work-type, or attendance request, told apart by `type`.
+ * One shift, work-type, attendance, or equipment request, told apart by
+ * `type`.
  *
  * @mixin HrRequest
  */
@@ -29,6 +31,7 @@ class HrRequestResource extends JsonResource
                 ShiftRequest::class => 'shift',
                 WorkTypeRequest::class => 'work_type',
                 AttendanceRequest::class => 'attendance',
+                EquipmentRequest::class => 'equipment',
                 default => throw new \LogicException('Unknown HR request: '.$this->resource::class),
             },
             'kind' => $this->kind(),
@@ -39,6 +42,10 @@ class HrRequestResource extends JsonResource
                 'initials' => $this->employee->user->initials(),
                 'avatar_url' => $this->employee->user->avatarUrl(),
             ],
+            'equipment_category_id' => $this->when(
+                $this->resource instanceof EquipmentRequest,
+                fn (): ?int => $this->resource->equipment_category_id ?? null,
+            ),
             'reason' => $this->reason,
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
