@@ -339,6 +339,38 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<Shift, $this>
+     */
+    public function shifts(): HasMany
+    {
+        return $this->hasMany(Shift::class);
+    }
+
+    /**
+     * @return HasMany<ShiftRequest, $this>
+     */
+    public function shiftRequests(): HasMany
+    {
+        return $this->hasMany(ShiftRequest::class);
+    }
+
+    /**
+     * @return HasMany<WorkTypeRequest, $this>
+     */
+    public function workTypeRequests(): HasMany
+    {
+        return $this->hasMany(WorkTypeRequest::class);
+    }
+
+    /**
+     * @return HasMany<AttendanceRequest, $this>
+     */
+    public function attendanceRequests(): HasMany
+    {
+        return $this->hasMany(AttendanceRequest::class);
+    }
+
+    /**
      * @return HasMany<Holiday, $this>
      */
     public function holidays(): HasMany

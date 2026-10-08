@@ -3,10 +3,9 @@
 namespace App\Actions\Hr;
 
 use App\Enums\LeaveStatus;
-use App\Enums\MemberStatus;
-use App\Enums\WorkspaceRole;
 use App\Models\LeaveRequest;
 use App\Models\User;
+use App\Services\Hr\HrReviewers;
 use App\Services\HrBot;
 
 /**
@@ -45,7 +44,7 @@ class NotifyLeave
 
         $lines[] = 'Review it: '.$this->link($leaveRequest);
 
-        foreach ($this->reviewers($leaveRequest, $requester) as $reviewer) {
+        foreach (HrReviewers::for($leaveRequest->workspace_id, $requester) as $reviewer) {
             $this->send($leaveRequest, $reviewer, implode("\n", $lines));
         }
     }
@@ -71,28 +70,6 @@ class NotifyLeave
         $lines[] = $this->link($leaveRequest);
 
         $this->send($leaveRequest, $leaveRequest->employee->user, implode("\n", $lines));
-    }
-
-    /**
-     * The workspace's active, human admins other than the requester.
-     *
-     * @return iterable<int, User>
-     */
-    private function reviewers(LeaveRequest $leaveRequest, User $requester): iterable
-    {
-        $roles = array_map(
-            fn (WorkspaceRole $role): string => $role->value,
-            array_filter(WorkspaceRole::cases(), fn (WorkspaceRole $role): bool => $role->canManagePeople()),
-        );
-
-        return User::query()
-            ->where('is_bot', false)
-            ->whereKeyNot($requester->id)
-            ->whereHas('workspaceMemberships', fn ($query) => $query
-                ->where('workspace_id', $leaveRequest->workspace_id)
-                ->where('status', MemberStatus::Active)
-                ->whereIn('role', $roles))
-            ->get();
     }
 
     private function send(LeaveRequest $leaveRequest, User $recipient, string $body): void

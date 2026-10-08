@@ -29,6 +29,7 @@ use App\Http\Controllers\Files\DownloadController;
 use App\Http\Controllers\Files\FileBrowserController;
 use App\Http\Controllers\Hr\AbsenceController;
 use App\Http\Controllers\Hr\AnnouncementController;
+use App\Http\Controllers\Hr\AttendanceRequestController;
 use App\Http\Controllers\Hr\ClockController;
 use App\Http\Controllers\Hr\ContractController;
 use App\Http\Controllers\Hr\EmployeeController;
@@ -37,11 +38,15 @@ use App\Http\Controllers\Hr\EmploymentHistoryController;
 use App\Http\Controllers\Hr\HolidayController;
 use App\Http\Controllers\Hr\HrAnalyticsController;
 use App\Http\Controllers\Hr\HrDashboardController;
+use App\Http\Controllers\Hr\HrRequestController;
 use App\Http\Controllers\Hr\HrSettingsController;
 use App\Http\Controllers\Hr\LeaveRequestController;
 use App\Http\Controllers\Hr\LeaveReviewController;
 use App\Http\Controllers\Hr\LeaveTypeController;
+use App\Http\Controllers\Hr\ShiftController;
+use App\Http\Controllers\Hr\ShiftRequestController;
 use App\Http\Controllers\Hr\TimeEntryController;
+use App\Http\Controllers\Hr\WorkTypeRequestController;
 use App\Http\Controllers\Huddles\HuddleHistoryController;
 use App\Http\Controllers\InvitationAcceptanceController;
 use App\Http\Controllers\Mcp\AuthorizeWorkspaceController;
@@ -1054,6 +1059,24 @@ Route::middleware(['auth', 'verified', 'workspace'])
                 ->name('clock.out');
             Route::patch('time/{timeEntry}', [TimeEntryController::class, 'update'])->name('time.update');
             Route::delete('time/{timeEntry}', [TimeEntryController::class, 'destroy'])->name('time.destroy');
+
+            Route::get('requests', [HrRequestController::class, 'index'])->name('requests.index');
+            Route::post('requests/shift', [ShiftRequestController::class, 'store'])->middleware('throttle:30,1')->name('requests.shift.store');
+            Route::post('requests/shift/{shiftRequest}/cancel', [ShiftRequestController::class, 'cancel'])->name('requests.shift.cancel');
+            Route::post('requests/shift/{shiftRequest}/approve', [ShiftRequestController::class, 'approve'])->name('requests.shift.approve');
+            Route::post('requests/shift/{shiftRequest}/reject', [ShiftRequestController::class, 'reject'])->name('requests.shift.reject');
+            Route::post('requests/work-type', [WorkTypeRequestController::class, 'store'])->middleware('throttle:30,1')->name('requests.work-type.store');
+            Route::post('requests/work-type/{workTypeRequest}/cancel', [WorkTypeRequestController::class, 'cancel'])->name('requests.work-type.cancel');
+            Route::post('requests/work-type/{workTypeRequest}/approve', [WorkTypeRequestController::class, 'approve'])->name('requests.work-type.approve');
+            Route::post('requests/work-type/{workTypeRequest}/reject', [WorkTypeRequestController::class, 'reject'])->name('requests.work-type.reject');
+            Route::post('requests/attendance', [AttendanceRequestController::class, 'store'])->middleware('throttle:30,1')->name('requests.attendance.store');
+            Route::post('requests/attendance/{attendanceRequest}/cancel', [AttendanceRequestController::class, 'cancel'])->name('requests.attendance.cancel');
+            Route::post('requests/attendance/{attendanceRequest}/approve', [AttendanceRequestController::class, 'approve'])->name('requests.attendance.approve');
+            Route::post('requests/attendance/{attendanceRequest}/reject', [AttendanceRequestController::class, 'reject'])->name('requests.attendance.reject');
+
+            Route::post('shifts', [ShiftController::class, 'store'])->name('shifts.store');
+            Route::patch('shifts/{shift}', [ShiftController::class, 'update'])->name('shifts.update');
+            Route::delete('shifts/{shift}', [ShiftController::class, 'destroy'])->name('shifts.destroy');
 
             Route::get('holidays', [HolidayController::class, 'index'])->name('holidays.index');
             Route::post('holidays', [HolidayController::class, 'store'])->name('holidays.store');

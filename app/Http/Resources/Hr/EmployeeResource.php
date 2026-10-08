@@ -29,6 +29,13 @@ class EmployeeResource extends JsonResource
             'department' => $this->department,
             'employment_type' => $this->employment_type->value,
             'employment_type_label' => $this->employment_type->label(),
+            'work_type' => $this->work_type->value,
+            'work_type_label' => $this->work_type->label(),
+            'shift' => $this->whenLoaded('shift', fn (): ?array => $this->shift === null ? null : [
+                'id' => $this->shift->id,
+                'name' => $this->shift->name,
+                'hours' => $this->shift->hours(),
+            ]),
             'status' => $this->status->value,
             'status_label' => $this->status->label(),
             'hired_on' => $this->hired_on?->toDateString(),

@@ -2,6 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
     ChartColumn,
+    ClipboardList,
     Clock,
     LayoutDashboard,
     Megaphone,
@@ -23,6 +24,7 @@ import { index as announcementsIndex } from '@/routes/hr/announcements';
 import { index as employeesIndex } from '@/routes/hr/employees';
 import { index as holidaysIndex } from '@/routes/hr/holidays';
 import { index as leaveIndex } from '@/routes/hr/leave';
+import { index as requestsIndex } from '@/routes/hr/requests';
 import { edit as hrSettings } from '@/routes/hr/settings';
 import { index as timeIndex } from '@/routes/hr/time';
 
@@ -74,6 +76,12 @@ export function HrSidebar({ onNavigate }: { onNavigate?: () => void }) {
             icon: Plane,
             href: leaveIndex(workspace.slug),
             match: /^\/leave/,
+        },
+        {
+            label: 'Requests',
+            icon: ClipboardList,
+            href: requestsIndex(workspace.slug),
+            match: /^\/requests/,
         },
     ];
 

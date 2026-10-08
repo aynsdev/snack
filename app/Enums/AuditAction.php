@@ -163,6 +163,15 @@ enum AuditAction: string
     case TimeEntryUpdated = 'hr.time_entry_updated';
     case TimeEntryDeleted = 'hr.time_entry_deleted';
     case HrSettingsUpdated = 'hr.settings_updated';
+    case ShiftCreated = 'hr.shift_created';
+    case ShiftUpdated = 'hr.shift_updated';
+    case ShiftDeleted = 'hr.shift_deleted';
+    case ShiftRequestApproved = 'hr.shift_request_approved';
+    case ShiftRequestRejected = 'hr.shift_request_rejected';
+    case WorkTypeRequestApproved = 'hr.work_type_request_approved';
+    case WorkTypeRequestRejected = 'hr.work_type_request_rejected';
+    case AttendanceRequestApproved = 'hr.attendance_request_approved';
+    case AttendanceRequestRejected = 'hr.attendance_request_rejected';
 
     public function label(): string
     {
@@ -230,6 +239,15 @@ enum AuditAction: string
             self::TimeEntryUpdated => 'Time entry corrected',
             self::TimeEntryDeleted => 'Time entry deleted',
             self::HrSettingsUpdated => 'HR settings updated',
+            self::ShiftCreated => 'Shift created',
+            self::ShiftUpdated => 'Shift updated',
+            self::ShiftDeleted => 'Shift deleted',
+            self::ShiftRequestApproved => 'Shift change approved',
+            self::ShiftRequestRejected => 'Shift change rejected',
+            self::WorkTypeRequestApproved => 'Work type change approved',
+            self::WorkTypeRequestRejected => 'Work type change rejected',
+            self::AttendanceRequestApproved => 'Attendance correction approved',
+            self::AttendanceRequestRejected => 'Attendance correction rejected',
         };
     }
 

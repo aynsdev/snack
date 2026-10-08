@@ -10,6 +10,7 @@ use App\Http\Resources\Hr\TimeEntryResource;
 use App\Models\Employee;
 use App\Models\TimeEntry;
 use App\Models\Workspace;
+use App\Services\Hr\Punctuality;
 use App\Support\Geofence;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
@@ -40,6 +41,7 @@ class TimeEntryController extends Controller
             : null;
 
         $scope = $canManage && $request->query('scope') === 'team' ? 'team' : 'mine';
+        $flag = in_array($request->query('flag'), ['late', 'early'], true) ? $request->query('flag') : null;
         $ownEmployeeId = $employee === null ? 0 : $employee->id;
 
         $entries = $workspace->timeEntries()
@@ -50,6 +52,8 @@ class TimeEntryController extends Controller
                 fn ($query) => $query->when($employeeId !== null, fn ($query) => $query->where('employee_id', $employeeId)),
                 fn ($query) => $query->where('employee_id', $ownEmployeeId),
             )
+            ->when($flag === 'late', fn ($query) => $query->where('late_minutes', '>', 0))
+            ->when($flag === 'early', fn ($query) => $query->where('early_out_minutes', '>', 0))
             ->latest('clock_in_at')
             ->limit(500)
             ->get();
@@ -68,6 +72,7 @@ class TimeEntryController extends Controller
                 'to' => $to->toDateString(),
                 'scope' => $scope,
                 'employee' => $employeeId,
+                'flag' => $flag,
             ],
             'employees' => $canManage ? $workspace->employees()
                 ->with('user')
@@ -85,6 +90,7 @@ class TimeEntryController extends Controller
         TimeEntry $timeEntry,
         UpdateTimeEntryRequest $request,
         RecordAuditLog $audit,
+        Punctuality $punctuality,
     ): RedirectResponse {
         $before = [
             'clock_in_at' => $timeEntry->clock_in_at->toIso8601String(),
@@ -92,6 +98,7 @@ class TimeEntryController extends Controller
         ];
 
         $timeEntry->update($request->times());
+        $punctuality->measure($timeEntry);
 
         $audit->handle($workspace, AuditAction::TimeEntryUpdated, $request->user(), $timeEntry, $before, [
             'employee' => $timeEntry->employee->user->name,
