@@ -38,6 +38,7 @@ class HrAnalyticsController extends Controller
             'expiring_contracts' => $stats->expiringContracts(),
             'pending_requests' => $stats->pendingRequests(),
             'late_arrivals' => $stats->lateArrivals(),
+            'checklists' => $stats->checklistsInProgress(),
             'pending_leave' => LeaveRequestResource::collection(
                 $workspace->leaveRequests()
                     ->where('status', LeaveStatus::Pending)

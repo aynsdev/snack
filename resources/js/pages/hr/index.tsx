@@ -8,6 +8,7 @@ import {
     Plane,
     Users,
 } from 'lucide-react';
+import { TaskCheckbox, TaskDue } from '@/components/hr/checklist-card';
 import { ClockCard } from '@/components/hr/clock-card';
 import {
     EmptyNote,
@@ -31,6 +32,7 @@ import { index as leaveIndex } from '@/routes/hr/leave';
 import { index as timeIndex } from '@/routes/hr/time';
 import type {
     Announcement,
+    ChecklistTask,
     Geofence,
     LeaveBalance,
     LeaveRequest,
@@ -59,6 +61,7 @@ type Props = {
         leave_type: string;
         ends_on: string;
     }[];
+    my_tasks: ChecklistTask[];
     stats: {
         headcount: number;
         pending_leave: number;
@@ -80,6 +83,7 @@ export default function HrOverview({
     announcements,
     upcoming_holidays,
     out_today,
+    my_tasks,
     stats,
 }: Props) {
     const workspace = useWorkspace();
@@ -145,6 +149,35 @@ export default function HrOverview({
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <div className="min-w-0 space-y-6">
+                    {my_tasks.length > 0 && (
+                        <Section title={`Your HR tasks (${my_tasks.length})`}>
+                            <ul className="divide-y divide-border">
+                                {my_tasks.map((task) => (
+                                    <li
+                                        key={task.id}
+                                        className="flex items-start gap-3 py-2 first:pt-0 last:pb-0"
+                                    >
+                                        <span className="pt-0.5">
+                                            <TaskCheckbox task={task} />
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-sm">
+                                                {task.title}
+                                            </span>
+                                            {task.checklist && (
+                                                <span className="block text-xs text-muted-foreground">
+                                                    {task.checklist.kind_label}{' '}
+                                                    · {task.checklist.employee}
+                                                </span>
+                                            )}
+                                        </span>
+                                        <TaskDue task={task} />
+                                    </li>
+                                ))}
+                            </ul>
+                        </Section>
+                    )}
+
                     {clock && (
                         <ClockCard
                             openEntry={clock.open_entry}

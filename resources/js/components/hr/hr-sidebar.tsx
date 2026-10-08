@@ -11,6 +11,8 @@ import {
     Network,
     Plane,
     Settings,
+    UserMinus,
+    UserPlus,
     UserRound,
     Users,
 } from 'lucide-react';
@@ -29,6 +31,8 @@ import { index as documentsIndex } from '@/routes/hr/documents';
 import { index as employeesIndex } from '@/routes/hr/employees';
 import { index as holidaysIndex } from '@/routes/hr/holidays';
 import { index as leaveIndex } from '@/routes/hr/leave';
+import { index as offboardingIndex } from '@/routes/hr/offboarding';
+import { index as onboardingIndex } from '@/routes/hr/onboarding';
 import { index as policiesIndex } from '@/routes/hr/policies';
 import { index as requestsIndex } from '@/routes/hr/requests';
 import { edit as hrSettings } from '@/routes/hr/settings';
@@ -136,6 +140,18 @@ export function HrSidebar({ onNavigate }: { onNavigate?: () => void }) {
             icon: Users,
             href: employeesIndex(workspace.slug),
             match: isOwnFile ? /^$/ : /^\/employees/,
+        },
+        {
+            label: 'Onboarding',
+            icon: UserPlus,
+            href: onboardingIndex(workspace.slug),
+            match: /^\/onboarding/,
+        },
+        {
+            label: 'Offboarding',
+            icon: UserMinus,
+            href: offboardingIndex(workspace.slug),
+            match: /^\/offboarding/,
         },
         {
             label: 'HR settings',

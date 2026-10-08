@@ -181,6 +181,13 @@ enum AuditAction: string
     case CompanyPolicyPublished = 'hr.policy_published';
     case CompanyPolicyUpdated = 'hr.policy_updated';
     case CompanyPolicyDeleted = 'hr.policy_deleted';
+    case ChecklistStarted = 'hr.checklist_started';
+    case ChecklistCompleted = 'hr.checklist_completed';
+    case ChecklistCancelled = 'hr.checklist_cancelled';
+    case ChecklistTemplateSaved = 'hr.checklist_template_saved';
+    case ChecklistTemplateDeleted = 'hr.checklist_template_deleted';
+    case ResignationAccepted = 'hr.resignation_accepted';
+    case ResignationRejected = 'hr.resignation_rejected';
 
     public function label(): string
     {
@@ -266,6 +273,13 @@ enum AuditAction: string
             self::CompanyPolicyPublished => 'Policy published',
             self::CompanyPolicyUpdated => 'Policy updated',
             self::CompanyPolicyDeleted => 'Policy deleted',
+            self::ChecklistStarted => 'Checklist started',
+            self::ChecklistCompleted => 'Checklist completed',
+            self::ChecklistCancelled => 'Checklist cancelled',
+            self::ChecklistTemplateSaved => 'Checklist template saved',
+            self::ChecklistTemplateDeleted => 'Checklist template deleted',
+            self::ResignationAccepted => 'Resignation accepted',
+            self::ResignationRejected => 'Resignation rejected',
         };
     }
 

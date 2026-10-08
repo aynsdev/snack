@@ -6,8 +6,10 @@ use App\Actions\Audit\RecordAuditLog;
 use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Hr\UpdateHrSettingsRequest;
+use App\Http\Resources\Hr\ChecklistTemplateResource;
 use App\Http\Resources\Hr\LeaveTypeResource;
 use App\Http\Resources\Hr\ShiftResource;
+use App\Models\ChecklistTemplate;
 use App\Models\LeaveType;
 use App\Models\Workspace;
 use App\Support\Geofence;
@@ -17,8 +19,8 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Where people may clock in from, which kinds of leave exist, and the shifts
- * people are scheduled on.
+ * Where people may clock in from, which kinds of leave exist, the shifts
+ * people are scheduled on, and how onboarding and offboarding go.
  */
 class HrSettingsController extends Controller
 {
@@ -27,6 +29,7 @@ class HrSettingsController extends Controller
         $this->authorize('create', [LeaveType::class, $workspace]);
 
         LeaveType::seedDefaultsFor($workspace);
+        ChecklistTemplate::seedDefaultsFor($workspace);
 
         return Inertia::render('hr/settings', [
             'geofence' => Geofence::forWorkspace($workspace)?->toArray(),
@@ -35,6 +38,10 @@ class HrSettingsController extends Controller
                 $workspace->leaveTypes()->orderByRaw('archived_at is not null')->orderBy('name')->get(),
             )->resolve($request),
             'shifts' => ShiftResource::collection($workspace->shifts()->orderBy('starts_at')->get())->resolve($request),
+            'checklist_templates' => ChecklistTemplateResource::collection(
+                $workspace->checklistTemplates()->with('tasks')->orderBy('kind')->orderByDesc('is_default')->orderBy('name')->get(),
+            )->resolve($request),
+            'auto_onboarding' => (bool) $workspace->setting('hr.auto_onboarding', false),
         ]);
     }
 
@@ -42,17 +49,28 @@ class HrSettingsController extends Controller
     {
         $before = $workspace->setting('hr', []);
 
-        $geofence = $request->input('geofence');
+        $hr = is_array($before) ? $before : [];
 
-        $hr = [
-            'require_location' => $request->boolean('require_location'),
-            'geofence' => is_array($geofence) ? [
+        // Each settings form sends only its own fields; whatever it leaves out
+        // keeps its saved value.
+        if ($request->has('require_location')) {
+            $hr['require_location'] = $request->boolean('require_location');
+        }
+
+        if ($request->exists('geofence')) {
+            $geofence = $request->input('geofence');
+
+            $hr['geofence'] = is_array($geofence) ? [
                 'latitude' => (float) $geofence['latitude'],
                 'longitude' => (float) $geofence['longitude'],
                 'radius_meters' => (int) $geofence['radius_meters'],
                 'enforced' => (bool) ($geofence['enforced'] ?? false),
-            ] : null,
-        ];
+            ] : null;
+        }
+
+        if ($request->has('auto_onboarding')) {
+            $hr['auto_onboarding'] = $request->boolean('auto_onboarding');
+        }
 
         $settings = $workspace->settings ?? [];
         $settings['hr'] = $hr;

@@ -58,10 +58,10 @@ final class HrDashboardStats
     }
 
     /**
-     * Shift, work-type, and attendance requests, and uploaded documents,
-     * waiting on HR, by kind.
+     * Shift, work-type, and attendance requests, uploaded documents, and
+     * resignations waiting on HR, by kind.
      *
-     * @return array{shift: int, work_type: int, attendance: int, documents: int}
+     * @return array{shift: int, work_type: int, attendance: int, documents: int, resignations: int}
      */
     public function pendingRequests(): array
     {
@@ -70,6 +70,27 @@ final class HrDashboardStats
             'work_type' => $this->workspace->workTypeRequests()->pending()->count(),
             'attendance' => $this->workspace->attendanceRequests()->pending()->count(),
             'documents' => $this->workspace->documentSubmissions()->awaitingReview()->count(),
+            'resignations' => $this->workspace->resignations()->pending()->count(),
+        ];
+    }
+
+    /**
+     * People being onboarded and offboarded right now.
+     *
+     * @return array{onboarding: int, offboarding: int}
+     */
+    public function checklistsInProgress(): array
+    {
+        $counts = $this->workspace->employeeChecklists()
+            ->inProgress()
+            ->toBase()
+            ->select('kind', DB::raw('count(*) as total'))
+            ->groupBy('kind')
+            ->pluck('total', 'kind');
+
+        return [
+            'onboarding' => (int) ($counts['onboarding'] ?? 0),
+            'offboarding' => (int) ($counts['offboarding'] ?? 0),
         ];
     }
 
