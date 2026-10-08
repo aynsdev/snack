@@ -371,6 +371,41 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<DocumentRequest, $this>
+     */
+    public function documentRequests(): HasMany
+    {
+        return $this->hasMany(DocumentRequest::class);
+    }
+
+    /**
+     * Every person's answer to every document request. Scopes
+     * `{documentSubmission}` route binding to the tenant.
+     *
+     * @return HasManyThrough<DocumentSubmission, DocumentRequest, $this>
+     */
+    public function documentSubmissions(): HasManyThrough
+    {
+        return $this->hasManyThrough(DocumentSubmission::class, DocumentRequest::class);
+    }
+
+    /**
+     * @return HasMany<DisciplinaryAction, $this>
+     */
+    public function disciplinaryActions(): HasMany
+    {
+        return $this->hasMany(DisciplinaryAction::class);
+    }
+
+    /**
+     * @return HasMany<CompanyPolicy, $this>
+     */
+    public function companyPolicies(): HasMany
+    {
+        return $this->hasMany(CompanyPolicy::class);
+    }
+
+    /**
      * @return HasMany<Holiday, $this>
      */
     public function holidays(): HasMany

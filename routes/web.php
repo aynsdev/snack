@@ -31,7 +31,10 @@ use App\Http\Controllers\Hr\AbsenceController;
 use App\Http\Controllers\Hr\AnnouncementController;
 use App\Http\Controllers\Hr\AttendanceRequestController;
 use App\Http\Controllers\Hr\ClockController;
+use App\Http\Controllers\Hr\CompanyPolicyController;
 use App\Http\Controllers\Hr\ContractController;
+use App\Http\Controllers\Hr\DisciplinaryActionController;
+use App\Http\Controllers\Hr\DocumentController;
 use App\Http\Controllers\Hr\EmployeeController;
 use App\Http\Controllers\Hr\EmployeeRecordController;
 use App\Http\Controllers\Hr\EmploymentHistoryController;
@@ -43,6 +46,7 @@ use App\Http\Controllers\Hr\HrSettingsController;
 use App\Http\Controllers\Hr\LeaveRequestController;
 use App\Http\Controllers\Hr\LeaveReviewController;
 use App\Http\Controllers\Hr\LeaveTypeController;
+use App\Http\Controllers\Hr\OrgChartController;
 use App\Http\Controllers\Hr\ShiftController;
 use App\Http\Controllers\Hr\ShiftRequestController;
 use App\Http\Controllers\Hr\TimeEntryController;
@@ -1030,6 +1034,9 @@ Route::middleware(['auth', 'verified', 'workspace'])
             Route::get('employees/{employee}/records/{record}/file', [EmployeeRecordController::class, 'download'])
                 ->name('employees.records.download');
 
+            Route::post('employees/{employee}/disciplinary', [DisciplinaryActionController::class, 'store'])->middleware('throttle:uploads')->name('employees.disciplinary.store');
+            Route::delete('employees/{employee}/disciplinary/{disciplinaryAction}', [DisciplinaryActionController::class, 'destroy'])->name('employees.disciplinary.destroy');
+            Route::get('employees/{employee}/disciplinary/{disciplinaryAction}/file', [DisciplinaryActionController::class, 'download'])->name('employees.disciplinary.download');
             Route::post('employees/{employee}/absences', [AbsenceController::class, 'store'])
                 ->name('employees.absences.store');
             Route::delete('employees/{employee}/absences/{absence}', [AbsenceController::class, 'destroy'])
@@ -1077,6 +1084,23 @@ Route::middleware(['auth', 'verified', 'workspace'])
             Route::post('shifts', [ShiftController::class, 'store'])->name('shifts.store');
             Route::patch('shifts/{shift}', [ShiftController::class, 'update'])->name('shifts.update');
             Route::delete('shifts/{shift}', [ShiftController::class, 'destroy'])->name('shifts.destroy');
+
+            Route::get('documents', [DocumentController::class, 'index'])->name('documents.index');
+            Route::post('documents', [DocumentController::class, 'store'])->name('documents.store');
+            Route::delete('documents/{documentRequest}', [DocumentController::class, 'destroy'])->name('documents.destroy');
+            Route::post('documents/submissions/{documentSubmission}/upload', [DocumentController::class, 'upload'])->middleware('throttle:uploads')->name('documents.upload');
+            Route::post('documents/submissions/{documentSubmission}/approve', [DocumentController::class, 'approve'])->name('documents.approve');
+            Route::post('documents/submissions/{documentSubmission}/reject', [DocumentController::class, 'reject'])->name('documents.reject');
+            Route::get('documents/submissions/{documentSubmission}/file', [DocumentController::class, 'download'])->name('documents.download');
+
+            Route::get('policies', [CompanyPolicyController::class, 'index'])->name('policies.index');
+            Route::post('policies', [CompanyPolicyController::class, 'store'])->middleware('throttle:uploads')->name('policies.store');
+            Route::post('policies/{companyPolicy}', [CompanyPolicyController::class, 'update'])->middleware('throttle:uploads')->name('policies.update');
+            Route::delete('policies/{companyPolicy}', [CompanyPolicyController::class, 'destroy'])->name('policies.destroy');
+            Route::post('policies/{companyPolicy}/acknowledge', [CompanyPolicyController::class, 'acknowledge'])->name('policies.acknowledge');
+            Route::get('policies/{companyPolicy}/file', [CompanyPolicyController::class, 'download'])->name('policies.download');
+
+            Route::get('org-chart', [OrgChartController::class, 'index'])->name('org-chart');
 
             Route::get('holidays', [HolidayController::class, 'index'])->name('holidays.index');
             Route::post('holidays', [HolidayController::class, 'store'])->name('holidays.store');

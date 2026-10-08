@@ -2,6 +2,7 @@ import { Link, router, useForm } from '@inertiajs/react';
 import { ArrowLeft, Download, FileText, Pencil, Plus } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
+import { DisciplinaryTab } from '@/components/hr/disciplinary-tab';
 import {
     DeleteButton,
     FormDialog,
@@ -55,6 +56,7 @@ import {
 import type {
     Absence,
     Contract,
+    DisciplinaryAction,
     Employee,
     EmployeeRecord,
     EmploymentHistoryEntry,
@@ -73,6 +75,7 @@ type Props = {
     leave_requests: LeaveRequest[];
     balances: LeaveBalance[];
     time_entries: TimeEntry[];
+    disciplinary_actions: DisciplinaryAction[];
     managers: { id: number; name: string }[];
     shifts: Option[];
     options: {
@@ -83,11 +86,19 @@ type Props = {
         contract_statuses: Option[];
         record_types: Option[];
         absence_types: Option[];
+        disciplinary_types: Option[];
     };
     can_manage: boolean;
 };
 
-type Tab = 'profile' | 'history' | 'contracts' | 'records' | 'leave' | 'time';
+type Tab =
+    | 'profile'
+    | 'history'
+    | 'contracts'
+    | 'records'
+    | 'disciplinary'
+    | 'leave'
+    | 'time';
 
 const PAY_FREQUENCIES: Option[] = [
     { value: 'hourly', label: 'Hourly' },
@@ -125,6 +136,11 @@ export default function EmployeeShow(props: Props) {
                   },
               ]
             : []),
+        {
+            id: 'disciplinary',
+            label: 'Disciplinary',
+            count: props.disciplinary_actions.length,
+        },
         { id: 'leave', label: 'Leave & absences' },
         { id: 'time', label: 'Time' },
     ];
@@ -205,6 +221,14 @@ export default function EmployeeShow(props: Props) {
                 {tab === 'contracts' && <ContractsTab {...props} ids={ids} />}
                 {tab === 'records' && can_manage && (
                     <RecordsTab {...props} ids={ids} />
+                )}
+                {tab === 'disciplinary' && (
+                    <DisciplinaryTab
+                        actions={props.disciplinary_actions}
+                        types={props.options.disciplinary_types}
+                        ids={ids}
+                        canManage={can_manage}
+                    />
                 )}
                 {tab === 'leave' && <LeaveTab {...props} ids={ids} />}
                 {tab === 'time' && <TimeTab entries={props.time_entries} />}

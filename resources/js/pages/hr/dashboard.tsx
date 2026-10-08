@@ -32,6 +32,7 @@ import {
 } from '@/components/snack/projects/summary-charts';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/hooks/use-workspace';
+import { index as documentsIndex } from '@/routes/hr/documents';
 import { show as showEmployee } from '@/routes/hr/employees';
 import { index as leaveIndex } from '@/routes/hr/leave';
 import { index as requestsIndex } from '@/routes/hr/requests';
@@ -86,7 +87,12 @@ type Props = {
         ends_on: string;
     }[];
     pending_leave: LeaveRequest[];
-    pending_requests: { shift: number; work_type: number; attendance: number };
+    pending_requests: {
+        shift: number;
+        work_type: number;
+        attendance: number;
+        documents: number;
+    };
     late_arrivals: (Person & {
         employee_id: number;
         times: number;
@@ -120,10 +126,29 @@ export default function HrDashboard({
         decision: 'approve' | 'reject';
     } | null>(null);
 
-    const otherPending =
-        pending_requests.shift +
-        pending_requests.work_type +
-        pending_requests.attendance;
+    const plural = (count: number, noun: string) =>
+        `${count} ${noun}${count === 1 ? '' : 's'}`;
+    const requestLabels = [
+        [pending_requests.shift, 'shift change'],
+        [pending_requests.work_type, 'work type change'],
+        [pending_requests.attendance, 'attendance correction'],
+    ] as const;
+    const queues = [
+        {
+            label: requestLabels
+                .filter(([count]) => count > 0)
+                .map(([count, noun]) => plural(count, noun))
+                .join(' · '),
+            href: requestsIndex(workspace.slug).url,
+        },
+        {
+            label:
+                pending_requests.documents > 0
+                    ? plural(pending_requests.documents, 'uploaded document')
+                    : '',
+            href: documentsIndex(workspace.slug).url,
+        },
+    ].filter((queue) => queue.label !== '');
     const departmentTotal = departments.reduce(
         (sum, row) => sum + row.count,
         0,
@@ -190,7 +215,7 @@ export default function HrDashboard({
                     >
                         {pending_leave.length === 0 ? (
                             <EmptyNote>
-                                {otherPending === 0
+                                {queues.length === 0
                                     ? 'Nothing to review. All caught up.'
                                     : 'No leave waiting.'}
                             </EmptyNote>
@@ -254,37 +279,22 @@ export default function HrDashboard({
                                 ))}
                             </ul>
                         )}
-                        {otherPending > 0 && (
-                            <Link
-                                href={requestsIndex(workspace.slug)}
-                                className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm hover:bg-accent"
-                            >
-                                <span>
-                                    {[
-                                        [
-                                            pending_requests.shift,
-                                            'shift change',
-                                        ],
-                                        [
-                                            pending_requests.work_type,
-                                            'work type change',
-                                        ],
-                                        [
-                                            pending_requests.attendance,
-                                            'attendance correction',
-                                        ],
-                                    ]
-                                        .filter(([count]) => Number(count) > 0)
-                                        .map(
-                                            ([count, label]) =>
-                                                `${count} ${label}${count === 1 ? '' : 's'}`,
-                                        )
-                                        .join(' · ')}
-                                </span>
-                                <span className="text-xs font-medium text-muted-foreground">
-                                    Review
-                                </span>
-                            </Link>
+                        {queues.length > 0 && (
+                            <ul className="mt-3 space-y-2">
+                                {queues.map((queue) => (
+                                    <li key={queue.label}>
+                                        <Link
+                                            href={queue.href}
+                                            className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm hover:bg-accent"
+                                        >
+                                            <span>{queue.label}</span>
+                                            <span className="text-xs font-medium text-muted-foreground">
+                                                Review
+                                            </span>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
                         )}
                     </Section>
 

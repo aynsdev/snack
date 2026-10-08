@@ -172,6 +172,15 @@ enum AuditAction: string
     case WorkTypeRequestRejected = 'hr.work_type_request_rejected';
     case AttendanceRequestApproved = 'hr.attendance_request_approved';
     case AttendanceRequestRejected = 'hr.attendance_request_rejected';
+    case DocumentRequested = 'hr.document_requested';
+    case DocumentRequestDeleted = 'hr.document_request_deleted';
+    case DocumentApproved = 'hr.document_approved';
+    case DocumentRejected = 'hr.document_rejected';
+    case DisciplinaryActionIssued = 'hr.disciplinary_action_issued';
+    case DisciplinaryActionDeleted = 'hr.disciplinary_action_deleted';
+    case CompanyPolicyPublished = 'hr.policy_published';
+    case CompanyPolicyUpdated = 'hr.policy_updated';
+    case CompanyPolicyDeleted = 'hr.policy_deleted';
 
     public function label(): string
     {
@@ -248,6 +257,15 @@ enum AuditAction: string
             self::WorkTypeRequestRejected => 'Work type change rejected',
             self::AttendanceRequestApproved => 'Attendance correction approved',
             self::AttendanceRequestRejected => 'Attendance correction rejected',
+            self::DocumentRequested => 'Documents requested',
+            self::DocumentRequestDeleted => 'Document request deleted',
+            self::DocumentApproved => 'Document approved',
+            self::DocumentRejected => 'Document rejected',
+            self::DisciplinaryActionIssued => 'Disciplinary action issued',
+            self::DisciplinaryActionDeleted => 'Disciplinary action deleted',
+            self::CompanyPolicyPublished => 'Policy published',
+            self::CompanyPolicyUpdated => 'Policy updated',
+            self::CompanyPolicyDeleted => 'Policy deleted',
         };
     }
 
