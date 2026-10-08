@@ -163,6 +163,40 @@ enum AuditAction: string
     case TimeEntryUpdated = 'hr.time_entry_updated';
     case TimeEntryDeleted = 'hr.time_entry_deleted';
     case HrSettingsUpdated = 'hr.settings_updated';
+    case ShiftCreated = 'hr.shift_created';
+    case ShiftUpdated = 'hr.shift_updated';
+    case ShiftDeleted = 'hr.shift_deleted';
+    case ShiftRequestApproved = 'hr.shift_request_approved';
+    case ShiftRequestRejected = 'hr.shift_request_rejected';
+    case WorkTypeRequestApproved = 'hr.work_type_request_approved';
+    case WorkTypeRequestRejected = 'hr.work_type_request_rejected';
+    case AttendanceRequestApproved = 'hr.attendance_request_approved';
+    case AttendanceRequestRejected = 'hr.attendance_request_rejected';
+    case DocumentRequested = 'hr.document_requested';
+    case DocumentRequestDeleted = 'hr.document_request_deleted';
+    case DocumentApproved = 'hr.document_approved';
+    case DocumentRejected = 'hr.document_rejected';
+    case DisciplinaryActionIssued = 'hr.disciplinary_action_issued';
+    case DisciplinaryActionDeleted = 'hr.disciplinary_action_deleted';
+    case CompanyPolicyPublished = 'hr.policy_published';
+    case CompanyPolicyUpdated = 'hr.policy_updated';
+    case CompanyPolicyDeleted = 'hr.policy_deleted';
+    case ChecklistStarted = 'hr.checklist_started';
+    case ChecklistCompleted = 'hr.checklist_completed';
+    case ChecklistCancelled = 'hr.checklist_cancelled';
+    case ChecklistTemplateSaved = 'hr.checklist_template_saved';
+    case ChecklistTemplateDeleted = 'hr.checklist_template_deleted';
+    case ResignationAccepted = 'hr.resignation_accepted';
+    case ResignationRejected = 'hr.resignation_rejected';
+    case EquipmentCreated = 'hr.equipment_created';
+    case EquipmentUpdated = 'hr.equipment_updated';
+    case EquipmentDeleted = 'hr.equipment_deleted';
+    case EquipmentAssigned = 'hr.equipment_assigned';
+    case EquipmentReturned = 'hr.equipment_returned';
+    case EquipmentCategorySaved = 'hr.equipment_category_saved';
+    case EquipmentCategoryDeleted = 'hr.equipment_category_deleted';
+    case EquipmentRequestApproved = 'hr.equipment_request_approved';
+    case EquipmentRequestRejected = 'hr.equipment_request_rejected';
 
     public function label(): string
     {
@@ -230,6 +264,40 @@ enum AuditAction: string
             self::TimeEntryUpdated => 'Time entry corrected',
             self::TimeEntryDeleted => 'Time entry deleted',
             self::HrSettingsUpdated => 'HR settings updated',
+            self::ShiftCreated => 'Shift created',
+            self::ShiftUpdated => 'Shift updated',
+            self::ShiftDeleted => 'Shift deleted',
+            self::ShiftRequestApproved => 'Shift change approved',
+            self::ShiftRequestRejected => 'Shift change rejected',
+            self::WorkTypeRequestApproved => 'Work type change approved',
+            self::WorkTypeRequestRejected => 'Work type change rejected',
+            self::AttendanceRequestApproved => 'Attendance correction approved',
+            self::AttendanceRequestRejected => 'Attendance correction rejected',
+            self::DocumentRequested => 'Documents requested',
+            self::DocumentRequestDeleted => 'Document request deleted',
+            self::DocumentApproved => 'Document approved',
+            self::DocumentRejected => 'Document rejected',
+            self::DisciplinaryActionIssued => 'Disciplinary action issued',
+            self::DisciplinaryActionDeleted => 'Disciplinary action deleted',
+            self::CompanyPolicyPublished => 'Policy published',
+            self::CompanyPolicyUpdated => 'Policy updated',
+            self::CompanyPolicyDeleted => 'Policy deleted',
+            self::ChecklistStarted => 'Checklist started',
+            self::ChecklistCompleted => 'Checklist completed',
+            self::ChecklistCancelled => 'Checklist cancelled',
+            self::ChecklistTemplateSaved => 'Checklist template saved',
+            self::ChecklistTemplateDeleted => 'Checklist template deleted',
+            self::ResignationAccepted => 'Resignation accepted',
+            self::ResignationRejected => 'Resignation rejected',
+            self::EquipmentCreated => 'Equipment added',
+            self::EquipmentUpdated => 'Equipment updated',
+            self::EquipmentDeleted => 'Equipment deleted',
+            self::EquipmentAssigned => 'Equipment handed over',
+            self::EquipmentReturned => 'Equipment returned',
+            self::EquipmentCategorySaved => 'Equipment category saved',
+            self::EquipmentCategoryDeleted => 'Equipment category deleted',
+            self::EquipmentRequestApproved => 'Equipment request approved',
+            self::EquipmentRequestRejected => 'Equipment request rejected',
         };
     }
 

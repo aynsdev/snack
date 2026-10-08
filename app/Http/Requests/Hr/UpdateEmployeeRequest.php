@@ -4,6 +4,7 @@ namespace App\Http\Requests\Hr;
 
 use App\Enums\EmploymentStatus;
 use App\Enums\EmploymentType;
+use App\Enums\WorkType;
 use App\Models\Employee;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -35,6 +36,11 @@ class UpdateEmployeeRequest extends FormRequest
                 'nullable', 'integer', Rule::notIn([$employee->id]),
                 Rule::exists('employees', 'id')->where('workspace_id', $employee->workspace_id),
             ],
+            'shift_id' => [
+                'nullable', 'integer',
+                Rule::exists('shifts', 'id')->where('workspace_id', $employee->workspace_id),
+            ],
+            'work_type' => ['sometimes', 'required', Rule::enum(WorkType::class)],
             'hired_on' => ['nullable', 'date'],
             'terminated_on' => ['nullable', 'date', 'after_or_equal:hired_on'],
             'birth_date' => ['nullable', 'date', 'before:today'],

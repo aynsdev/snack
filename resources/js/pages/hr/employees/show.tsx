@@ -3,6 +3,11 @@ import { ArrowLeft, Download, FileText, Pencil, Plus } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
 import {
+    ChecklistCard,
+    StartChecklistDialog,
+} from '@/components/hr/checklist-card';
+import { DisciplinaryTab } from '@/components/hr/disciplinary-tab';
+import {
     DeleteButton,
     FormDialog,
     LocationLink,
@@ -23,6 +28,7 @@ import {
     StatusPill,
     todayString,
 } from '@/components/hr/hr-ui';
+import { ResignationBanner, ResignDialog } from '@/components/hr/resignation';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -54,13 +60,18 @@ import {
 } from '@/routes/hr/employees/records';
 import type {
     Absence,
+    ChecklistTemplate,
     Contract,
+    DisciplinaryAction,
     Employee,
+    EmployeeChecklist,
+    EquipmentAssignment,
     EmployeeRecord,
     EmploymentHistoryEntry,
     LeaveBalance,
     LeaveRequest,
     Option,
+    Resignation,
     TimeEntry,
 } from '@/types/hr';
 
@@ -73,19 +84,37 @@ type Props = {
     leave_requests: LeaveRequest[];
     balances: LeaveBalance[];
     time_entries: TimeEntry[];
+    disciplinary_actions: DisciplinaryAction[];
+    checklists: EmployeeChecklist[];
+    equipment: EquipmentAssignment[];
+    checklist_templates: ChecklistTemplate[];
+    resignation: Resignation | null;
+    can_resign: boolean;
     managers: { id: number; name: string }[];
+    shifts: Option[];
     options: {
         employment_types: Option[];
+        work_types: Option[];
         statuses: Option[];
         changes: Option[];
         contract_statuses: Option[];
         record_types: Option[];
         absence_types: Option[];
+        disciplinary_types: Option[];
     };
     can_manage: boolean;
 };
 
-type Tab = 'profile' | 'history' | 'contracts' | 'records' | 'leave' | 'time';
+type Tab =
+    | 'profile'
+    | 'history'
+    | 'contracts'
+    | 'records'
+    | 'disciplinary'
+    | 'checklists'
+    | 'equipment'
+    | 'leave'
+    | 'time';
 
 const PAY_FREQUENCIES: Option[] = [
     { value: 'hourly', label: 'Hourly' },
@@ -105,6 +134,7 @@ export default function EmployeeShow(props: Props) {
     const { employee, can_manage } = props;
     const workspace = useWorkspace();
     const [tab, setTab] = useState<Tab>('profile');
+    const [resigning, setResigning] = useState(false);
 
     const tabs: { id: Tab; label: string; count?: number }[] = [
         { id: 'profile', label: 'Profile' },
@@ -123,8 +153,27 @@ export default function EmployeeShow(props: Props) {
                   },
               ]
             : []),
+        {
+            id: 'disciplinary',
+            label: 'Disciplinary',
+            count: props.disciplinary_actions.length,
+        },
         { id: 'leave', label: 'Leave & absences' },
         { id: 'time', label: 'Time' },
+        {
+            id: 'equipment',
+            label: 'Equipment',
+            count: props.equipment.filter((row) => !row.returned_on).length,
+        },
+        ...(can_manage
+            ? [
+                  {
+                      id: 'checklists' as Tab,
+                      label: 'Onboarding & offboarding',
+                      count: props.checklists.length,
+                  },
+              ]
+            : []),
     ];
 
     const ids = { workspace: workspace.slug, employee: employee.id };
@@ -144,14 +193,25 @@ export default function EmployeeShow(props: Props) {
                 </span>
             }
             actions={
-                can_manage && (
-                    <Button variant="ghost" size="sm" asChild>
-                        <Link href={employeesIndex(workspace.slug)}>
-                            <ArrowLeft aria-hidden="true" />
-                            All employees
-                        </Link>
-                    </Button>
-                )
+                <>
+                    {props.can_resign && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setResigning(true)}
+                        >
+                            Resign
+                        </Button>
+                    )}
+                    {can_manage && (
+                        <Button variant="ghost" size="sm" asChild>
+                            <Link href={employeesIndex(workspace.slug)}>
+                                <ArrowLeft aria-hidden="true" />
+                                All employees
+                            </Link>
+                        </Button>
+                    )}
+                </>
             }
         >
             <div className="flex items-center gap-3">
@@ -167,6 +227,10 @@ export default function EmployeeShow(props: Props) {
                     </p>
                 </div>
             </div>
+
+            {props.resignation && (
+                <ResignationBanner resignation={props.resignation} />
+            )}
 
             <div
                 role="tablist"
@@ -204,9 +268,29 @@ export default function EmployeeShow(props: Props) {
                 {tab === 'records' && can_manage && (
                     <RecordsTab {...props} ids={ids} />
                 )}
+                {tab === 'disciplinary' && (
+                    <DisciplinaryTab
+                        actions={props.disciplinary_actions}
+                        types={props.options.disciplinary_types}
+                        ids={ids}
+                        canManage={can_manage}
+                    />
+                )}
                 {tab === 'leave' && <LeaveTab {...props} ids={ids} />}
                 {tab === 'time' && <TimeTab entries={props.time_entries} />}
+                {tab === 'equipment' && (
+                    <EquipmentTab assignments={props.equipment} />
+                )}
+                {tab === 'checklists' && can_manage && (
+                    <ChecklistsTab
+                        checklists={props.checklists}
+                        templates={props.checklist_templates}
+                        employeeId={employee.id}
+                    />
+                )}
             </div>
+
+            {resigning && <ResignDialog onClose={() => setResigning(false)} />}
         </HrPage>
     );
 }
@@ -215,7 +299,13 @@ type Ids = { workspace: string; employee: number };
 
 // -- Profile ----------------------------------------------------------------
 
-function ProfileTab({ employee, managers, options, can_manage }: Props) {
+function ProfileTab({
+    employee,
+    managers,
+    shifts,
+    options,
+    can_manage,
+}: Props) {
     const workspace = useWorkspace();
     const form = useForm({
         employee_number: employee.employee_number ?? '',
@@ -224,6 +314,8 @@ function ProfileTab({ employee, managers, options, can_manage }: Props) {
         employment_type: employee.employment_type,
         status: employee.status,
         manager_id: employee.manager ? String(employee.manager.id) : '',
+        shift_id: employee.shift ? String(employee.shift.id) : '',
+        work_type: employee.work_type,
         hired_on: employee.hired_on ?? '',
         terminated_on: employee.terminated_on ?? '',
         birth_date: employee.birth_date ?? '',
@@ -243,6 +335,13 @@ function ProfileTab({ employee, managers, options, can_manage }: Props) {
                             ['Department', employee.department],
                             ['Type', employee.employment_type_label],
                             ['Manager', employee.manager?.name],
+                            [
+                                'Shift',
+                                employee.shift
+                                    ? `${employee.shift.name} (${employee.shift.hours})`
+                                    : 'Workspace default',
+                            ],
+                            ['Works', employee.work_type_label],
                             ['Hired', formatDate(employee.hired_on)],
                             ['Employee number', employee.employee_number],
                         ]}
@@ -278,6 +377,7 @@ function ProfileTab({ employee, managers, options, can_manage }: Props) {
         form.transform((data) => ({
             ...data,
             manager_id: data.manager_id === '' ? null : Number(data.manager_id),
+            shift_id: data.shift_id === '' ? null : Number(data.shift_id),
         }));
         form.patch(
             updateEmployee({ workspace: workspace.slug, employee: employee.id })
@@ -341,6 +441,24 @@ function ProfileTab({ employee, managers, options, can_manage }: Props) {
                         error={form.errors.manager_id}
                         allowEmpty
                         emptyLabel="No manager"
+                    />
+                    <SelectField
+                        id="employee-shift"
+                        label="Shift"
+                        value={form.data.shift_id}
+                        onChange={(value) => form.setData('shift_id', value)}
+                        options={shifts}
+                        error={form.errors.shift_id}
+                        allowEmpty
+                        emptyLabel="Workspace default"
+                    />
+                    <SelectField
+                        id="employee-work_type"
+                        label="Work type"
+                        value={form.data.work_type}
+                        onChange={(value) => form.setData('work_type', value)}
+                        options={options.work_types}
+                        error={form.errors.work_type}
                     />
                     {text('employee_number', 'Employee number')}
                     {text('hired_on', 'Hired on', 'date')}
@@ -1463,6 +1581,123 @@ function TimeTab({ entries }: { entries: TimeEntry[] }) {
                             >
                                 {formatMinutes(entry.minutes)}
                             </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </Section>
+    );
+}
+
+// -- Onboarding & offboarding ------------------------------------------------
+
+function ChecklistsTab({
+    checklists,
+    templates,
+    employeeId,
+}: {
+    checklists: EmployeeChecklist[];
+    templates: ChecklistTemplate[];
+    employeeId: number;
+}) {
+    const [starting, setStarting] = useState<
+        'onboarding' | 'offboarding' | null
+    >(null);
+
+    return (
+        <Section
+            title="Onboarding & offboarding"
+            action={
+                <div className="flex gap-1.5">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setStarting('onboarding')}
+                    >
+                        Start onboarding
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setStarting('offboarding')}
+                    >
+                        Start offboarding
+                    </Button>
+                </div>
+            }
+        >
+            {checklists.length === 0 ? (
+                <EmptyNote>Nothing started yet.</EmptyNote>
+            ) : (
+                <ul className="space-y-2">
+                    {checklists.map((checklist) => (
+                        <ChecklistCard
+                            key={checklist.id}
+                            checklist={checklist}
+                            defaultOpen={checklist.status === 'in_progress'}
+                        />
+                    ))}
+                </ul>
+            )}
+
+            {starting && (
+                <StartChecklistDialog
+                    kind={starting}
+                    templates={templates}
+                    employeeId={employeeId}
+                    onClose={() => setStarting(null)}
+                />
+            )}
+        </Section>
+    );
+}
+
+// -- Equipment ----------------------------------------------------------------
+
+function EquipmentTab({ assignments }: { assignments: EquipmentAssignment[] }) {
+    return (
+        <Section title="Company equipment">
+            {assignments.length === 0 ? (
+                <EmptyNote>Nothing has been handed out.</EmptyNote>
+            ) : (
+                <ul className="divide-y divide-border">
+                    {assignments.map((assignment) => (
+                        <li
+                            key={assignment.id}
+                            className="flex flex-wrap items-center gap-3 py-2.5 first:pt-0 last:pb-0"
+                        >
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium">
+                                    {assignment.equipment?.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    {[
+                                        assignment.equipment?.category,
+                                        assignment.equipment?.tracking_code,
+                                    ]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    {' · '}
+                                    {formatDate(assignment.assigned_on)} –{' '}
+                                    {assignment.returned_on
+                                        ? formatDate(assignment.returned_on)
+                                        : 'now'}
+                                </p>
+                            </div>
+                            <StatusPill
+                                status={
+                                    assignment.returned_on
+                                        ? 'retired'
+                                        : 'assigned'
+                                }
+                                label={
+                                    assignment.returned_on
+                                        ? 'Returned'
+                                        : assignment.return_requested_at
+                                          ? 'Return requested'
+                                          : 'Has it'
+                                }
+                            />
                         </li>
                     ))}
                 </ul>

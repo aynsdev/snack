@@ -2,6 +2,7 @@ import { router, useForm } from '@inertiajs/react';
 import { Crosshair, LoaderCircle, Pencil, Plus } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
+import { ChecklistTemplatesSection } from '@/components/hr/checklist-templates-section';
 import { DeleteButton, FormDialog } from '@/components/hr/hr-dialogs';
 import {
     Field,
@@ -11,6 +12,7 @@ import {
     Section,
     SelectField,
 } from '@/components/hr/hr-ui';
+import { ShiftsSection } from '@/components/hr/shifts-section';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,12 +25,15 @@ import {
     update as updateLeaveType,
 } from '@/routes/hr/leave-types';
 import { update as updateSettings } from '@/routes/hr/settings';
-import type { Geofence, LeaveType } from '@/types/hr';
+import type { ChecklistTemplate, Geofence, LeaveType, Shift } from '@/types/hr';
 
 type Props = {
     geofence: Geofence | null;
     require_location: boolean;
     leave_types: LeaveType[];
+    shifts: Shift[];
+    checklist_templates: ChecklistTemplate[];
+    auto_onboarding: boolean;
 };
 
 const COLORS = Object.keys(LEAVE_COLORS).map((color) => ({
@@ -37,12 +42,16 @@ const COLORS = Object.keys(LEAVE_COLORS).map((color) => ({
 }));
 
 /**
- * Where people may clock in from, and which kinds of leave exist.
+ * Where people may clock in from, the shifts they work, and which kinds of
+ * leave exist.
  */
 export default function HrSettingsPage({
     geofence,
     require_location,
     leave_types,
+    shifts,
+    checklist_templates,
+    auto_onboarding,
 }: Props) {
     const [editing, setEditing] = useState<LeaveType | 'new' | null>(null);
     const workspace = useWorkspace();
@@ -52,6 +61,13 @@ export default function HrSettingsPage({
             <GeofenceForm
                 geofence={geofence}
                 requireLocation={require_location}
+            />
+
+            <ShiftsSection shifts={shifts} />
+
+            <ChecklistTemplatesSection
+                templates={checklist_templates}
+                autoOnboarding={auto_onboarding}
             />
 
             <Section

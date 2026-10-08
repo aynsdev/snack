@@ -339,6 +339,146 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<Shift, $this>
+     */
+    public function shifts(): HasMany
+    {
+        return $this->hasMany(Shift::class);
+    }
+
+    /**
+     * @return HasMany<ShiftRequest, $this>
+     */
+    public function shiftRequests(): HasMany
+    {
+        return $this->hasMany(ShiftRequest::class);
+    }
+
+    /**
+     * @return HasMany<WorkTypeRequest, $this>
+     */
+    public function workTypeRequests(): HasMany
+    {
+        return $this->hasMany(WorkTypeRequest::class);
+    }
+
+    /**
+     * @return HasMany<AttendanceRequest, $this>
+     */
+    public function attendanceRequests(): HasMany
+    {
+        return $this->hasMany(AttendanceRequest::class);
+    }
+
+    /**
+     * @return HasMany<DocumentRequest, $this>
+     */
+    public function documentRequests(): HasMany
+    {
+        return $this->hasMany(DocumentRequest::class);
+    }
+
+    /**
+     * Every person's answer to every document request. Scopes
+     * `{documentSubmission}` route binding to the tenant.
+     *
+     * @return HasManyThrough<DocumentSubmission, DocumentRequest, $this>
+     */
+    public function documentSubmissions(): HasManyThrough
+    {
+        return $this->hasManyThrough(DocumentSubmission::class, DocumentRequest::class);
+    }
+
+    /**
+     * @return HasMany<DisciplinaryAction, $this>
+     */
+    public function disciplinaryActions(): HasMany
+    {
+        return $this->hasMany(DisciplinaryAction::class);
+    }
+
+    /**
+     * @return HasMany<CompanyPolicy, $this>
+     */
+    public function companyPolicies(): HasMany
+    {
+        return $this->hasMany(CompanyPolicy::class);
+    }
+
+    /**
+     * @return HasMany<ChecklistTemplate, $this>
+     */
+    public function checklistTemplates(): HasMany
+    {
+        return $this->hasMany(ChecklistTemplate::class);
+    }
+
+    /**
+     * @return HasMany<EmployeeChecklist, $this>
+     */
+    public function employeeChecklists(): HasMany
+    {
+        return $this->hasMany(EmployeeChecklist::class);
+    }
+
+    /**
+     * Every step of every checklist. Scopes `{employeeChecklistTask}` route
+     * binding to the tenant.
+     *
+     * @return HasManyThrough<EmployeeChecklistTask, EmployeeChecklist, $this>
+     */
+    public function employeeChecklistTasks(): HasManyThrough
+    {
+        return $this->hasManyThrough(EmployeeChecklistTask::class, EmployeeChecklist::class);
+    }
+
+    /**
+     * @return HasMany<Resignation, $this>
+     */
+    public function resignations(): HasMany
+    {
+        return $this->hasMany(Resignation::class);
+    }
+
+    /**
+     * @return HasMany<EquipmentCategory, $this>
+     */
+    public function equipmentCategories(): HasMany
+    {
+        return $this->hasMany(EquipmentCategory::class);
+    }
+
+    /**
+     * Company equipment — HR's assets. Not to be confused with
+     * {@see assets()}, the shared file library.
+     *
+     * @return HasMany<Equipment, $this>
+     */
+    public function equipment(): HasMany
+    {
+        return $this->hasMany(Equipment::class);
+    }
+
+    /**
+     * @return HasMany<EquipmentRequest, $this>
+     */
+    public function equipmentRequests(): HasMany
+    {
+        return $this->hasMany(EquipmentRequest::class);
+    }
+
+    /**
+     * Every hand-over of every item. Scopes `{equipmentAssignment}` route
+     * binding to the tenant.
+     *
+     * @return HasManyThrough<EquipmentAssignment, Equipment, $this>
+     */
+    public function equipmentAssignments(): HasManyThrough
+    {
+        return $this->hasManyThrough(EquipmentAssignment::class, Equipment::class);
+    }
+
+    /**
      * @return HasMany<Holiday, $this>
      */
     public function holidays(): HasMany

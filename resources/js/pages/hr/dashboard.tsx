@@ -32,8 +32,13 @@ import {
 } from '@/components/snack/projects/summary-charts';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/hooks/use-workspace';
+import { index as documentsIndex } from '@/routes/hr/documents';
 import { show as showEmployee } from '@/routes/hr/employees';
+import { index as equipmentIndex } from '@/routes/hr/equipment';
 import { index as leaveIndex } from '@/routes/hr/leave';
+import { index as offboardingIndex } from '@/routes/hr/offboarding';
+import { index as onboardingIndex } from '@/routes/hr/onboarding';
+import { index as requestsIndex } from '@/routes/hr/requests';
 import { index as timeIndex } from '@/routes/hr/time';
 import type { LeaveRequest } from '@/types/hr';
 
@@ -61,6 +66,7 @@ type Props = {
         clocked_in_today: number;
         on_leave: number;
         not_in: number;
+        late_today: number;
         week_minutes: number;
     };
     leave_by_type: Count[];
@@ -84,6 +90,21 @@ type Props = {
         ends_on: string;
     }[];
     pending_leave: LeaveRequest[];
+    pending_requests: {
+        shift: number;
+        work_type: number;
+        attendance: number;
+        documents: number;
+        resignations: number;
+        equipment: number;
+        returns: number;
+    };
+    checklists: { onboarding: number; offboarding: number };
+    late_arrivals: (Person & {
+        employee_id: number;
+        times: number;
+        minutes: number;
+    })[];
 };
 
 /**
@@ -103,6 +124,9 @@ export default function HrDashboard({
     celebrations,
     expiring_contracts,
     pending_leave,
+    pending_requests,
+    late_arrivals,
+    checklists,
 }: Props) {
     const workspace = useWorkspace();
     const [reviewing, setReviewing] = useState<{
@@ -110,6 +134,49 @@ export default function HrDashboard({
         decision: 'approve' | 'reject';
     } | null>(null);
 
+    const plural = (count: number, noun: string) =>
+        `${count} ${noun}${count === 1 ? '' : 's'}`;
+    const requestLabels = [
+        [pending_requests.shift, 'shift change'],
+        [pending_requests.work_type, 'work type change'],
+        [pending_requests.attendance, 'attendance correction'],
+    ] as const;
+    const queues = [
+        {
+            label: requestLabels
+                .filter(([count]) => count > 0)
+                .map(([count, noun]) => plural(count, noun))
+                .join(' · '),
+            href: requestsIndex(workspace.slug).url,
+        },
+        {
+            label:
+                pending_requests.documents > 0
+                    ? plural(pending_requests.documents, 'uploaded document')
+                    : '',
+            href: documentsIndex(workspace.slug).url,
+        },
+        {
+            label:
+                pending_requests.resignations > 0
+                    ? plural(pending_requests.resignations, 'resignation')
+                    : '',
+            href: offboardingIndex(workspace.slug).url,
+        },
+        {
+            label: [
+                pending_requests.equipment > 0
+                    ? plural(pending_requests.equipment, 'equipment request')
+                    : '',
+                pending_requests.returns > 0
+                    ? plural(pending_requests.returns, 'equipment return')
+                    : '',
+            ]
+                .filter(Boolean)
+                .join(' · '),
+            href: equipmentIndex(workspace.slug).url,
+        },
+    ].filter((queue) => queue.label !== '');
     const departmentTotal = departments.reduce(
         (sum, row) => sum + row.count,
         0,
@@ -176,7 +243,9 @@ export default function HrDashboard({
                     >
                         {pending_leave.length === 0 ? (
                             <EmptyNote>
-                                Nothing to review. All caught up.
+                                {queues.length === 0
+                                    ? 'Nothing to review. All caught up.'
+                                    : 'No leave waiting.'}
                             </EmptyNote>
                         ) : (
                             <ul className="divide-y divide-border">
@@ -238,6 +307,23 @@ export default function HrDashboard({
                                 ))}
                             </ul>
                         )}
+                        {queues.length > 0 && (
+                            <ul className="mt-3 space-y-2">
+                                {queues.map((queue) => (
+                                    <li key={queue.label}>
+                                        <Link
+                                            href={queue.href}
+                                            className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm hover:bg-accent"
+                                        >
+                                            <span>{queue.label}</span>
+                                            <span className="text-xs font-medium text-muted-foreground">
+                                                Review
+                                            </span>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </Section>
 
                     <div className="grid gap-6 md:grid-cols-2">
@@ -273,7 +359,7 @@ export default function HrDashboard({
                     <div className="grid gap-6 md:grid-cols-2">
                         <Panel
                             title="Attendance today"
-                            description={`${formatMinutes(attendance.week_minutes)} clocked so far this week.`}
+                            description={`${attendance.late_today} late today · ${formatMinutes(attendance.week_minutes)} clocked this week.`}
                         >
                             <StackedBar
                                 segments={[
@@ -325,6 +411,45 @@ export default function HrDashboard({
                 </div>
 
                 <aside className="space-y-6">
+                    <Section title="Coming and going">
+                        <ul className="space-y-2 text-sm">
+                            <li>
+                                <Link
+                                    href={onboardingIndex(workspace.slug)}
+                                    className="flex items-center justify-between rounded-lg hover:bg-accent"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <UserPlus
+                                            aria-hidden="true"
+                                            className="size-4 text-muted-foreground"
+                                        />
+                                        Onboarding
+                                    </span>
+                                    <span className="font-medium tabular-nums">
+                                        {checklists.onboarding}
+                                    </span>
+                                </Link>
+                            </li>
+                            <li>
+                                <Link
+                                    href={offboardingIndex(workspace.slug)}
+                                    className="flex items-center justify-between rounded-lg hover:bg-accent"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <UserMinus
+                                            aria-hidden="true"
+                                            className="size-4 text-muted-foreground"
+                                        />
+                                        Offboarding
+                                    </span>
+                                    <span className="font-medium tabular-nums">
+                                        {checklists.offboarding}
+                                    </span>
+                                </Link>
+                            </li>
+                        </ul>
+                    </Section>
+
                     <Section title="Out this week">
                         {out_this_week.length === 0 ? (
                             <p className="text-sm text-muted-foreground">
@@ -353,6 +478,49 @@ export default function HrDashboard({
                                                 )}
                                             </p>
                                         </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </Section>
+
+                    <Section
+                        title="Late this month"
+                        action={
+                            <Link
+                                href={
+                                    timeIndex(workspace.slug, {
+                                        query: { scope: 'team', flag: 'late' },
+                                    }).url
+                                }
+                                className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                            >
+                                All
+                            </Link>
+                        }
+                    >
+                        {late_arrivals.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                                Nobody has clocked in late this month.
+                            </p>
+                        ) : (
+                            <ul className="space-y-2">
+                                {late_arrivals.map((person) => (
+                                    <li
+                                        key={person.employee_id}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <PersonAvatar
+                                            person={person}
+                                            className="size-7"
+                                        />
+                                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                                            {person.name}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground tabular-nums">
+                                            {person.times}× ·{' '}
+                                            {formatMinutes(person.minutes)}
+                                        </span>
                                     </li>
                                 ))}
                             </ul>

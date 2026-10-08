@@ -53,7 +53,86 @@ final class HrDashboardStats
      */
     public function pendingApprovals(): int
     {
-        return $this->workspace->leaveRequests()->where('status', LeaveStatus::Pending)->count();
+        return $this->workspace->leaveRequests()->where('status', LeaveStatus::Pending)->count()
+            + array_sum($this->pendingRequests());
+    }
+
+    /**
+     * Shift, work-type, attendance, and equipment requests, uploaded
+     * documents, resignations, and equipment waiting to be taken back — what
+     * is waiting on HR, by kind.
+     *
+     * @return array{shift: int, work_type: int, attendance: int, documents: int, resignations: int, equipment: int, returns: int}
+     */
+    public function pendingRequests(): array
+    {
+        return [
+            'shift' => $this->workspace->shiftRequests()->pending()->count(),
+            'work_type' => $this->workspace->workTypeRequests()->pending()->count(),
+            'attendance' => $this->workspace->attendanceRequests()->pending()->count(),
+            'documents' => $this->workspace->documentSubmissions()->awaitingReview()->count(),
+            'resignations' => $this->workspace->resignations()->pending()->count(),
+            'equipment' => $this->workspace->equipmentRequests()->pending()->count(),
+            'returns' => $this->workspace->equipmentAssignments()->open()->whereNotNull('return_requested_at')->count(),
+        ];
+    }
+
+    /**
+     * People being onboarded and offboarded right now.
+     *
+     * @return array{onboarding: int, offboarding: int}
+     */
+    public function checklistsInProgress(): array
+    {
+        $counts = $this->workspace->employeeChecklists()
+            ->inProgress()
+            ->toBase()
+            ->select('kind', DB::raw('count(*) as total'))
+            ->groupBy('kind')
+            ->pluck('total', 'kind');
+
+        return [
+            'onboarding' => (int) ($counts['onboarding'] ?? 0),
+            'offboarding' => (int) ($counts['offboarding'] ?? 0),
+        ];
+    }
+
+    /**
+     * Who clocked in late most often this month, worst first.
+     *
+     * @return array<int, array{employee_id: int, name: string, initials: string, avatar_url: string|null, times: int, minutes: int}>
+     */
+    public function lateArrivals(int $limit = 5): array
+    {
+        $rows = $this->workspace->timeEntries()
+            ->where('clock_in_at', '>=', today()->startOfMonth())
+            ->where('late_minutes', '>', 0)
+            ->toBase()
+            ->select('employee_id', DB::raw('count(*) as times'), DB::raw('sum(late_minutes) as minutes'))
+            ->groupBy('employee_id')
+            ->orderByDesc('times')
+            ->orderByDesc('minutes')
+            ->limit($limit)
+            ->get();
+
+        $employees = $this->workspace->employees()->with('user')->findMany($rows->pluck('employee_id'))->keyBy('id');
+
+        return $rows
+            ->filter(fn ($row): bool => $employees->has($row->employee_id))
+            ->map(function ($row) use ($employees): array {
+                $user = $employees[$row->employee_id]->user;
+
+                return [
+                    'employee_id' => (int) $row->employee_id,
+                    'name' => $user->name,
+                    'initials' => $user->initials(),
+                    'avatar_url' => $user->avatarUrl(),
+                    'times' => (int) $row->times,
+                    'minutes' => (int) $row->minutes,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**
@@ -140,7 +219,7 @@ final class HrDashboardStats
      * "Not in" is everybody employed who has neither clocked in today nor is on
      * approved leave — it is not an absence, just nobody has seen them yet.
      *
-     * @return array{clocked_in_today: int, on_leave: int, not_in: int, week_minutes: int}
+     * @return array{clocked_in_today: int, on_leave: int, not_in: int, late_today: int, week_minutes: int}
      */
     public function attendance(): array
     {
@@ -162,6 +241,11 @@ final class HrDashboardStats
             'clocked_in_today' => $clockedInToday,
             'on_leave' => $onLeave,
             'not_in' => max(0, $headcount - $clockedInToday - $onLeave),
+            'late_today' => $this->workspace->timeEntries()
+                ->where('clock_in_at', '>=', today())
+                ->where('late_minutes', '>', 0)
+                ->distinct()
+                ->count('employee_id'),
             'week_minutes' => (int) $weekMinutes,
         ];
     }

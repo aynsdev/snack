@@ -2,11 +2,18 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
     ChartColumn,
+    BookOpen,
+    ClipboardList,
     Clock,
+    FileStack,
     LayoutDashboard,
     Megaphone,
+    Network,
+    Package,
     Plane,
     Settings,
+    UserMinus,
+    UserPlus,
     UserRound,
     Users,
 } from 'lucide-react';
@@ -18,11 +25,19 @@ import {
     dashboard as hrDashboard,
     index as hrIndex,
     me as myProfile,
+    myEquipment,
+    orgChart,
 } from '@/routes/hr';
 import { index as announcementsIndex } from '@/routes/hr/announcements';
+import { index as documentsIndex } from '@/routes/hr/documents';
 import { index as employeesIndex } from '@/routes/hr/employees';
+import { index as equipmentIndex } from '@/routes/hr/equipment';
 import { index as holidaysIndex } from '@/routes/hr/holidays';
 import { index as leaveIndex } from '@/routes/hr/leave';
+import { index as offboardingIndex } from '@/routes/hr/offboarding';
+import { index as onboardingIndex } from '@/routes/hr/onboarding';
+import { index as policiesIndex } from '@/routes/hr/policies';
+import { index as requestsIndex } from '@/routes/hr/requests';
 import { edit as hrSettings } from '@/routes/hr/settings';
 import { index as timeIndex } from '@/routes/hr/time';
 
@@ -75,6 +90,24 @@ export function HrSidebar({ onNavigate }: { onNavigate?: () => void }) {
             href: leaveIndex(workspace.slug),
             match: /^\/leave/,
         },
+        {
+            label: 'Requests',
+            icon: ClipboardList,
+            href: requestsIndex(workspace.slug),
+            match: /^\/requests/,
+        },
+        {
+            label: 'Documents',
+            icon: FileStack,
+            href: documentsIndex(workspace.slug),
+            match: /^\/documents/,
+        },
+        {
+            label: 'My equipment',
+            icon: Package,
+            href: myEquipment(workspace.slug),
+            match: /^\/my-equipment/,
+        },
     ];
 
     const company: Item[] = [
@@ -90,6 +123,18 @@ export function HrSidebar({ onNavigate }: { onNavigate?: () => void }) {
             href: announcementsIndex(workspace.slug),
             match: /^\/announcements/,
         },
+        {
+            label: 'Policies',
+            icon: BookOpen,
+            href: policiesIndex(workspace.slug),
+            match: /^\/policies/,
+        },
+        {
+            label: 'Org chart',
+            icon: Network,
+            href: orgChart(workspace.slug),
+            match: /^\/org-chart/,
+        },
     ];
 
     const admin: Item[] = [
@@ -104,6 +149,24 @@ export function HrSidebar({ onNavigate }: { onNavigate?: () => void }) {
             icon: Users,
             href: employeesIndex(workspace.slug),
             match: isOwnFile ? /^$/ : /^\/employees/,
+        },
+        {
+            label: 'Onboarding',
+            icon: UserPlus,
+            href: onboardingIndex(workspace.slug),
+            match: /^\/onboarding/,
+        },
+        {
+            label: 'Offboarding',
+            icon: UserMinus,
+            href: offboardingIndex(workspace.slug),
+            match: /^\/offboarding/,
+        },
+        {
+            label: 'Assets',
+            icon: Package,
+            href: equipmentIndex(workspace.slug),
+            match: /^\/equipment/,
         },
         {
             label: 'HR settings',

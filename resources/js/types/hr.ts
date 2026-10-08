@@ -27,6 +27,9 @@ export type Employee = {
     department: string | null;
     employment_type: string;
     employment_type_label: string;
+    work_type: string;
+    work_type_label: string;
+    shift?: { id: number; name: string; hours: string } | null;
     status: string;
     status_label: string;
     hired_on: string | null;
@@ -142,6 +145,9 @@ export type TimeEntry = {
     is_open: boolean;
     clock_in_location: GeoStamp | null;
     clock_out_location: GeoStamp | null;
+    late_minutes: number | null;
+    early_out_minutes: number | null;
+    overtime_minutes: number | null;
     note: string | null;
 };
 
@@ -186,4 +192,209 @@ export type HeaderClockState = {
     open_entry: { id: number; clock_in_at: string } | null;
     require_location: boolean;
     geofence: Geofence | null;
+};
+
+export type Shift = {
+    id: number;
+    name: string;
+    starts_at: string;
+    ends_at: string;
+    hours: string;
+    grace_minutes: number;
+    /** ISO weekdays, 1 (Monday) to 7 (Sunday). */
+    days: number[];
+    is_default: boolean;
+};
+
+export type HrRequestType = 'shift' | 'work_type' | 'attendance' | 'equipment';
+
+export type HrRequest = {
+    id: number;
+    type: HrRequestType;
+    kind: string;
+    summary: string;
+    employee: PersonSummary;
+    /** Equipment requests only: the kind of item asked for. */
+    equipment_category_id?: number;
+    reason: string | null;
+    status: string;
+    status_label: string;
+    reviewer: string | null;
+    reviewed_at: string | null;
+    review_note: string | null;
+    created_at: string | null;
+    can: { cancel: boolean; review: boolean };
+};
+
+export type DocumentSubmission = {
+    id: number;
+    employee?: PersonSummary;
+    request?: {
+        id: number;
+        title: string;
+        description: string | null;
+        allowed_formats: string[];
+        max_size_mb: number;
+        due_on: string | null;
+    };
+    status: 'pending' | 'submitted' | 'approved' | 'rejected';
+    status_label: string;
+    file_name: string | null;
+    has_file: boolean;
+    expires_on: string | null;
+    submitted_at: string | null;
+    reviewer: string | null;
+    review_note: string | null;
+    can: { upload: boolean; review: boolean };
+};
+
+export type DocumentRequest = {
+    id: number;
+    title: string;
+    description: string | null;
+    allowed_formats: string[];
+    max_size_mb: number;
+    due_on: string | null;
+    created_by: string | null;
+    created_at: string | null;
+    total: number;
+    uploaded: number;
+    approved: number;
+    submissions: DocumentSubmission[];
+};
+
+export type DisciplinaryAction = {
+    id: number;
+    type: string;
+    type_label: string;
+    description: string;
+    starts_on: string;
+    duration_days: number | null;
+    ends_on: string | null;
+    issued_by: string | null;
+    file_name: string | null;
+    has_file: boolean;
+};
+
+export type CompanyPolicy = {
+    id: number;
+    title: string;
+    body: string;
+    requires_acknowledgement: boolean;
+    file_name: string | null;
+    has_file: boolean;
+    author: string | null;
+    updated_at: string | null;
+    acknowledged: boolean;
+    acknowledged_count: number | null;
+    can: { acknowledge: boolean };
+};
+
+export type ChecklistAssignee = 'hr' | 'manager' | 'employee';
+
+export type ChecklistTask = {
+    id: number;
+    title: string;
+    description: string | null;
+    assignee_role: ChecklistAssignee;
+    assignee: string | null;
+    due_on: string | null;
+    is_overdue: boolean;
+    completed_at: string | null;
+    completed_by: string | null;
+    checklist?: {
+        id: number;
+        kind: 'onboarding' | 'offboarding';
+        kind_label: string;
+        employee: string;
+    };
+    can_toggle: boolean;
+};
+
+export type EmployeeChecklist = {
+    id: number;
+    kind: 'onboarding' | 'offboarding';
+    kind_label: string;
+    name: string;
+    status: string;
+    status_label: string;
+    employee: PersonSummary & { job_title: string | null };
+    starts_on: string;
+    target_on: string | null;
+    completed_at: string | null;
+    done: number;
+    total: number;
+    equipment_held: number | null;
+    tasks: ChecklistTask[];
+    can_close: boolean;
+};
+
+export type ChecklistTemplate = {
+    id: number;
+    kind: 'onboarding' | 'offboarding';
+    name: string;
+    is_default: boolean;
+    tasks: {
+        title: string;
+        description: string | null;
+        assignee_role: ChecklistAssignee;
+        due_offset_days: number;
+    }[];
+};
+
+export type Resignation = {
+    id: number;
+    employee: PersonSummary;
+    reason: string;
+    last_day_on: string;
+    status: string;
+    status_label: string;
+    reviewer: string | null;
+    review_note: string | null;
+    created_at: string | null;
+    can: { withdraw: boolean; review: boolean };
+};
+
+export type EquipmentAssignment = {
+    id: number;
+    equipment?: {
+        id: number;
+        name: string;
+        tracking_code: string | null;
+        serial_number: string | null;
+        category: string;
+    };
+    employee?: PersonSummary;
+    assigned_on: string;
+    assigned_by: string | null;
+    condition_out: string | null;
+    return_requested_at: string | null;
+    returned_on: string | null;
+    returned_by: string | null;
+    condition_in: string | null;
+    can: { request_return: boolean; take_back: boolean };
+};
+
+export type Equipment = {
+    id: number;
+    category_id: number;
+    category: string;
+    name: string;
+    tracking_code: string | null;
+    serial_number: string | null;
+    purchased_on: string | null;
+    cost: string | null;
+    status: 'available' | 'assigned' | 'in_repair' | 'retired';
+    status_label: string;
+    warranty_expires_on: string | null;
+    notes: string | null;
+    holder: EquipmentAssignment | null;
+    history: EquipmentAssignment[];
+};
+
+export type EquipmentCategory = {
+    id: number;
+    name: string;
+    description: string | null;
+    count: number;
 };

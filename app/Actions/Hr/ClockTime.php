@@ -4,6 +4,7 @@ namespace App\Actions\Hr;
 
 use App\Models\Employee;
 use App\Models\TimeEntry;
+use App\Services\Hr\Punctuality;
 use App\Support\Geofence;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\ValidationException;
@@ -19,6 +20,8 @@ use Illuminate\Validation\ValidationException;
  */
 class ClockTime
 {
+    public function __construct(private readonly Punctuality $punctuality) {}
+
     /**
      * @param  array{latitude?: float|null, longitude?: float|null, accuracy?: float|null}  $location
      */
@@ -31,7 +34,7 @@ class ClockTime
         $stamp = $this->stamp($employee, $location);
 
         try {
-            return $employee->timeEntries()->create([
+            $entry = $employee->timeEntries()->create([
                 'workspace_id' => $employee->workspace_id,
                 'clock_in_at' => now(),
                 'clock_in_latitude' => $stamp['latitude'],
@@ -44,6 +47,8 @@ class ClockTime
             // A double-submitted button racing past the check above.
             throw ValidationException::withMessages(['clock' => 'You are already clocked in.']);
         }
+
+        return $this->punctuality->measure($entry);
     }
 
     /**
@@ -68,7 +73,7 @@ class ClockTime
             'note' => $note ?? $entry->note,
         ]);
 
-        return $entry;
+        return $this->punctuality->measure($entry);
     }
 
     /**
