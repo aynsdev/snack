@@ -32,6 +32,7 @@ enum BiteCapability: string
     case AttachFile = 'attach_file';
     case SearchTasks = 'search_tasks';
     case CreateTask = 'create_task';
+    case PeopleReport = 'people_report';
 
     public function label(): string
     {
@@ -43,6 +44,7 @@ enum BiteCapability: string
             self::AttachFile => 'Send files into the chat',
             self::SearchTasks => 'Search tasks',
             self::CreateTask => 'Create tasks',
+            self::PeopleReport => 'HR reports',
         };
     }
 
@@ -56,6 +58,7 @@ enum BiteCapability: string
             self::AttachFile => 'Attach a file it found to its reply, so nobody has to go and fetch it.',
             self::SearchTasks => 'Look through the project boards for existing work.',
             self::CreateTask => 'File a task on a board. Always asks the person for approval first.',
+            self::PeopleReport => 'Report attendance and task output per employee — lateness, undertime, absences. Only for admins, and only in a private DM with Bite.',
         };
     }
 
@@ -89,6 +92,7 @@ enum BiteCapability: string
             self::AttachFile => Tools\AttachFile::class,
             self::SearchTasks => Tools\SearchTasks::class,
             self::CreateTask => Tools\CreateTask::class,
+            self::PeopleReport => Tools\PeopleReport::class,
         };
     }
 

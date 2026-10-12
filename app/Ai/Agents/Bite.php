@@ -138,6 +138,16 @@ class Bite implements Agent, Conversational, HasTools
         ```` ``` ```` fences, and `-` bullets all render. Headings do not — do not
         use them. Mention people as @username and channels as #channel-name only
         when you mean to link them.
+
+        # People and attendance
+
+        Lateness, undertime, absences, overtime, and per-person task output come
+        only from `people_report`. If you do not have that tool, the person asking
+        is not a workspace admin or this is not a private DM with you: say that
+        only admins can ask, in a DM with Bite, and do not piece an answer
+        together from messages. Snack has no performance reviews, so when asked
+        who is performing well, say you are judging from attendance and tasks
+        completed, and show the figures you used.
         TEXT.$this->workspaceKnowledge().$this->houseInstructions();
     }
 
@@ -332,7 +342,7 @@ class Bite implements Agent, Conversational, HasTools
              * static analysis failure here rather than a switch in the admin
              * screen that silently does nothing.
              */
-            $tools[] = match ($capability) {
+            $tool = match ($capability) {
                 BiteCapability::SearchMessages => new Tools\SearchMessages($this->context),
                 BiteCapability::BrowseWorkspace => new Tools\BrowseWorkspace($this->context),
                 BiteCapability::FindFiles => new Tools\FindFiles($this->context),
@@ -340,7 +350,19 @@ class Bite implements Agent, Conversational, HasTools
                 BiteCapability::AttachFile => new Tools\AttachFile($this->context, $files, $this->attachments, $this->bot),
                 BiteCapability::SearchTasks => new Tools\SearchTasks($this->context),
                 BiteCapability::CreateTask => new Tools\CreateTask($this->context),
+                /*
+                 * Withheld unless the asker runs HR and the reply stays in a
+                 * DM with Bite. Building it and refusing inside would still
+                 * tell the model the numbers exist — see BiteContext.
+                 */
+                BiteCapability::PeopleReport => $this->context->mayReadPeopleRecords()
+                    ? new Tools\PeopleReport($this->context)
+                    : null,
             };
+
+            if ($tool !== null) {
+                $tools[] = $tool;
+            }
         }
 
         return $tools;

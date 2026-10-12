@@ -2,6 +2,7 @@
 
 namespace App\Ai;
 
+use App\Enums\ConversationType;
 use App\Enums\WorkspaceRole;
 use App\Models\BiteSetting;
 use App\Models\Channel;
@@ -103,6 +104,40 @@ final readonly class BiteContext
     public function isGuest(): bool
     {
         return $this->role()?->isGuest() === true;
+    }
+
+    /**
+     * Whether the asker may be told people's attendance and output figures.
+     *
+     * Two conditions, and both are needed. Only someone who runs HR here may see
+     * these numbers at all — the same rule {@see App\Policies\ManagesPeople}
+     * applies to the HR screens. And only in a direct message with Bite alone,
+     * because the answer is posted where the question was asked: an admin asking
+     * "who is always late?" in #general would be publishing the answer to the
+     * whole channel, and in a DM with a colleague, to that colleague.
+     */
+    public function mayReadPeopleRecords(): bool
+    {
+        return $this->role()?->canManagePeople() === true && $this->isPrivateWithBite();
+    }
+
+    /**
+     * Whether nobody but the asker and bots will read the reply.
+     *
+     * Queried rather than read off a loaded relation, because the answer
+     * decides whether HR data is offered and a stale participant list is
+     * exactly how a colleague added to the DM would end up reading it.
+     */
+    public function isPrivateWithBite(): bool
+    {
+        if (! $this->container instanceof Conversation || $this->container->type !== ConversationType::Direct) {
+            return false;
+        }
+
+        return $this->container->activeUsers()
+            ->where('users.id', '!=', $this->user->id)
+            ->where('users.is_bot', false)
+            ->doesntExist();
     }
 
     /**
