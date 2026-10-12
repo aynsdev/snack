@@ -24,7 +24,7 @@ beforeEach(function () {
     Storage::fake('local');
 
     config()->set('snack.bite.enabled', true);
-    config()->set('ai.providers.mistral.key', 'test-key');
+    config()->set('ai.providers.anthropic.key', 'test-key');
 
     [$this->workspace, $this->owner] = makeWorkspaceWithOwner();
     $this->channel = makeChannel($this->workspace);
@@ -59,8 +59,8 @@ it('says nothing about files when none were attached', function () {
 });
 
 /**
- * An image goes to the provider as bytes — Mistral takes images inline, and
- * that works on every disk, including a local one that cannot sign URLs.
+ * An image goes to the provider as bytes, which works on every disk, including
+ * a local one that cannot sign URLs.
  */
 it('attaches an image for the model to look at', function () {
     $message = messageWithFile([
@@ -107,8 +107,8 @@ it('truncates a very long text file loudly', function () {
 });
 
 /**
- * A PDF goes as a short-lived signed URL, because Mistral fetches documents
- * itself and will not take the bytes — see App\Ai\Tools\ReadFile.
+ * A PDF goes as a short-lived signed URL the provider fetches itself — see
+ * App\Ai\Tools\ReadFile.
  */
 it('hands a PDF over as a temporary link', function () {
     $message = messageWithFile([

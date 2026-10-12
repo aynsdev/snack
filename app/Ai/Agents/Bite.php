@@ -53,7 +53,7 @@ use Laravel\Ai\Promptable;
  * stored conversation and nothing else. `messages()` explains why mixing them
  * broke every real approval.
  */
-#[Provider(Lab::Mistral)]
+#[Provider(Lab::Anthropic)]
 #[MaxSteps(8)]
 class Bite implements Agent, Conversational, HasTools
 {
