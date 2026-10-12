@@ -26,7 +26,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
  */
 beforeEach(function () {
     config()->set('snack.bite.enabled', true);
-    config()->set('ai.providers.mistral.key', 'test-key');
+    config()->set('ai.providers.anthropic.key', 'test-key');
 
     [$this->workspace, $this->owner] = makeWorkspaceWithOwner();
     $this->channel = makeChannel($this->workspace);

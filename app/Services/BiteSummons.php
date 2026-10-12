@@ -205,7 +205,7 @@ class BiteSummons
             return false;
         }
 
-        $provider = (string) config('ai.default', 'mistral');
+        $provider = (string) config('ai.default', 'anthropic');
 
         return ! in_array(config("ai.providers.{$provider}.key"), [null, '', false], true);
     }

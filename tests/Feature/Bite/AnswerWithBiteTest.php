@@ -28,7 +28,7 @@ use Laravel\Ai\Responses\AgentResponse;
  */
 beforeEach(function () {
     config()->set('snack.bite.enabled', true);
-    config()->set('ai.providers.mistral.key', 'test-key');
+    config()->set('ai.providers.anthropic.key', 'test-key');
 
     [$this->workspace, $this->owner] = makeWorkspaceWithOwner();
     $this->channel = makeChannel($this->workspace);
@@ -84,6 +84,15 @@ it('is asked the question that was actually typed', function () {
         (string) $prompt->prompt,
         'find me the deck',
     ));
+});
+
+it('is answered by Claude Haiku', function () {
+    Bite::fake(['Sure.']);
+
+    askBite('@bite hello');
+
+    Bite::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->provider->name() === 'anthropic'
+        && $prompt->model === 'claude-haiku-5-5');
 });
 
 /**

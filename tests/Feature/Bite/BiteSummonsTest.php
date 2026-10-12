@@ -24,8 +24,8 @@ use Illuminate\Support\Facades\Storage;
  */
 beforeEach(function () {
     config()->set('snack.bite.enabled', true);
-    config()->set('ai.default', 'mistral');
-    config()->set('ai.providers.mistral.key', 'test-key');
+    config()->set('ai.default', 'anthropic');
+    config()->set('ai.providers.anthropic.key', 'test-key');
 
     [$this->workspace, $this->owner] = makeWorkspaceWithOwner();
     $this->channel = makeChannel($this->workspace);
@@ -117,7 +117,7 @@ it('is not summoned while the feature is switched off', function () {
  * otherwise turn every message into a failed job rather than into nothing.
  */
 it('is not summoned when the provider has no key', function () {
-    config()->set('ai.providers.mistral.key', null);
+    config()->set('ai.providers.anthropic.key', null);
 
     Queue::fake();
 

@@ -27,8 +27,9 @@ use Throwable;
  *
  * # The three shapes, and why they differ
  *
- * Mistral takes images as bytes and documents only as URLs it fetches itself —
- * see the note on {@see BiteFiles} and `ReadFile`. So:
+ * Images go as bytes and documents as URLs the provider fetches itself — a
+ * shape chosen when Snack ran on Mistral, which took nothing else, and one
+ * Anthropic accepts as well. See the note on {@see BiteFiles} and `ReadFile`. So:
  *
  *  - **images** go inline from storage, which works on every disk;
  *  - **PDFs** go as a short-lived signed URL, and are simply named when the disk

@@ -14,20 +14,19 @@ return [
     */
 
     /*
-     * Snack runs on Mistral. It is the only provider this application holds a
-     * key for, so it is also the default for the two other capabilities it
-     * supports — transcription and embeddings — rather than leaving those
-     * pointing at an OpenAI key that does not exist.
+     * Snack runs on Anthropic, with Haiku as the text model — see the
+     * `anthropic` provider below. It is the only provider this application
+     * holds a key for.
      *
-     * Images, audio, and reranking are left at their package defaults because
-     * Mistral does not implement them; nothing in Snack calls them, and a
-     * provider that cannot serve a capability throws rather than guessing.
+     * Everything else is left at the package defaults because Anthropic only
+     * does text; nothing in Snack calls the other capabilities, and a provider
+     * that cannot serve a capability throws rather than guessing.
      */
-    'default' => env('AI_PROVIDER', 'mistral'),
+    'default' => env('AI_PROVIDER', 'anthropic'),
     'default_for_images' => 'gemini',
     'default_for_audio' => 'openai',
-    'default_for_transcription' => 'mistral',
-    'default_for_embeddings' => 'mistral',
+    'default_for_transcription' => 'openai',
+    'default_for_embeddings' => 'openai',
     'default_for_reranking' => 'cohere',
 
     /*
@@ -64,6 +63,11 @@ return [
             'driver' => 'anthropic',
             'key' => env('ANTHROPIC_API_KEY'),
             'url' => env('ANTHROPIC_URL', 'https://api.anthropic.com/v1'),
+            'models' => [
+                'text' => [
+                    'default' => env('ANTHROPIC_MODEL', 'claude-haiku-5-5'),
+                ],
+            ],
         ],
 
         'azure' => [

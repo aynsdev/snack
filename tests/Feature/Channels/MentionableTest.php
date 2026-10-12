@@ -20,8 +20,8 @@ beforeEach(function () {
     Storage::fake('public');
 
     config()->set('snack.bite.enabled', true);
-    config()->set('ai.default', 'mistral');
-    config()->set('ai.providers.mistral.key', 'test-key');
+    config()->set('ai.default', 'anthropic');
+    config()->set('ai.providers.anthropic.key', 'test-key');
 
     [$this->workspace, $this->owner] = makeWorkspaceWithOwner();
 });

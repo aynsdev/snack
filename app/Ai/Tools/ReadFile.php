@@ -21,10 +21,11 @@ use function Laravel\Ai\agent;
  * Takes a file id from {@see FindFiles} and returns the content, so Bite can
  * answer about the inside of a document rather than only its name.
  *
- * # Three ways in, because the provider only accepts two kinds of attachment
+ * # Three ways in
  *
- * Mistral takes images inline and documents only as a URL it fetches itself;
- * it will not accept PDF bytes in the request body. And a tool may only return
+ * Images go inline and documents as a URL the provider fetches itself — the
+ * only two shapes Mistral accepted when Snack ran on it, and both still work on
+ * Anthropic. And a tool may only return
  * a string — it cannot add an attachment to the conversation that called it.
  * So the reading happens here rather than in the outer prompt:
  *
