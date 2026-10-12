@@ -180,8 +180,12 @@ it('still answers in a direct message when channels are restricted', function ()
 
 // -- What the agent is built with ------------------------------------------
 
+/**
+ * Every one but the HR report, which is withheld in a channel whatever the
+ * settings say — see PeopleReportTest.
+ */
 it('gives Bite every capability when the workspace has chosen none', function () {
-    expect(collect(agentFor()->tools())->count())->toBe(count(BiteCapability::cases()));
+    expect(collect(agentFor()->tools())->count())->toBe(count(BiteCapability::cases()) - 1);
 });
 
 /**
