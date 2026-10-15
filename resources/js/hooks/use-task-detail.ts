@@ -9,7 +9,22 @@ import {
     store as commentStore,
     update as commentUpdate,
 } from '@/routes/tasks/comments';
-import type { Attachment, Task, TaskComment } from '@/types';
+import {
+    destroy as linkDestroy,
+    store as linkStore,
+} from '@/routes/tasks/links';
+import {
+    destroy as relationDestroy,
+    store as relationStore,
+} from '@/routes/tasks/relations';
+import type {
+    Attachment,
+    Task,
+    TaskComment,
+    TaskLink,
+    TaskRelation,
+    TaskRelationType,
+} from '@/types';
 
 /**
  * The half of a card that only exists once somebody opens it.
@@ -225,6 +240,105 @@ export function useTaskDetail({
         [patch, taskId, workspaceSlug],
     );
 
+    /**
+     * Web links and linked cards. Each write answers with what the panel
+     * should now show, so the cache is set rather than refetched.
+     */
+    const run = useCallback(
+        async (action: () => Promise<void>, fallback: string) => {
+            try {
+                await action();
+                setError(null);
+            } catch (cause) {
+                setError(
+                    cause instanceof ApiError ? cause.userMessage : fallback,
+                );
+
+                throw cause;
+            }
+        },
+        [],
+    );
+
+    const addLink = useCallback(
+        (url: string, title: string | null) =>
+            run(async () => {
+                const { link } = await api.post<{ link: TaskLink }>(
+                    linkStore.url({
+                        workspace: workspaceSlug,
+                        task: taskId ?? 0,
+                    }),
+                    { url, title },
+                );
+
+                patch((task) => ({
+                    ...task,
+                    links: [
+                        ...(task.links ?? []).filter(
+                            (row) => row.id !== link.id,
+                        ),
+                        link,
+                    ],
+                }));
+            }, 'That link could not be added.'),
+        [patch, run, taskId, workspaceSlug],
+    );
+
+    const removeLink = useCallback(
+        (id: number) =>
+            run(async () => {
+                await api.delete(
+                    linkDestroy.url({
+                        workspace: workspaceSlug,
+                        task: taskId ?? 0,
+                        link: id,
+                    }),
+                );
+
+                patch((task) => ({
+                    ...task,
+                    links: (task.links ?? []).filter((row) => row.id !== id),
+                }));
+            }, 'That link could not be removed.').catch(noop),
+        [patch, run, taskId, workspaceSlug],
+    );
+
+    const addRelation = useCallback(
+        (relatedTaskId: number, type: TaskRelationType) =>
+            run(async () => {
+                const { relations } = await api.post<{
+                    relations: TaskRelation[];
+                }>(
+                    relationStore.url({
+                        workspace: workspaceSlug,
+                        task: taskId ?? 0,
+                    }),
+                    { related_task_id: relatedTaskId, type },
+                );
+
+                patch((task) => ({ ...task, relations }));
+            }, 'Those tasks could not be linked.'),
+        [patch, run, taskId, workspaceSlug],
+    );
+
+    const removeRelation = useCallback(
+        (id: number) =>
+            run(async () => {
+                const { relations } = await api.delete<{
+                    relations: TaskRelation[];
+                }>(
+                    relationDestroy.url({
+                        workspace: workspaceSlug,
+                        task: taskId ?? 0,
+                        relation: id,
+                    }),
+                );
+
+                patch((task) => ({ ...task, relations }));
+            }, 'That link could not be removed.').catch(noop),
+        [patch, run, taskId, workspaceSlug],
+    );
+
     return {
         /** Null until the card's own request lands. */
         detail: query.data ?? null,
@@ -242,6 +356,12 @@ export function useTaskDetail({
         removeFile,
         /** Names of the files still going up, so the list can say so. */
         uploading,
+        /** Rejects on failure, so a form can keep what was typed. */
+        addLink,
+        removeLink,
+        /** Rejects on failure, so the picker can stay open. */
+        addRelation,
+        removeRelation,
     };
 }
 

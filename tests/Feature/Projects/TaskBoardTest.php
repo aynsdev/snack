@@ -230,7 +230,7 @@ it('rebalances a column whose gaps have run out rather than losing the order', f
         ->toBe(['First', 'Moving', 'Second']);
 });
 
-it('keeps the hierarchy one level deep', function () {
+it('keeps epics at the top of the hierarchy', function () {
     [$workspace, $owner] = makeWorkspaceWithOwner();
     $project = makeProject($workspace, $owner);
 
@@ -247,13 +247,32 @@ it('keeps the hierarchy one level deep', function () {
 
     expect(Task::find($story['id'])->parent_task_id)->toBe($epic->id);
 
-    // Promoted to an epic, it loses its parent — an epic inside an epic is the
-    // second level the model does not have.
+    // Promoted to an epic, it loses its parent: an epic is never under
+    // another task.
     $this->actingAs($owner)
         ->patchJson(route('tasks.update', [$workspace->slug, $story['id']]), [
             'type' => 'epic',
             'parent_task_id' => $epic->id,
         ])
+        ->assertOk();
+
+    expect(Task::find($story['id'])->parent_task_id)->toBeNull();
+});
+
+it('nests subtasks under any task, but never in a loop', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $project = makeProject($workspace, $owner);
+
+    $story = fileTask($this, $workspace, $project, $owner, 'Checkout', ['type' => 'story']);
+    $task = fileTask($this, $workspace, $project, $owner, 'Card form', ['type' => 'task', 'parent_task_id' => $story['id']]);
+    $subtask = fileTask($this, $workspace, $project, $owner, 'Expiry field', ['type' => 'task', 'parent_task_id' => $task['id']]);
+
+    expect(Task::find($task['id'])->parent_task_id)->toBe($story['id'])
+        ->and(Task::find($subtask['id'])->parent_task_id)->toBe($task['id']);
+
+    // The story under its own grandchild would be a loop, so the parent is dropped.
+    $this->actingAs($owner)
+        ->patchJson(route('tasks.update', [$workspace->slug, $story['id']]), ['parent_task_id' => $subtask['id']])
         ->assertOk();
 
     expect(Task::find($story['id'])->parent_task_id)->toBeNull();

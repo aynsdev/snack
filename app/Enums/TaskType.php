@@ -37,10 +37,10 @@ enum TaskType: string
     }
 
     /**
-     * Whether tasks of this type can hold other tasks.
+     * Whether tasks of this type sit at the top of the hierarchy.
      *
-     * Only epics can, and an epic can never be inside another one — which is
-     * what keeps the hierarchy exactly one level deep and the backlog readable.
+     * Any task can have subtasks, but an epic is never inside another task:
+     * it is what the rest of the work is grouped under.
      */
     public function isContainer(): bool
     {

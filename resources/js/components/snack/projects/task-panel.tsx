@@ -10,6 +10,8 @@ import {
     TaskPriorityIcon,
     TaskTypeIcon,
 } from '@/components/snack/projects/task-glyphs';
+import { TaskLinks } from '@/components/snack/projects/task-links';
+import { TaskPicker } from '@/components/snack/projects/task-picker';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,7 +31,6 @@ import { useTaskDetail } from '@/hooks/use-task-detail';
 import { cn } from '@/lib/utils';
 import type {
     BoardColumn,
-    EpicOption,
     ProjectMembership,
     ReleaseOption,
     Task,
@@ -64,7 +65,6 @@ export function TaskPanel({
     columns,
     members,
     labels,
-    epics,
     releases,
     workspaceSlug,
     canContribute,
@@ -78,7 +78,6 @@ export function TaskPanel({
     columns: BoardColumn[];
     members: ProjectMembership[];
     labels: TaskLabel[];
-    epics: EpicOption[];
     releases: ReleaseOption[];
     workspaceSlug: string;
     canContribute: boolean;
@@ -115,7 +114,6 @@ export function TaskPanel({
                         columns={columns}
                         members={members}
                         labels={labels}
-                        epics={epics}
                         releases={releases}
                         workspaceSlug={workspaceSlug}
                         canContribute={canContribute}
@@ -136,7 +134,6 @@ function TaskPanelBody({
     columns,
     members,
     labels,
-    epics,
     releases,
     workspaceSlug,
     canContribute,
@@ -150,7 +147,6 @@ function TaskPanelBody({
     columns: BoardColumn[];
     members: ProjectMembership[];
     labels: TaskLabel[];
-    epics: EpicOption[];
     releases: ReleaseOption[];
     workspaceSlug: string;
     canContribute: boolean;
@@ -282,6 +278,18 @@ function TaskPanelBody({
                         </button>
                     </div>
                 )}
+
+                <TaskLinks
+                    workspaceSlug={workspaceSlug}
+                    taskId={task.id}
+                    links={detail.detail?.links ?? []}
+                    relations={detail.detail?.relations ?? []}
+                    canContribute={canContribute}
+                    onAddLink={detail.addLink}
+                    onRemoveLink={(id) => void detail.removeLink(id)}
+                    onAddRelation={detail.addRelation}
+                    onRemoveRelation={(id) => void detail.removeRelation(id)}
+                />
 
                 <TaskAttachments
                     attachments={detail.detail?.attachments ?? []}
@@ -472,37 +480,53 @@ function TaskPanelBody({
                     </Select>
                 </Field>
 
-                {/* An epic cannot be inside an epic — the server drops the
-                    parent on such a save, so offering the control here would be
-                    offering something that silently does nothing. */}
-                {task.type !== 'epic' && epics.length > 0 && (
-                    <Field label="Epic">
-                        <Select
-                            value={task.epic?.id ? String(task.epic.id) : NONE}
-                            disabled={!canContribute}
-                            onValueChange={(value) =>
-                                save({
-                                    parent_task_id:
-                                        value === NONE ? null : Number(value),
-                                })
-                            }
-                        >
-                            <SelectTrigger className="w-full">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value={NONE}>None</SelectItem>
-
-                                {epics.map((epic) => (
-                                    <SelectItem
-                                        key={epic.id}
-                                        value={String(epic.id)}
+                {/* Any card can sit under another — an epic, a story, a
+                    task. An epic never has a parent, so it gets no control.
+                    The picker leaves out this card and its own subtasks, so
+                    nothing it offers can make a loop. */}
+                {task.type !== 'epic' && (
+                    <Field label="Parent">
+                        {task.epic != null ? (
+                            <div className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm">
+                                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                                    {task.epic.reference}
+                                </span>
+                                <span className="min-w-0 flex-1 truncate">
+                                    {task.epic.title}
+                                </span>
+                                {canContribute && (
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            save({ parent_task_id: null })
+                                        }
+                                        className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
                                     >
-                                        {epic.title}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                                        <X
+                                            aria-hidden="true"
+                                            className="size-4"
+                                        />
+                                        <span className="sr-only">
+                                            Remove parent
+                                        </span>
+                                    </button>
+                                )}
+                            </div>
+                        ) : canContribute ? (
+                            <TaskPicker
+                                workspaceSlug={workspaceSlug}
+                                taskId={task.id}
+                                purpose="parent"
+                                placeholder="Choose a parent…"
+                                onPick={(option) =>
+                                    save({ parent_task_id: option.id })
+                                }
+                            />
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                None
+                            </p>
+                        )}
                     </Field>
                 )}
 

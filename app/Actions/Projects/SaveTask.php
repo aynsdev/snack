@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
  *
  * One action for both because everything that makes a task *valid* is the same
  * on the way in and on the way back: the assignee has to be on the project, the
- * epic has to be an epic in this project, the labels have to be this project's
+ * parent has to be in this project and not form a loop, the labels have to be this project's
  * labels, and a task in a Done column has to be marked complete. Splitting them
  * meant those five rules had two implementations, and the edit path is the one
  * that would have quietly grown a hole.
@@ -63,7 +63,7 @@ class SaveTask
                 'number' => $this->nextNumber($project),
                 'board_column_id' => $column->id,
                 'sprint_id' => $sprint?->id,
-                'parent_task_id' => $this->epicId($project, $attributes),
+                'parent_task_id' => $this->parentId($project, $attributes),
                 'type' => $this->type($attributes),
                 'priority' => $attributes['priority'] ?? 'medium',
                 'title' => $attributes['title'] ?? 'Untitled',
@@ -124,13 +124,13 @@ class SaveTask
             }
 
             if (array_key_exists('parent_task_id', $attributes)) {
-                $changes['parent_task_id'] = $this->epicId($project, $attributes, ignore: $task);
+                $changes['parent_task_id'] = $this->parentId($project, $attributes, $task);
             }
 
             $task->fill($changes)->save();
 
             /*
-             * An epic cannot be inside another epic, so a task promoted to Epic
+             * An epic is never inside another task, so a task promoted to Epic
              * loses its parent. Done after the fill rather than inside it,
              * because the promotion and the parent can arrive in the same
              * request and the order they were listed in must not decide.
@@ -241,19 +241,21 @@ class SaveTask
     }
 
     /**
-     * The epic this task sits under, if it may.
+     * The task this one sits under, if it may.
      *
-     * Refused unless the named task is an Epic in this same project, and never
-     * for a task that is itself an Epic — which is what keeps the hierarchy one
-     * level deep. `$ignore` stops a task being made its own parent.
+     * Any task in this same project can be a parent — an epic, a story, a
+     * task, a bug — so work can be broken down as far as a team needs. Two
+     * rules remain: an Epic is always at the top and never has a parent, and
+     * a task cannot go under itself or under one of its own subtasks, which
+     * would make a loop. `$task` is the one being saved, when editing.
      *
      * @param  array<string, mixed>  $attributes
      */
-    private function epicId(Project $project, array $attributes, ?Task $ignore = null): ?int
+    private function parentId(Project $project, array $attributes, ?Task $task = null): ?int
     {
-        $epicId = $attributes['parent_task_id'] ?? null;
+        $parentId = $attributes['parent_task_id'] ?? null;
 
-        if ($epicId === null) {
+        if ($parentId === null) {
             return null;
         }
 
@@ -261,13 +263,13 @@ class SaveTask
             return null;
         }
 
-        $exists = $project->tasks()
-            ->whereKey((int) $epicId)
-            ->where('type', TaskType::Epic)
-            ->when($ignore !== null, fn ($query) => $query->whereKeyNot($ignore->id))
-            ->exists();
+        $parent = $project->tasks()->whereKey((int) $parentId)->first();
 
-        return $exists ? (int) $epicId : null;
+        if ($parent === null || ($task !== null && $parent->isOrDescendsFrom($task->id))) {
+            return null;
+        }
+
+        return $parent->id;
     }
 
     /**

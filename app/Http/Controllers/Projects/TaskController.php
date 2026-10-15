@@ -62,7 +62,7 @@ class TaskController extends Controller
         return response()->json([
             'task' => (new TaskResource($task->load([
                 'project', 'assignee', 'labels', 'epic', 'release', 'reporter',
-                'comments.author', 'attachments',
+                'comments.author', 'attachments', 'links',
             ])))->resolve($request),
         ]);
     }

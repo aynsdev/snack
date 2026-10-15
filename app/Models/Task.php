@@ -46,6 +46,9 @@ use Illuminate\Support\Carbon;
  * @property-read BoardColumn $column
  * @property-read Collection<int, TaskComment> $comments
  * @property-read Collection<int, MessageAttachment> $attachments
+ * @property-read Collection<int, TaskLink> $links
+ * @property-read Collection<int, TaskRelation> $outgoingRelations
+ * @property-read Collection<int, TaskRelation> $incomingRelations
  */
 #[Fillable([
     'project_id', 'number', 'board_column_id', 'sprint_id', 'release_id', 'parent_task_id',
@@ -126,6 +129,58 @@ class Task extends Model
     public function children(): HasMany
     {
         return $this->hasMany(Task::class, 'parent_task_id');
+    }
+
+    /**
+     * Web links on the card: pull requests, designs, incidents.
+     *
+     * @return HasMany<TaskLink, $this>
+     */
+    public function links(): HasMany
+    {
+        return $this->hasMany(TaskLink::class)->orderBy('id');
+    }
+
+    /**
+     * Relations said from this card: "this blocks PWA-2".
+     *
+     * @return HasMany<TaskRelation, $this>
+     */
+    public function outgoingRelations(): HasMany
+    {
+        return $this->hasMany(TaskRelation::class)->orderBy('id');
+    }
+
+    /**
+     * Relations said from another card about this one: "PWA-1 blocks this".
+     *
+     * @return HasMany<TaskRelation, $this>
+     */
+    public function incomingRelations(): HasMany
+    {
+        return $this->hasMany(TaskRelation::class, 'related_task_id')->orderBy('id');
+    }
+
+    /**
+     * Whether `$taskId` is this task, or anywhere above it — the check that
+     * stops a task being put under one of its own subtasks.
+     *
+     * Walks up one parent at a time, bounded so a loop already in the data
+     * cannot spin forever; past the bound it answers true, refusing the move.
+     */
+    public function isOrDescendsFrom(int $taskId): bool
+    {
+        $currentId = $this->id;
+
+        for ($depth = 0; $depth < 50 && $currentId !== null; $depth++) {
+            if ($currentId === $taskId) {
+                return true;
+            }
+
+            $currentId = static::query()->whereKey($currentId)->value('parent_task_id');
+        }
+
+        return $currentId !== null;
     }
 
     /**

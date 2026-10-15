@@ -39,7 +39,6 @@ import {
 } from '@/routes/projects/sprints';
 import type {
     BoardColumn,
-    EpicOption,
     Project,
     ProjectMembership,
     ReleaseOption,
@@ -56,7 +55,6 @@ type Props = {
     plannedSprints: Sprint[];
     members: ProjectMembership[];
     labels: TaskLabel[];
-    epics: EpicOption[];
     releases: ReleaseOption[];
     canContribute: boolean;
     canManage: boolean;
@@ -85,7 +83,6 @@ export default function ProjectBoardPage({
     plannedSprints,
     members,
     labels,
-    epics,
     releases,
     canContribute,
     canManage,
@@ -317,7 +314,6 @@ export default function ProjectBoardPage({
                 columns={columns}
                 members={members}
                 labels={labels}
-                epics={epics}
                 releases={releases}
                 workspaceSlug={workspace.slug}
                 canContribute={canContribute}
