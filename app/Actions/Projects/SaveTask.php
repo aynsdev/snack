@@ -34,7 +34,10 @@ use Illuminate\Support\Facades\DB;
  */
 class SaveTask
 {
-    public function __construct(private readonly AnnounceAssignment $assignments) {}
+    public function __construct(
+        private readonly AnnounceAssignment $assignments,
+        private readonly AnnounceParentProgress $parents,
+    ) {}
 
     /**
      * @param  array{
@@ -55,16 +58,22 @@ class SaveTask
     {
         $column = $this->column($project, $attributes['board_column_id'] ?? null);
 
+        $attributes = $this->inheritFromParent($project, $attributes);
+
         $task = DB::transaction(function () use ($project, $reporter, $attributes, $column): Task {
             $sprint = $this->sprint($project, $attributes['sprint_id'] ?? null);
+            $type = $this->type($attributes);
+            $parentId = $this->parentId($project, $attributes, $type);
 
             $task = Task::create([
                 'project_id' => $project->id,
                 'number' => $this->nextNumber($project),
                 'board_column_id' => $column->id,
                 'sprint_id' => $sprint?->id,
-                'parent_task_id' => $this->parentId($project, $attributes),
-                'type' => $this->type($attributes),
+                'parent_task_id' => $parentId,
+                // A subtask is always a piece of something; filed with no
+                // parent, it is an ordinary task.
+                'type' => $type->isSubtask() && $parentId === null ? TaskType::Task : $type,
                 'priority' => $attributes['priority'] ?? 'medium',
                 'title' => $attributes['title'] ?? 'Untitled',
                 'description' => $attributes['description'] ?? null,
@@ -85,6 +94,7 @@ class SaveTask
         });
 
         event(TaskChanged::for($task->refresh(), 'created'));
+        $this->parents->announce([$task->parent_task_id]);
 
         // Outside the transaction: the notification is queued, and a worker can
         // pick the job up before an open transaction has committed the row it
@@ -101,8 +111,10 @@ class SaveTask
     {
         $project = $task->project;
         $previousAssigneeId = $task->assignee_id;
+        $previousParentId = $task->parent_task_id;
+        $previousType = $task->type;
 
-        DB::transaction(function () use ($project, $task, $attributes): void {
+        DB::transaction(function () use ($project, $task, $attributes, $previousType): void {
             $changes = [];
 
             foreach (['title', 'description', 'priority', 'story_points', 'due_on'] as $field) {
@@ -124,7 +136,12 @@ class SaveTask
             }
 
             if (array_key_exists('parent_task_id', $attributes)) {
-                $changes['parent_task_id'] = $this->parentId($project, $attributes, $task);
+                $changes['parent_task_id'] = $this->parentId(
+                    $project,
+                    $attributes,
+                    array_key_exists('type', $attributes) ? $this->type($attributes) : $task->type,
+                    $task,
+                );
             }
 
             $task->fill($changes)->save();
@@ -139,14 +156,49 @@ class SaveTask
                 $task->forceFill(['parent_task_id' => null])->save();
             }
 
+            $this->keepHierarchyValid($task, $previousType);
+
             $this->syncLabels($project, $task, $attributes);
         });
 
         event(TaskChanged::for($task->refresh(), 'updated'));
+        $this->parents->announce([$previousParentId, $task->parent_task_id]);
 
         $this->assignments->handle($task, $actor, $previousAssigneeId);
 
         return $task;
+    }
+
+    /**
+     * A subtask goes where its parent is, unless the request said otherwise.
+     *
+     * The same as Jira: work broken out of a card is part of that card, so it
+     * lands in the parent's sprint and release rather than in the backlog,
+     * where nobody working the sprint would see it. Only fills what the
+     * request left out — an explicit `sprint_id: null` still means backlog.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function inheritFromParent(Project $project, array $attributes): array
+    {
+        $parentId = $this->parentId($project, $attributes, $this->type($attributes));
+
+        if ($parentId === null) {
+            return $attributes;
+        }
+
+        $parent = $project->tasks()->whereKey($parentId)->first(['id', 'sprint_id', 'release_id']);
+
+        if (! array_key_exists('sprint_id', $attributes)) {
+            $attributes['sprint_id'] = $parent?->sprint_id;
+        }
+
+        if (! array_key_exists('release_id', $attributes)) {
+            $attributes['release_id'] = $parent?->release_id;
+        }
+
+        return $attributes;
     }
 
     /**
@@ -243,15 +295,16 @@ class SaveTask
     /**
      * The task this one sits under, if it may.
      *
-     * Any task in this same project can be a parent — an epic, a story, a
-     * task, a bug — so work can be broken down as far as a team needs. Two
-     * rules remain: an Epic is always at the top and never has a parent, and
-     * a task cannot go under itself or under one of its own subtasks, which
-     * would make a loop. `$task` is the one being saved, when editing.
+     * Any story, task, or bug in this same project can be a parent, so work
+     * can be broken down as far as a team needs; an epic can hold anything but
+     * a subtask, and a subtask holds nothing — see TaskType::canHoldChild().
+     * A task also cannot go under itself or one of its own subtasks, which
+     * would make a loop. `$type` is the type the task being saved will have;
+     * `$task` is the task itself, when editing.
      *
      * @param  array<string, mixed>  $attributes
      */
-    private function parentId(Project $project, array $attributes, ?Task $task = null): ?int
+    private function parentId(Project $project, array $attributes, TaskType $type, ?Task $task = null): ?int
     {
         $parentId = $attributes['parent_task_id'] ?? null;
 
@@ -259,17 +312,44 @@ class SaveTask
             return null;
         }
 
-        if ($this->type($attributes)->isContainer()) {
+        $parent = $project->tasks()->whereKey((int) $parentId)->first();
+
+        if ($parent === null || ! $parent->type->canHoldChild($type)) {
             return null;
         }
 
-        $parent = $project->tasks()->whereKey((int) $parentId)->first();
-
-        if ($parent === null || ($task !== null && $parent->isOrDescendsFrom($task->id))) {
+        if ($task !== null && $parent->isOrDescendsFrom($task->id)) {
             return null;
         }
 
         return $parent->id;
+    }
+
+    /**
+     * The type rules that depend on the rest of the hierarchy, applied after
+     * an edit because a type and a parent can change in the same request.
+     *
+     * A subtask left without a parent becomes a task. A card with subtasks
+     * cannot become a subtask itself, nor an epic (subtasks never sit
+     * directly under one), so it keeps the type it had.
+     */
+    private function keepHierarchyValid(Task $task, TaskType $previousType): void
+    {
+        if ($task->type->isSubtask() && $task->parent_task_id === null) {
+            $task->forceFill(['type' => TaskType::Task])->save();
+
+            return;
+        }
+
+        $breaksChildren = match (true) {
+            $task->type->isSubtask() => $task->children()->exists(),
+            $task->type->isContainer() => $task->children()->where('type', TaskType::Subtask)->exists(),
+            default => false,
+        };
+
+        if ($breaksChildren) {
+            $task->forceFill(['type' => $previousType])->save();
+        }
     }
 
     /**

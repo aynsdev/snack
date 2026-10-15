@@ -84,8 +84,17 @@ trait PlacesTasks
             $changed[] = 'release → '.($release->name ?? 'none');
         }
 
+        $type = TaskType::tryFrom((string) ($arguments['type'] ?? '')) ?? $task->type ?? TaskType::Task;
+
+        if ($type->isSubtask() && ! array_key_exists('parent', $arguments) && $task?->parent_task_id === null) {
+            return 'A subtask always has a parent: pass `parent` with the reference of a story, task, or bug. Nothing was changed.';
+        }
+
+        if ($type->isSubtask() && $task !== null && $task->children()->exists()) {
+            return "{$task->reference()} has subtasks of its own, so it cannot become a subtask. Nothing was changed.";
+        }
+
         if (array_key_exists('parent', $arguments)) {
-            $type = TaskType::tryFrom((string) ($arguments['type'] ?? '')) ?? $task->type ?? TaskType::Task;
             $parent = $this->parentNamed($context, $project, $arguments['parent'], $type, $task);
 
             if (is_string($parent)) {
@@ -219,16 +228,19 @@ trait PlacesTasks
     /**
      * The task a task goes under, or null for "none".
      *
-     * Any task in the same project can be a parent, with the rules
-     * {@see SaveTask} enforces: an epic is never under another task, and no
-     * task can go under itself or one of its own subtasks.
+     * Any story, task, or bug in the same project can be a parent, with the
+     * rules {@see SaveTask} enforces: an epic is never under another task, a
+     * subtask never has children or sits straight under an epic, and no task
+     * can go under itself or one of its own subtasks.
      */
     protected function parentNamed(BiteContext $context, Project $project, mixed $named, TaskType $type, ?Task $task): Task|null|string
     {
         $reference = is_string($named) ? trim($named) : '';
 
         if (strtolower($reference) === 'none') {
-            return null;
+            return $type->isSubtask()
+                ? 'A subtask always has a parent. Change its type to task first, or give it another parent. Nothing was changed.'
+                : null;
         }
 
         if ($type->isContainer()) {
@@ -240,6 +252,8 @@ trait PlacesTasks
         $why = match (true) {
             $parent === null => "There is no task [{$reference}] that this person can see. References look like {$project->key}-12.",
             $parent->project_id !== $project->id => "[{$reference}] is in a different project; a parent must be in {$project->key}.",
+            $parent->type->isSubtask() => "[{$reference}] is a subtask, and a subtask cannot have subtasks of its own.",
+            ! $parent->type->canHoldChild($type) => "A subtask goes under a story, task, or bug, not straight under an epic like [{$reference}].",
             $task !== null && $parent->isOrDescendsFrom($task->id) => $parent->id === $task->id
                 ? 'A task cannot be its own parent.'
                 : "[{$reference}] is a subtask of {$task->reference()}, so it cannot also be its parent.",

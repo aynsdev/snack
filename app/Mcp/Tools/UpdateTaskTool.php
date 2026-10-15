@@ -42,10 +42,12 @@ reference, such as ENG-42.
 
 - `status`: a column name from `get_project`, such as "Done".
 - `sprint`: "active" for the running sprint, an open sprint's name, or
-  "backlog". See `list_sprints`.
+  "backlog". See `list_sprints`. Unfinished subtasks move with
+  their parent.
 - `release`: a release name such as "v3.2.1", or "none". See `list_releases`.
-- `parent`: the reference of any task in the same project, or "none". An
-  epic cannot have a parent, and a task cannot go under its own subtask.
+- `parent`: the reference of a task in the same project, or "none". An
+  epic cannot have a parent, a subtask must have one (a story, task, or
+  bug), and a task cannot go under its own subtask.
 - `add_labels` / `remove_labels`: label names the project already has.
 - `assignee`: @username of a project member, "me" for the connected person,
   or "none" to unassign. The new assignee is notified.

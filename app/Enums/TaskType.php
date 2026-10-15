@@ -26,6 +26,8 @@ enum TaskType: string
     /** A container for other tasks, spanning sprints. */
     case Epic = 'epic';
 
+    case Subtask = 'subtask';
+
     public function label(): string
     {
         return match ($this) {
@@ -33,6 +35,7 @@ enum TaskType: string
             self::Task => 'Task',
             self::Bug => 'Bug',
             self::Epic => 'Epic',
+            self::Subtask => 'Subtask',
         };
     }
 
@@ -45,6 +48,31 @@ enum TaskType: string
     public function isContainer(): bool
     {
         return $this === self::Epic;
+    }
+
+    /**
+     * Whether this is a piece of another card, as Jira's subtasks are: it
+     * always has a parent, and never has subtasks of its own.
+     */
+    public function isSubtask(): bool
+    {
+        return $this === self::Subtask;
+    }
+
+    /**
+     * Whether a card of this type may have `$child` beneath it.
+     *
+     * Nothing goes under a subtask, and a subtask goes under a story, task,
+     * or bug — never straight under an epic, which groups whole pieces of
+     * work rather than the steps of one.
+     */
+    public function canHoldChild(self $child): bool
+    {
+        if ($this->isSubtask() || $child->isContainer()) {
+            return false;
+        }
+
+        return ! ($child->isSubtask() && $this->isContainer());
     }
 
     /**

@@ -1,5 +1,5 @@
 import { Check, Trash2, X } from 'lucide-react';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { DevelopmentSection } from '@/components/snack/projects/development-section';
 import { TaskAttachments } from '@/components/snack/projects/task-attachments';
 import { TaskComments } from '@/components/snack/projects/task-comments';
@@ -9,9 +9,11 @@ import {
     TASK_TYPES,
     TaskPriorityIcon,
     TaskTypeIcon,
+    typeOptionsFor,
 } from '@/components/snack/projects/task-glyphs';
 import { TaskLinks } from '@/components/snack/projects/task-links';
 import { TaskPicker } from '@/components/snack/projects/task-picker';
+import { TaskSubtasks } from '@/components/snack/projects/task-subtasks';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -73,6 +75,8 @@ export function TaskPanel({
     onUpdate,
     onDelete,
     onMoveToColumn,
+    onOpenTask,
+    onCreateTask,
 }: {
     task: Task | null;
     columns: BoardColumn[];
@@ -89,6 +93,10 @@ export function TaskPanel({
     ) => Promise<unknown>;
     onDelete: (taskId: number) => Promise<void>;
     onMoveToColumn: (task: Task, columnId: number) => void;
+    /** Open another card in this panel — a subtask, or the parent. */
+    onOpenTask: (task: { id: number; reference: string }) => void;
+    /** File a card on this project; used for subtasks. */
+    onCreateTask: (attributes: Record<string, unknown>) => Promise<unknown>;
 }) {
     return (
         <Dialog
@@ -121,6 +129,8 @@ export function TaskPanel({
                         onUpdate={onUpdate}
                         onDelete={onDelete}
                         onMoveToColumn={onMoveToColumn}
+                        onOpenTask={onOpenTask}
+                        onCreateTask={onCreateTask}
                         onClose={onClose}
                     />
                 )}
@@ -141,6 +151,8 @@ function TaskPanelBody({
     onUpdate,
     onDelete,
     onMoveToColumn,
+    onOpenTask,
+    onCreateTask,
     onClose,
 }: {
     task: Task;
@@ -157,9 +169,28 @@ function TaskPanelBody({
     ) => Promise<unknown>;
     onDelete: (taskId: number) => Promise<void>;
     onMoveToColumn: (task: Task, columnId: number) => void;
+    onOpenTask: (task: { id: number; reference: string }) => void;
+    onCreateTask: (attributes: Record<string, unknown>) => Promise<unknown>;
     onClose: () => void;
 }) {
     const [title, setTitle] = useState(task.title);
+    const titleField = useRef<HTMLTextAreaElement>(null);
+
+    /*
+     * The title wraps onto as many lines as it needs instead of scrolling
+     * inside one: measured after every change, before paint, so a long title
+     * never flashes a scrollbar.
+     */
+    useLayoutEffect(() => {
+        const field = titleField.current;
+
+        if (field === null) {
+            return;
+        }
+
+        field.style.height = 'auto';
+        field.style.height = `${field.scrollHeight}px`;
+    }, [title]);
     const [description, setDescription] = useState(task.description ?? '');
     const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -209,17 +240,35 @@ function TaskPanelBody({
                     {task.epic != null && (
                         <>
                             <span aria-hidden="true">·</span>
-                            <span className="truncate">{task.epic.title}</span>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    task.epic != null && onOpenTask(task.epic)
+                                }
+                                title={`Open ${task.epic.reference}`}
+                                className="truncate hover:text-foreground hover:underline"
+                            >
+                                {task.epic.title}
+                            </button>
                         </>
                     )}
                 </div>
 
                 <DialogTitle asChild>
                     <textarea
+                        ref={titleField}
                         value={title}
                         rows={1}
                         readOnly={!canContribute}
                         onChange={(event) => setTitle(event.target.value)}
+                        onKeyDown={(event) => {
+                            // A title is one line of thought: Enter saves it
+                            // rather than starting a second line.
+                            if (event.key === 'Enter') {
+                                event.preventDefault();
+                                event.currentTarget.blur();
+                            }
+                        }}
                         onBlur={() => {
                             const trimmed = title.trim();
 
@@ -232,7 +281,7 @@ function TaskPanelBody({
 
                             save({ title: trimmed });
                         }}
-                        className="mt-1 w-full resize-none bg-transparent text-lg font-semibold outline-none"
+                        className="mt-1 w-full resize-none overflow-hidden bg-transparent text-lg leading-snug font-semibold break-words outline-none"
                     />
                 </DialogTitle>
 
@@ -264,6 +313,30 @@ function TaskPanelBody({
                     }}
                     className="mt-1.5 w-full resize-y rounded-lg border border-border bg-background p-2.5 text-sm outline-none focus:border-brand"
                 />
+
+                {/* Nothing goes under a subtask. An epic lists its child
+                    issues, as in Jira, and new ones are stories — a subtask
+                    never sits straight under an epic. */}
+                {task.type !== 'subtask' && (
+                    <TaskSubtasks
+                        heading={
+                            task.type === 'epic' ? 'Child issues' : 'Subtasks'
+                        }
+                        subtasks={detail.detail?.subtasks ?? []}
+                        canContribute={canContribute}
+                        onOpen={onOpenTask}
+                        onCreate={async (childTitle) => {
+                            await onCreateTask({
+                                title: childTitle,
+                                type:
+                                    task.type === 'epic' ? 'story' : 'subtask',
+                                priority: 'medium',
+                                parent_task_id: task.id,
+                            });
+                            await detail.refresh();
+                        }}
+                    />
+                )}
 
                 {detail.error !== null && (
                     <div className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
@@ -438,13 +511,11 @@ function TaskPanelBody({
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            {Object.entries(TASK_TYPES).map(([value, meta]) => (
+                            {typeOptionsFor(task).map((value) => (
                                 <SelectItem key={value} value={value}>
                                     <span className="flex items-center gap-2">
-                                        <TaskTypeIcon
-                                            type={value as TaskType}
-                                        />
-                                        {meta.label}
+                                        <TaskTypeIcon type={value} />
+                                        {TASK_TYPES[value].label}
                                     </span>
                                 </SelectItem>
                             ))}

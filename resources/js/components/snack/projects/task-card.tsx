@@ -1,4 +1,4 @@
-import { CalendarDays, Zap } from 'lucide-react';
+import { CalendarDays, ListTree, Zap } from 'lucide-react';
 import {
     LabelChip,
     TaskPriorityIcon,
@@ -130,6 +130,23 @@ export function TaskCard({
                         className="rounded-full bg-muted px-1.5 py-0.5 text-[0.625rem] leading-none font-semibold text-muted-foreground tabular-nums"
                     >
                         {task.story_points}
+                    </span>
+                )}
+
+                {task.subtask_progress != null && (
+                    <span
+                        title={`${task.subtask_progress.done} of ${task.subtask_progress.total} subtasks done`}
+                        className={cn(
+                            'inline-flex items-center gap-0.5 text-[0.625rem] font-medium tabular-nums',
+                            task.subtask_progress.done ===
+                                task.subtask_progress.total
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-muted-foreground',
+                        )}
+                    >
+                        <ListTree aria-hidden="true" className="size-3" />
+                        {task.subtask_progress.done}/
+                        {task.subtask_progress.total}
                     </span>
                 )}
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ColumnCategory;
+use App\Enums\TaskType;
 use App\Models\Task;
 
 it('counts the project by status, priority and type', function () {
@@ -44,7 +45,7 @@ it('counts the project by status, priority and type', function () {
             ->has('priorities', 5)
             ->where('priorities.1.value', 'high')
             ->where('priorities.1.count', 2)
-            ->has('types', 4));
+            ->has('types', count(TaskType::cases())));
 });
 
 it('counts only the last seven days in its tiles', function () {

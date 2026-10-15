@@ -6,6 +6,7 @@ import {
     TASK_TYPES,
     TaskPriorityIcon,
     TaskTypeIcon,
+    typeOptionsFor,
 } from '@/components/snack/projects/task-glyphs';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import {
@@ -73,18 +74,15 @@ export function TaskTypeMenu({
                 Type
             </DropdownMenuLabel>
 
-            {Object.entries(TASK_TYPES).map(([value, meta]) => (
-                <DropdownMenuItem
-                    key={value}
-                    onSelect={() => onChange(value as TaskType)}
-                >
+            {typeOptionsFor(task).map((value) => (
+                <DropdownMenuItem key={value} onSelect={() => onChange(value)}>
                     {/* Hidden from the accessible name, which the label beside
                         it already carries — the glyph would otherwise read it
                         out twice. */}
                     <span aria-hidden="true" className="inline-flex">
-                        <TaskTypeIcon type={value as TaskType} />
+                        <TaskTypeIcon type={value} />
                     </span>
-                    {meta.label}
+                    {TASK_TYPES[value].label}
                     {task.type === value && (
                         <Check className="ml-auto size-4" />
                     )}

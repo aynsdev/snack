@@ -183,7 +183,7 @@ it('shows an epic with its subtasks, and lists them by parent', function () {
     SnackServer::actingAs($user)
         ->tool(GetTaskTool::class, ['task' => $this->epic->reference()])
         ->assertOk()
-        ->assertSee(['Subtasks:', "{$this->task->reference()} — Fix the fare rounding"]);
+        ->assertSee(['Child issues (0 of 1 done):', "{$this->task->reference()} — Fix the fare rounding"]);
 
     SnackServer::actingAs($user)
         ->tool(GetTaskTool::class, ['task' => $this->task->reference()])
@@ -296,4 +296,28 @@ it('keeps release planning to project leads', function () {
         ->assertHasErrors(['Only project leads']);
 
     expect($this->release->fresh()->released_at)->toBeNull();
+});
+
+it('needs a story, task, or bug as a subtask’s parent', function () {
+    [$user] = connectAs($this->member, $this->workspace);
+
+    SnackServer::actingAs($user)
+        ->tool(CreateTaskTool::class, ['project' => 'PWA', 'title' => 'Loose piece', 'type' => 'subtask'])
+        ->assertHasErrors(['A subtask always has a parent', 'Nothing was created.']);
+
+    SnackServer::actingAs($user)
+        ->tool(CreateTaskTool::class, ['project' => 'PWA', 'title' => 'Under the epic', 'type' => 'subtask', 'parent' => $this->epic->reference()])
+        ->assertHasErrors(['not straight under an epic']);
+
+    SnackServer::actingAs($user)
+        ->tool(CreateTaskTool::class, ['project' => 'PWA', 'title' => 'Round half up', 'type' => 'subtask', 'parent' => $this->task->reference()])
+        ->assertOk();
+
+    expect(Task::query()->where('title', 'Round half up')->sole())
+        ->type->toBe(TaskType::Subtask)
+        ->parent_task_id->toBe($this->task->id);
+
+    SnackServer::actingAs($user)
+        ->tool(GetTaskTool::class, ['task' => $this->task->reference()])
+        ->assertSee(['Subtasks (0 of 1 done):', 'Round half up', 'subtask']);
 });

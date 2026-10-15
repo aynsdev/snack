@@ -65,7 +65,7 @@ export type ActivityTab =
 export type ProjectRole = 'lead' | 'member';
 
 /** Mirrors App\Enums\TaskType. */
-export type TaskType = 'story' | 'task' | 'bug' | 'epic';
+export type TaskType = 'story' | 'task' | 'bug' | 'epic' | 'subtask';
 
 /** Mirrors App\Enums\TaskPriority. */
 export type TaskPriority = 'highest' | 'high' | 'medium' | 'low' | 'lowest';
@@ -1086,11 +1086,26 @@ export type Task = {
      */
     comments?: TaskComment[];
     attachments?: Attachment[];
+    /** Subtasks done and in all, for the card's badge; null when it has none. */
+    subtask_progress?: { done: number; total: number } | null;
+    /** The subtasks themselves — only from `tasks.show`. */
+    subtasks?: TaskSubtask[];
     /** Web links and linked cards — also only from `tasks.show`. */
     links?: TaskLink[];
     relations?: TaskRelation[];
     created_at: string | null;
     updated_at: string | null;
+};
+
+/** One subtask as the parent's panel lists it. */
+export type TaskSubtask = {
+    id: number;
+    reference: string;
+    title: string;
+    type: TaskType;
+    status: string;
+    is_complete: boolean;
+    assignee: SnackUser | null;
 };
 
 /** A web link on a card, such as a pull request. */

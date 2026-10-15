@@ -67,6 +67,11 @@ is up front: call `whoami` whenever a request says "me", "my", or "I".
   `sprint`, a `release`, and a `parent` task on create and update, and
   `update_tasks` moves many at once. When a name matches nothing, the reply
   lists the valid options.
+- To break a task into subtasks, as in Jira, call `create_task` with
+  `type: "subtask"` and `parent` set to the story, task, or bug. A subtask
+  always has a parent, never has subtasks of its own, never sits straight
+  under an epic, and starts in its parent's sprint and release. Moving the
+  parent to another sprint takes its unfinished subtasks along.
 - `add_link` puts a web link such as a pull request on a task; `link_tasks`
   says one task blocks, relates to, or duplicates another.
 - Every tool that changes something — `send_message`, `create_task`,

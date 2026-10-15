@@ -44,10 +44,13 @@ reply lists the projects that exist so you can ask which one was meant.
 
 Optional placement, all resolved within the project:
 - `status`: a column name from `get_project`. Defaults to the first column.
-- `sprint`: "active", an open sprint's name, or "backlog" (the default).
-- `release`: a release name such as "v3.2.1". See `list_releases`.
-- `parent`: the reference of any task in the same project, such as ENG-12,
-  to make this its subtask. An epic cannot have a parent.
+- `sprint`: "active", an open sprint's name, or "backlog". Defaults to the
+  backlog, or for a subtask to its parent's sprint.
+- `release`: a release name such as "v3.2.1". See `list_releases`. A
+  subtask defaults to its parent's release.
+- `parent`: the reference of a task in the same project, such as ENG-12,
+  to file this under it. With `type: subtask` this is required, and the
+  parent must be a story, task, or bug. An epic cannot have a parent.
 - `labels`: label names the project already has.
 - `assignee`: @username of a project member, or "me". They are notified.
 
