@@ -54,7 +54,7 @@ export function WorkspaceRail({
                                 href={createWorkspace()}
                                 className={cn(
                                     'flex size-11 items-center justify-center rounded-xl border border-dashed border-rail-muted/40 text-rail-muted',
-                                    'transition-colors hover:border-rail-active hover:text-rail-active',
+                                    'transition-colors hover:border-rail-foreground/40 hover:text-rail-foreground',
                                 )}
                             >
                                 <Plus aria-hidden="true" className="size-5" />
@@ -87,23 +87,11 @@ function WorkspaceRailButton({
                     aria-current={isActive ? 'page' : undefined}
                     className="group relative flex items-center justify-center"
                 >
-                    {/* The active pill grows out of the edge, so the current
-                        workspace is identifiable by position as well as ring. */}
-                    <span
-                        aria-hidden="true"
-                        className={cn(
-                            'absolute -left-3 w-1 rounded-r-full bg-rail-active transition-all',
-                            isActive
-                                ? 'h-7 opacity-100'
-                                : 'h-2 opacity-0 group-hover:opacity-60',
-                        )}
-                    />
-
                     <span
                         className={cn(
                             'flex size-11 items-center justify-center overflow-hidden rounded-xl text-sm font-semibold transition-all',
                             isActive
-                                ? 'bg-brand-subtle text-foreground ring-2 ring-rail-active'
+                                ? 'bg-rail-foreground/20 text-rail-foreground'
                                 : 'bg-rail-foreground/10 text-rail-foreground hover:rounded-lg hover:bg-rail-foreground/20',
                         )}
                     >

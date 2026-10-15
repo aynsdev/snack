@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Conversations;
 
+use App\Enums\MagnificModel;
 use App\Http\Requests\Concerns\ResolvesAttachments;
 use App\Http\Requests\Concerns\ResolvesThreadParent;
 use App\Models\Conversation;
@@ -12,6 +13,7 @@ use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 /**
  * Posting a message to a conversation.
@@ -52,6 +54,8 @@ class StoreConversationMessageRequest extends FormRequest
             ],
             'parent_message_id' => $this->parentRules(),
 
+            'bite_model' => ['nullable', Rule::prohibitedIf(! $this->conversation()->type->isBite()), Rule::enum(MagnificModel::class)],
+
             ...$this->attachmentRules(),
         ];
     }
@@ -75,6 +79,13 @@ class StoreConversationMessageRequest extends FormRequest
         abort_unless($conversation instanceof Conversation, 404);
 
         return $conversation;
+    }
+
+    public function biteModel(): ?MagnificModel
+    {
+        $model = $this->validated('bite_model');
+
+        return is_string($model) ? MagnificModel::from($model) : null;
     }
 
     public function messageBody(): string

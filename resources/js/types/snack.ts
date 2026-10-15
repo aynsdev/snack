@@ -337,6 +337,7 @@ export type PendingMessage = {
     attachmentCount: number;
     /** The ids to re-claim if the send failed and is retried. */
     attachmentIds: number[];
+    biteModel?: string | null;
 };
 
 /** One page of cursor-paginated history. */

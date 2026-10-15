@@ -423,7 +423,11 @@ export function useMessageTimeline({
     // -- Mutations ----------------------------------------------------------
 
     const send = useCallback(
-        async (body: string, attachmentIds: number[] = []) => {
+        async (
+            body: string,
+            attachmentIds: number[] = [],
+            biteModel?: string | null,
+        ) => {
             if (currentUser === null) {
                 return;
             }
@@ -440,6 +444,7 @@ export function useMessageTimeline({
                     failed: false,
                     attachmentCount: attachmentIds.length,
                     attachmentIds,
+                    biteModel,
                 },
             ]);
 
@@ -451,7 +456,11 @@ export function useMessageTimeline({
                      * re-verifies every one of them against this workspace and
                      * this uploader before claiming it — see ResolvesAttachments.
                      */
-                    { body, attachment_ids: attachmentIds },
+                    {
+                        body,
+                        attachment_ids: attachmentIds,
+                        ...(biteModel ? { bite_model: biteModel } : {}),
+                    },
                 );
 
                 upsert(message);
@@ -490,7 +499,7 @@ export function useMessageTimeline({
              * uploads are still unattached and still this user's — the retry
              * claims them exactly as the first attempt would have.
              */
-            void send(failed.body, failed.attachmentIds);
+            void send(failed.body, failed.attachmentIds, failed.biteModel);
         },
         [pending, send],
     );

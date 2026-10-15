@@ -2,12 +2,14 @@
 
 namespace App\Http\Requests\Bite;
 
+use App\Enums\MagnificModel;
 use App\Http\Requests\Concerns\ResolvesAttachments;
 use App\Models\MessageAttachment;
 use App\Models\Workspace;
 use App\Services\BiteSummons;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 
 /**
  * The first message of a new Bite chat.
@@ -39,6 +41,8 @@ class StoreBiteChatRequest extends FormRequest
                 'max:'.config('snack.messages.max_length'),
             ],
 
+            'bite_model' => ['nullable', Rule::enum(MagnificModel::class)],
+
             ...$this->attachmentRules(),
         ];
     }
@@ -52,6 +56,13 @@ class StoreBiteChatRequest extends FormRequest
             'body.required_without' => 'Ask Bite something to start a chat.',
             'body.max' => 'That message is too long to send.',
         ];
+    }
+
+    public function biteModel(): ?MagnificModel
+    {
+        $model = $this->validated('bite_model');
+
+        return is_string($model) ? MagnificModel::from($model) : null;
     }
 
     public function messageBody(): string

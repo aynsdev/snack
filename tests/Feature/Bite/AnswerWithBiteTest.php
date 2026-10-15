@@ -5,6 +5,7 @@ use App\Ai\Agents\Bite;
 use App\Ai\BiteAttachments;
 use App\Ai\BiteUploads;
 use App\Enums\BiteCapability;
+use App\Enums\MagnificModel;
 use App\Enums\WorkspaceRole;
 use App\Events\BiteReplying;
 use App\Jobs\AnswerWithBite;
@@ -84,6 +85,20 @@ it('is asked the question that was actually typed', function () {
         (string) $prompt->prompt,
         'find me the deck',
     ));
+});
+
+it('includes the selected media mode and model in the generation brief', function () {
+    Bite::fake(['On its way.']);
+
+    app(SendMessage::class)->handle(
+        container: $this->channel,
+        sender: $this->ada,
+        body: '@bite A rocket at sunrise',
+        biteModel: MagnificModel::Recraft4,
+    );
+
+    Bite::assertPrompted(fn (AgentPrompt $prompt): bool => str_contains((string) $prompt->prompt, 'A rocket at sunrise')
+        && str_contains((string) $prompt->prompt, 'image generation with Recraft 4'));
 });
 
 it('is answered by Claude Haiku', function () {

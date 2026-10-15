@@ -68,12 +68,9 @@ const BOTTOM_TOLERANCE = 80;
  * document, however many pages have been scrolled through. Everything else is
  * two padding values.
  *
- * The window is expressed as padding above and below the visible rows rather
- * than by absolutely positioning each one, which is the more common way to write
- * this. Absolute positioning takes every row out of flow and breaks the sticky
- * day dividers — `position: sticky` needs a normal-flow box to stick within.
- * Padding keeps the rows in flow, so the dividers behave exactly as they did
- * before any of this was windowed.
+ * Padding above and below the visible rows keeps messages and date dividers
+ * in normal flow. The prepend correction can therefore compare scroll heights
+ * without introducing a separate positioning system for the visible rows.
  *
  * Pending messages stay outside the window. There are only ever a handful, they
  * live at the very bottom where the reader already is, and keeping them in flow
@@ -540,14 +537,17 @@ export function MessageList({
  */
 function DayDivider({ iso }: { iso: string }) {
     return (
-        <div className="sticky top-0 z-10 flex items-center gap-3 bg-background/85 px-4 py-2 backdrop-blur-sm">
-            <span aria-hidden="true" className="h-px flex-1 bg-border" />
+        <div className="flex items-center gap-4 px-6 py-4">
+            <span aria-hidden="true" className="h-px flex-1 bg-border/50" />
 
-            <span className="rounded-full border border-border px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+            <time
+                dateTime={iso}
+                className="shrink-0 py-1 text-xs font-medium text-muted-foreground"
+            >
                 {dayLabel(iso)}
-            </span>
+            </time>
 
-            <span aria-hidden="true" className="h-px flex-1 bg-border" />
+            <span aria-hidden="true" className="h-px flex-1 bg-border/50" />
         </div>
     );
 }

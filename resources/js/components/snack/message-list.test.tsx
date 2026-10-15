@@ -122,6 +122,30 @@ function renderList(props: Partial<Parameters<typeof MessageList>[0]> = {}) {
  * a later change would silently stop appearing here.
  */
 describe('MessageList', () => {
+    it('aligns the viewer’s messages and pending sends right and other authors left', () => {
+        renderList({
+            messages: [
+                makeMessage({ id: 1, body: 'My message' }),
+                makeMessage({
+                    id: 2,
+                    body: 'Their message',
+                    sender: { ...ADA, id: 2, name: 'Grace' },
+                }),
+            ],
+            pending: [makePending({ body: 'Sending mine' })],
+        });
+
+        expect(screen.getByText('My message').closest('article')).toHaveClass(
+            'flex-row-reverse',
+        );
+        expect(
+            screen.getByText('Their message').closest('article'),
+        ).not.toHaveClass('flex-row-reverse');
+        expect(screen.getByText('Sending mine').closest('article')).toHaveClass(
+            'flex-row-reverse',
+        );
+    });
+
     it('renders a short history in full', () => {
         renderList({
             messages: [
@@ -155,6 +179,8 @@ describe('MessageList', () => {
         // Two messages a day apart cannot share a group, so both dividers render
         // and each message keeps its own author header.
         expect(screen.getAllByText('Ada Lovelace')).toHaveLength(2);
+        expect(screen.getByText('Thursday, July 30').tagName).toBe('TIME');
+        expect(screen.getByText('Friday, July 31').tagName).toBe('TIME');
     });
 
     it('keeps unsent messages outside the window', () => {

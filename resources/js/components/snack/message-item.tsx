@@ -113,8 +113,9 @@ export function MessageItem({
     return (
         <article
             className={cn(
-                'group relative flex gap-2.5 px-4 hover:bg-accent/40',
-                grouped ? 'py-0.5' : 'mt-3 py-1',
+                'group relative flex items-start gap-2.5 px-4 sm:px-6',
+                isOwn && 'flex-row-reverse',
+                grouped ? 'py-0.5' : 'mt-5 py-1',
             )}
         >
             <div className="w-9 shrink-0 pt-0.5">
@@ -145,10 +146,20 @@ export function MessageItem({
                 )}
             </div>
 
-            <div className="min-w-0 flex-1">
+            <div
+                className={cn(
+                    'max-w-[85%] min-w-0 sm:max-w-[75%]',
+                    isOwn && 'flex flex-col items-end',
+                )}
+            >
                 {!grouped && (
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-sm font-bold">
+                    <div
+                        className={cn(
+                            'mb-1 flex items-baseline gap-2 px-1',
+                            isOwn && 'flex-row-reverse',
+                        )}
+                    >
+                        <span className="text-xs font-semibold">
                             {/*
                              * The webhook's snapshotted name wins over the
                              * sender's current one. The bot account follows the
@@ -190,105 +201,114 @@ export function MessageItem({
                     </div>
                 )}
 
-                {editing ? (
-                    <MessageEditor
-                        initialBody={message.body}
-                        onCancel={() => setEditing(false)}
-                        onSave={async (body) => {
-                            await onEdit(message.id, body);
-                            setEditing(false);
-                        }}
-                    />
-                ) : (
-                    <>
-                        {/*
-                         * A message may legitimately have no words at all —
-                         * files alone are a message — so the body is only
-                         * rendered when there is one, rather than leaving an
-                         * empty line above the attachments.
-                         */}
-                        {message.body !== '' && (
-                            <MessageText body={message.body} />
-                        )}
+                <div
+                    className={cn(
+                        'max-w-full min-w-0 rounded-2xl border px-3.5 py-2.5 shadow-xs',
+                        isOwn
+                            ? 'rounded-tr-md border-transparent bg-primary/10'
+                            : 'rounded-tl-md border-border/70 bg-card',
+                    )}
+                >
+                    {editing ? (
+                        <MessageEditor
+                            initialBody={message.body}
+                            onCancel={() => setEditing(false)}
+                            onSave={async (body) => {
+                                await onEdit(message.id, body);
+                                setEditing(false);
+                            }}
+                        />
+                    ) : (
+                        <>
+                            {/*
+                             * A message may legitimately have no words at all —
+                             * files alone are a message — so the body is only
+                             * rendered when there is one, rather than leaving an
+                             * empty line above the attachments.
+                             */}
+                            {message.body !== '' && (
+                                <MessageText body={message.body} />
+                            )}
 
-                        {message.is_edited && (
-                            <span className="ml-1 text-[0.6875rem] text-muted-foreground">
-                                (edited)
-                            </span>
-                        )}
+                            {message.is_edited && (
+                                <span className="ml-1 text-[0.6875rem] text-muted-foreground">
+                                    (edited)
+                                </span>
+                            )}
 
-                        {/*
-                         * The standup form, on the bot's prompts and reminders
-                         * only — `standup` is null on every other message.
-                         *
-                         * Below the body rather than instead of it: the body
-                         * carries the questions too, which is what search
-                         * indexes, what the sidebar previews, and what somebody
-                         * reading on a client that has never heard of standup
-                         * cards still sees.
-                         */}
-                        {message.standup != null && (
-                            <StandupCard
-                                key={message.standup.response_id}
-                                card={message.standup}
-                            />
-                        )}
-
-                        {/*
-                         * The cards an outside system sent, below the body for
-                         * the reason the standup form is: the body carries the
-                         * headline too, which is what search indexes, what the
-                         * sidebar previews, and what a notification reads out.
-                         */}
-                        {message.webhook != null && (
-                            <WebhookAttachments
-                                attachments={message.webhook.attachments}
-                            />
-                        )}
-
-                        {/*
-                         * Bite's approval card, on the one kind of message that
-                         * carries it — `bite` is null on every other message,
-                         * including all of Bite's ordinary answers.
-                         *
-                         * Below the body like the two above: the body says what
-                         * it wants to do in words, which is what search indexes
-                         * and what a notification reads out to somebody who is
-                         * not going to see this card at all.
-                         */}
-                        {message.bite != null && (
-                            <BiteCard
-                                card={message.bite}
-                                messageId={message.id}
-                            />
-                        )}
-
-                        <AttachmentList attachments={message.attachments} />
-
-                        {message.reactions.length > 0 &&
-                            onReact !== undefined && (
-                                <ReactionBar
-                                    reactions={message.reactions}
-                                    currentUserId={currentUserId}
-                                    onToggle={(emoji) =>
-                                        onReact(
-                                            message.id,
-                                            emoji,
-                                            message.reactions,
-                                        )
-                                    }
+                            {/*
+                             * The standup form, on the bot's prompts and reminders
+                             * only — `standup` is null on every other message.
+                             *
+                             * Below the body rather than instead of it: the body
+                             * carries the questions too, which is what search
+                             * indexes, what the sidebar previews, and what somebody
+                             * reading on a client that has never heard of standup
+                             * cards still sees.
+                             */}
+                            {message.standup != null && (
+                                <StandupCard
+                                    key={message.standup.response_id}
+                                    card={message.standup}
                                 />
                             )}
 
-                        {message.reply_count > 0 &&
-                            onOpenThread !== undefined && (
-                                <ThreadAffordance
-                                    message={message}
-                                    onOpen={() => onOpenThread(message)}
+                            {/*
+                             * The cards an outside system sent, below the body for
+                             * the reason the standup form is: the body carries the
+                             * headline too, which is what search indexes, what the
+                             * sidebar previews, and what a notification reads out.
+                             */}
+                            {message.webhook != null && (
+                                <WebhookAttachments
+                                    attachments={message.webhook.attachments}
                                 />
                             )}
-                    </>
-                )}
+
+                            {/*
+                             * Bite's approval card, on the one kind of message that
+                             * carries it — `bite` is null on every other message,
+                             * including all of Bite's ordinary answers.
+                             *
+                             * Below the body like the two above: the body says what
+                             * it wants to do in words, which is what search indexes
+                             * and what a notification reads out to somebody who is
+                             * not going to see this card at all.
+                             */}
+                            {message.bite != null && (
+                                <BiteCard
+                                    card={message.bite}
+                                    messageId={message.id}
+                                />
+                            )}
+
+                            <AttachmentList attachments={message.attachments} />
+
+                            {message.reactions.length > 0 &&
+                                onReact !== undefined && (
+                                    <ReactionBar
+                                        reactions={message.reactions}
+                                        currentUserId={currentUserId}
+                                        onToggle={(emoji) =>
+                                            onReact(
+                                                message.id,
+                                                emoji,
+                                                message.reactions,
+                                            )
+                                        }
+                                    />
+                                )}
+
+                            {message.reply_count > 0 &&
+                                onOpenThread !== undefined && (
+                                    <ThreadAffordance
+                                        message={message}
+                                        onOpen={() => onOpenThread(message)}
+                                    />
+                                )}
+                        </>
+                    )}
+                </div>
             </div>
 
             {!editing && (
@@ -383,8 +403,8 @@ export function PendingMessageItem({
     return (
         <article
             className={cn(
-                'group relative flex gap-2.5 px-4',
-                grouped ? 'py-0.5' : 'mt-3 py-1',
+                'group relative flex flex-row-reverse items-start gap-2.5 px-4 sm:px-6',
+                grouped ? 'py-0.5' : 'mt-5 py-1',
             )}
         >
             <div className="w-9 shrink-0 pt-0.5">
@@ -397,7 +417,7 @@ export function PendingMessageItem({
                 )}
             </div>
 
-            <div className="min-w-0 flex-1">
+            <div className="max-w-[85%] min-w-0 rounded-2xl rounded-tr-md border border-primary/15 bg-primary/10 px-3.5 py-2.5 sm:max-w-[75%]">
                 {!grouped && (
                     <div className="flex items-baseline gap-2">
                         <span className="text-sm font-bold">

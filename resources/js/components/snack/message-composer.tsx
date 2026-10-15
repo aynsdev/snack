@@ -60,7 +60,9 @@ export function MessageComposer({
     onTyping,
     onStopTyping,
     onSend,
+    controls,
 }: {
+    controls?: ReactNode;
     channelName: string;
     disabled?: boolean;
     disabledReason?: string;
@@ -358,7 +360,7 @@ export function MessageComposer({
 
     if (disabled && disabledReason !== undefined) {
         return (
-            <div className="border-t border-border p-4">
+            <div className="px-3 pt-2 pb-3 sm:px-5 sm:pb-4">
                 <p className="rounded-xl border border-border bg-muted/40 px-3.5 py-3 text-sm text-muted-foreground">
                     {disabledReason}
                 </p>
@@ -368,7 +370,7 @@ export function MessageComposer({
 
     return (
         <div
-            className="border-t border-border p-4"
+            className="px-3 pt-2 pb-3 sm:px-5 sm:pb-4"
             onDragOver={(event) => {
                 if (!attachmentsEnabled) {
                     return;
@@ -409,11 +411,16 @@ export function MessageComposer({
 
                 <div
                     className={cn(
-                        'overflow-hidden rounded-xl border border-input bg-background',
+                        'overflow-hidden rounded-2xl border border-input bg-card shadow-sm',
                         'focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/25',
                         draggingOver && 'border-brand ring-2 ring-brand/25',
                     )}
                 >
+                    {controls && (
+                        <div className="border-b border-border/60 px-3 py-2">
+                            {controls}
+                        </div>
+                    )}
                     {showFormatting && !disabled && editor !== null && (
                         <FormattingToolbar editor={editor} />
                     )}

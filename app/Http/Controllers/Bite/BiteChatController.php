@@ -4,13 +4,18 @@ namespace App\Http\Controllers\Bite;
 
 use App\Actions\Bite\StartBiteChat;
 use App\Actions\Conversations\SendConversationMessage;
+use App\Enums\BiteCapability;
+use App\Enums\MagnificModel;
+use App\Enums\MediaKind;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Bite\StoreBiteChatRequest;
 use App\Http\Resources\ConversationResource;
+use App\Models\BiteSetting;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\BiteSummons;
+use App\Services\Magnific;
 use App\Services\MessageHistory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -48,6 +53,7 @@ class BiteChatController extends Controller
 
         return Inertia::render('bite/show', [
             'biteChats' => $this->chatsFor($workspace, $request->user()),
+            'mediaModels' => $this->mediaModels($workspace),
             'chat' => null,
             'history' => null,
             'canPost' => true,
@@ -67,6 +73,7 @@ class BiteChatController extends Controller
 
         return Inertia::render('bite/show', [
             'biteChats' => $this->chatsFor($workspace, $user),
+            'mediaModels' => $this->mediaModels($workspace),
             'chat' => (new ConversationResource($conversation))->resolve($request),
             'history' => $this->history->page($conversation),
             'canPost' => $user->can('post', $conversation) && $this->summons->availableTo($workspace, $user),
@@ -92,6 +99,7 @@ class BiteChatController extends Controller
             sender: $request->user(),
             body: $request->messageBody(),
             attachments: $request->attachments(),
+            biteModel: $request->biteModel(),
         );
 
         return to_route('bite.chats.show', [
@@ -155,6 +163,30 @@ class BiteChatController extends Controller
                 'created_at' => $chat->created_at?->toIso8601String(),
             ])
             ->all();
+    }
+
+    /**
+     * @return array<int, array{id: string, label: string, kind: string, description: string}>
+     */
+    private function mediaModels(Workspace $workspace): array
+    {
+        if (! Magnific::isConfigured()) {
+            return [];
+        }
+
+        $settings = BiteSetting::forWorkspace($workspace);
+
+        return array_values(array_map(
+            fn (MagnificModel $model): array => [
+                'id' => $model->value,
+                'label' => $model->label(),
+                'kind' => $model->kind()->value,
+                'description' => $model->summary(),
+            ],
+            array_filter(MagnificModel::cases(), fn (MagnificModel $model): bool => $settings->allows(
+                $model->kind() === MediaKind::Image ? BiteCapability::GenerateImage : BiteCapability::GenerateVideo,
+            )),
+        ));
     }
 
     private function authorizeChat(Conversation $conversation, User $user): void

@@ -420,13 +420,13 @@ function ChannelHeader({
     onEdit: () => void;
 }) {
     return (
-        <header className="flex items-center gap-3 border-b border-border px-4 py-3">
+        <header className="flex min-h-16 items-center gap-3 border-b border-border/70 bg-card px-4 py-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-2">
                 <ChannelIcon
                     type={channel.type}
                     className="text-muted-foreground"
                 />
-                <h1 className="truncate text-base font-bold tracking-tight">
+                <h1 className="truncate text-base font-semibold">
                     {channel.name}
                 </h1>
 
@@ -508,13 +508,13 @@ function ChannelHeader({
  */
 function ChannelIntro({ channel }: { channel: Channel }) {
     return (
-        <div className="px-6 pt-10 pb-2">
+        <div className="px-6 pt-8 pb-4">
             <span className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-brand-subtle text-brand">
                 <ChannelIcon type={channel.type} className="size-6" />
             </span>
 
-            <h2 className="text-2xl font-bold tracking-tight text-balance">
-                This is the start of #{channel.slug}
+            <h2 className="text-xl font-semibold text-balance">
+                #{channel.name}
             </h2>
 
             <p className="mt-2 max-w-prose text-sm text-pretty text-muted-foreground">

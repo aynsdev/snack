@@ -54,6 +54,7 @@ class MessageController extends Controller
             body: $request->messageBody(),
             parent: $request->parentMessage(),
             attachments: $request->attachments(),
+            biteModel: $request->biteModel(),
         );
 
         /*

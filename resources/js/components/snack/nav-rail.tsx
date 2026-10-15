@@ -114,9 +114,9 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
             /* Bordered on both sides, not just against the sidebar: the seam
                with the workspace rail is where the two dark columns would
                otherwise read as one. */
-            className="flex w-[4.75rem] shrink-0 flex-col items-center gap-1 border-x border-rail-foreground/10 bg-nav py-3 text-rail-foreground"
+            className="flex w-[4.75rem] shrink-0 flex-col items-center gap-1 bg-nav py-4 text-rail-foreground"
         >
-            <ul className="flex flex-1 flex-col items-center gap-1">
+            <ul className="snack-scroll flex min-h-0 flex-1 flex-col items-center gap-1 overflow-x-hidden overflow-y-auto px-2">
                 {workspaces.length === 1 && (
                     <SingleWorkspaceMark
                         workspace={workspaces[0]}
@@ -272,7 +272,7 @@ function SingleWorkspaceMark({
                     <Link
                         href={href}
                         aria-label={workspace.name}
-                        className="flex size-11 items-center justify-center overflow-hidden rounded-xl bg-brand-subtle text-sm font-semibold text-foreground ring-1 ring-rail-foreground/10"
+                        className="flex size-11 items-center justify-center overflow-hidden rounded-xl bg-rail-foreground/10 text-sm font-semibold text-rail-foreground"
                     >
                         {workspace.logo_url ? (
                             <img
@@ -372,7 +372,7 @@ function NavRailItem({
     const className = cn(
         'group relative flex w-[3.75rem] flex-col items-center gap-1 rounded-xl px-1 py-2 transition-colors',
         isActive
-            ? 'bg-rail-active/15 text-rail-active'
+            ? 'bg-rail-foreground/10 text-rail-foreground'
             : 'text-rail-muted hover:bg-rail-foreground/10 hover:text-rail-foreground',
         // A destination that does not exist yet renders dimmed, below.
         href === undefined && 'cursor-default opacity-45 hover:bg-transparent',
@@ -380,16 +380,6 @@ function NavRailItem({
 
     const content = (
         <>
-            {/* The same active pill the workspace rail uses, so "you are here"
-                is one visual idea across both columns rather than two. */}
-            <span
-                aria-hidden="true"
-                className={cn(
-                    'absolute top-1/2 -left-2 w-1 -translate-y-1/2 rounded-r-full bg-rail-active transition-all',
-                    isActive ? 'h-8 opacity-100' : 'h-2 opacity-0',
-                )}
-            />
-
             <span className="relative">
                 <Icon aria-hidden="true" className="size-5" />
 
