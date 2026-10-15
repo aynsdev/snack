@@ -1,6 +1,15 @@
 import { Link, usePage } from '@inertiajs/react';
-import { Film, Image, LayoutGrid, MessageSquare, Plus } from 'lucide-react';
+import {
+    ArrowLeft,
+    Film,
+    Image,
+    LayoutGrid,
+    MessageSquare,
+    Pin,
+    Plus,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { BiteChatActions } from '@/components/bite/bite-chat-actions';
 import { useActiveBiteChatId } from '@/hooks/use-active-channel';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { useWorkspace } from '@/hooks/use-workspace';
@@ -22,6 +31,7 @@ export function BiteSidebar({ onNavigate }: { onNavigate?: () => void }) {
     const workspace = useWorkspace();
     const { currentUrl } = useCurrentUrl();
     const isMedia = /^\/w\/[^/]+\/ai\/media/.test(currentUrl);
+    const archived = usePage().props.biteArchived === true;
     const chats =
         (usePage().props.biteChats as BiteChatSummary[] | undefined) ?? [];
 
@@ -61,7 +71,21 @@ export function BiteSidebar({ onNavigate }: { onNavigate?: () => void }) {
                         New chat
                     </Link>
 
-                    <ChatList chats={chats} onNavigate={onNavigate} />
+                    <ChatList
+                        chats={chats}
+                        archived={archived}
+                        onNavigate={onNavigate}
+                    />
+                    {archived && (
+                        <Link
+                            href={biteIndex.url(workspace.slug)}
+                            onClick={onNavigate}
+                            className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                        >
+                            <ArrowLeft className="size-4" />
+                            Recent chats
+                        </Link>
+                    )}
                 </>
             )}
         </div>
@@ -105,9 +129,11 @@ function TabLink({
  */
 function ChatList({
     chats,
+    archived,
     onNavigate,
 }: {
     chats: BiteChatSummary[];
+    archived: boolean;
     onNavigate?: () => void;
 }) {
     const workspace = useWorkspace();
@@ -116,14 +142,26 @@ function ChatList({
     if (chats.length === 0) {
         return (
             <p className="px-2 text-sm text-muted-foreground">
-                No chats yet. Ask Bite anything to start one.
+                {archived
+                    ? 'No archived chats.'
+                    : 'No chats yet. Ask Bite anything to start one.'}
             </p>
         );
     }
 
     return (
         <nav aria-label="Bite chats" className="space-y-4">
-            {groupByAge(chats).map(([heading, rows]) => (
+            {[
+                ...(chats.some((chat) => chat.is_pinned)
+                    ? [
+                          [
+                              'Pinned',
+                              chats.filter((chat) => chat.is_pinned),
+                          ] as [string, BiteChatSummary[]],
+                      ]
+                    : []),
+                ...groupByAge(chats.filter((chat) => !chat.is_pinned)),
+            ].map(([heading, rows]) => (
                 <div key={heading}>
                     <p className="px-2 py-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                         {heading}
@@ -133,7 +171,15 @@ function ChatList({
                             const active = chat.id === activeId;
 
                             return (
-                                <li key={chat.id}>
+                                <li
+                                    key={chat.id}
+                                    className={cn(
+                                        'group flex min-w-0 items-center rounded-lg pr-1',
+                                        active
+                                            ? 'bg-foreground/8'
+                                            : 'hover:bg-foreground/5',
+                                    )}
+                                >
                                     <Link
                                         href={showChat.url({
                                             workspace: workspace.slug,
@@ -145,14 +191,26 @@ function ChatList({
                                         }
                                         title={chat.title}
                                         className={cn(
-                                            'block w-full truncate rounded-lg px-2 py-1.5 text-sm transition-colors',
+                                            'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
                                             active
-                                                ? 'bg-sidebar-accent font-semibold text-foreground'
-                                                : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+                                                ? 'font-medium text-foreground'
+                                                : 'text-muted-foreground hover:text-foreground',
                                         )}
                                     >
-                                        {chat.title}
+                                        {chat.is_pinned && (
+                                            <Pin
+                                                aria-label="Pinned"
+                                                className="size-3 shrink-0"
+                                            />
+                                        )}
+                                        <span className="truncate">
+                                            {chat.title}
+                                        </span>
                                     </Link>
+                                    <BiteChatActions
+                                        chat={chat}
+                                        className="data-[state=open]:opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                                    />
                                 </li>
                             );
                         })}

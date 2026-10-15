@@ -7,6 +7,7 @@ use App\Http\Controllers\Assets\AssetFolderController;
 use App\Http\Controllers\Assets\AssetLibraryController;
 use App\Http\Controllers\Bite\BiteChatController;
 use App\Http\Controllers\Bite\BiteMediaController;
+use App\Http\Controllers\Bite\BiteShareController;
 use App\Http\Controllers\CanvasController;
 use App\Http\Controllers\CanvasCoverController;
 use App\Http\Controllers\Channels\ChannelArchiveController;
@@ -363,6 +364,9 @@ Route::middleware(['auth', 'verified', 'workspace'])
          * Bite's own.
          */
         Route::get('ai', [BiteChatController::class, 'index'])->name('bite.index');
+        Route::get('ai/shared/{token}', [BiteShareController::class, 'show'])->name('bite.shared.show');
+        Route::post('ai/chats/{conversation}/share', [BiteShareController::class, 'store'])->name('bite.chats.share.store');
+        Route::delete('ai/chats/{conversation}/share', [BiteShareController::class, 'destroy'])->name('bite.chats.share.destroy');
         Route::get('ai/media', [BiteMediaController::class, 'index'])->name('bite.media.index');
         Route::post('ai/chats', [BiteChatController::class, 'store'])
             ->middleware('throttle:messages')

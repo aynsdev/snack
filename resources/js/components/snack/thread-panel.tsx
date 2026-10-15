@@ -215,19 +215,23 @@ export function ThreadPanel({
                 </div>
 
                 {thread.root !== null && (
-                    <>
-                        <FollowToggle
-                            following={thread.subscription.is_subscribed}
-                            onToggle={() =>
-                                void thread
-                                    .setFollowing(
-                                        !thread.subscription.is_subscribed,
-                                    )
-                                    .catch(() => undefined)
-                            }
-                        />
-
+                    <div className="shrink-0 border-t border-border">
                         <MessageComposer
+                            statusControl={
+                                <FollowToggle
+                                    following={
+                                        thread.subscription.is_subscribed
+                                    }
+                                    onToggle={() =>
+                                        void thread
+                                            .setFollowing(
+                                                !thread.subscription
+                                                    .is_subscribed,
+                                            )
+                                            .catch(() => undefined)
+                                    }
+                                />
+                            }
                             channelName={`this thread in ${containerName}`}
                             mentionSource={mentionSource}
                             replying={replying}
@@ -242,7 +246,7 @@ export function ThreadPanel({
                                 void thread.reply(body, attachmentIds)
                             }
                         />
-                    </>
+                    </div>
                 )}
             </div>
         </RightPanel>
@@ -284,27 +288,25 @@ function FollowToggle({
     onToggle: () => void;
 }) {
     return (
-        <div className="border-t border-border px-4 py-2">
-            <button
-                type="button"
-                onClick={onToggle}
-                aria-pressed={following}
-                className={cn(
-                    'flex items-center gap-2 rounded-md px-2 py-1 text-xs font-semibold transition-colors',
-                    following
-                        ? 'text-foreground hover:bg-accent'
-                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                )}
-            >
-                {following ? (
-                    <Bell aria-hidden="true" className="size-3.5" />
-                ) : (
-                    <BellOff aria-hidden="true" className="size-3.5" />
-                )}
+        <button
+            type="button"
+            onClick={onToggle}
+            aria-pressed={following}
+            className={cn(
+                'flex shrink-0 items-center gap-2 rounded-md px-1 py-1 text-xs font-semibold transition-colors',
+                following
+                    ? 'text-foreground hover:bg-accent'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+            )}
+        >
+            {following ? (
+                <Bell aria-hidden="true" className="size-3.5" />
+            ) : (
+                <BellOff aria-hidden="true" className="size-3.5" />
+            )}
 
-                {following ? 'Following this thread' : 'Not following'}
-            </button>
-        </div>
+            {following ? 'Following this thread' : 'Not following'}
+        </button>
     );
 }
 

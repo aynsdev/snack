@@ -67,7 +67,9 @@ export function MessageItem({
     onTogglePin,
     onToggleSave,
     currentUserId = null,
+    variant = 'chat',
 }: {
+    variant?: 'chat' | 'assistant';
     message: Message;
     grouped: boolean;
     isOwn: boolean;
@@ -100,8 +102,10 @@ export function MessageItem({
      * hint. It only decides whether a button renders; the server re-authorizes
      * the request and answers 403 if the hint was wrong.
      */
-    const canEdit = message.can?.update ?? isOwn;
-    const canDelete = message.can?.delete ?? isOwn;
+    const canEdit =
+        (variant !== 'assistant' || isOwn) && (message.can?.update ?? isOwn);
+    const canDelete =
+        (variant !== 'assistant' || isOwn) && (message.can?.delete ?? isOwn);
     // A live-arriving message carries no abilities; pinning is offered on the
     // assumption the viewer may, and refused server-side if they may not.
     const canPin = message.can?.pin ?? true;
@@ -118,41 +122,46 @@ export function MessageItem({
                 grouped ? 'py-0.5' : 'mt-5 py-1',
             )}
         >
-            <div className="w-9 shrink-0 pt-0.5">
-                {grouped ? (
-                    /*
-                     * Faded rather than hidden, and that is the whole point.
-                     * `hidden` takes the timestamp out of flow, so revealing it
-                     * on hover grew the row — the gutter is narrower than
-                     * "10:51 PM", so the line wrapped in two and the message
-                     * jumped under the pointer. Kept in flow at zero opacity it
-                     * costs the same height whether or not anyone is hovering,
-                     * which is what the virtualizer measures.
-                     *
-                     * Right-aligned and unwrapped: a long time string overflows
-                     * leftwards into the row's own padding, where there is room
-                     * for it, instead of into the message body.
-                     */
-                    <time
-                        dateTime={message.created_at ?? undefined}
-                        className="block text-right text-[0.625rem] leading-5 whitespace-nowrap text-muted-foreground tabular-nums opacity-0 transition-opacity group-hover:opacity-100"
-                    >
-                        {formatTime(message.created_at)}
-                    </time>
-                ) : (
-                    message.sender && (
-                        <UserAvatar user={message.sender} size="md" />
-                    )
-                )}
-            </div>
+            {variant === 'chat' && (
+                <div className="w-9 shrink-0 pt-0.5">
+                    {grouped ? (
+                        /*
+                         * Faded rather than hidden, and that is the whole point.
+                         * `hidden` takes the timestamp out of flow, so revealing it
+                         * on hover grew the row — the gutter is narrower than
+                         * "10:51 PM", so the line wrapped in two and the message
+                         * jumped under the pointer. Kept in flow at zero opacity it
+                         * costs the same height whether or not anyone is hovering,
+                         * which is what the virtualizer measures.
+                         *
+                         * Right-aligned and unwrapped: a long time string overflows
+                         * leftwards into the row's own padding, where there is room
+                         * for it, instead of into the message body.
+                         */
+                        <time
+                            dateTime={message.created_at ?? undefined}
+                            className="block text-right text-[0.625rem] leading-5 whitespace-nowrap text-muted-foreground tabular-nums opacity-0 transition-opacity group-hover:opacity-100"
+                        >
+                            {formatTime(message.created_at)}
+                        </time>
+                    ) : (
+                        message.sender && (
+                            <UserAvatar user={message.sender} size="md" />
+                        )
+                    )}
+                </div>
+            )}
 
             <div
                 className={cn(
-                    'max-w-[85%] min-w-0 sm:max-w-[75%]',
+                    'min-w-0',
+                    variant === 'assistant' && !isOwn
+                        ? 'w-full'
+                        : 'max-w-[85%] sm:max-w-[75%]',
                     isOwn && 'flex flex-col items-end',
                 )}
             >
-                {!grouped && (
+                {!grouped && variant === 'chat' && (
                     <div
                         className={cn(
                             'mb-1 flex items-baseline gap-2 px-1',
@@ -204,9 +213,13 @@ export function MessageItem({
                 <div
                     className={cn(
                         'max-w-full min-w-0 rounded-2xl border px-3.5 py-2.5 shadow-xs',
-                        isOwn
-                            ? 'rounded-tr-md border-transparent bg-primary/10'
-                            : 'rounded-tl-md border-border/70 bg-card',
+                        variant === 'assistant' && !isOwn
+                            ? 'w-full rounded-none border-0 bg-transparent p-0 shadow-none'
+                            : variant === 'assistant'
+                              ? 'border-transparent bg-muted'
+                              : isOwn
+                                ? 'rounded-tr-md border-transparent bg-primary/10'
+                                : 'rounded-tl-md border-border/70 bg-card',
                     )}
                 >
                     {editing ? (
@@ -300,6 +313,7 @@ export function MessageItem({
                                 )}
 
                             {message.reply_count > 0 &&
+                                variant !== 'assistant' &&
                                 onOpenThread !== undefined && (
                                     <ThreadAffordance
                                         message={message}
@@ -320,7 +334,7 @@ export function MessageItem({
                     onEdit={() => setEditing(true)}
                     onDelete={() => onDelete(message.id)}
                     onReply={
-                        onOpenThread === undefined
+                        onOpenThread === undefined || variant === 'assistant'
                             ? undefined
                             : () => onOpenThread(message)
                     }
@@ -394,7 +408,9 @@ export function PendingMessageItem({
     grouped,
     onRetry,
     onDiscard,
+    variant = 'chat',
 }: {
+    variant?: 'chat' | 'assistant';
     message: PendingMessage;
     grouped: boolean;
     onRetry: () => void;
@@ -407,22 +423,33 @@ export function PendingMessageItem({
                 grouped ? 'py-0.5' : 'mt-5 py-1',
             )}
         >
-            <div className="w-9 shrink-0 pt-0.5">
-                {!grouped && (
-                    <UserAvatar
-                        user={message.sender}
-                        size="md"
-                        className={message.failed ? '' : 'opacity-60'}
-                    />
-                )}
-            </div>
+            {variant === 'chat' && (
+                <div className="w-9 shrink-0 pt-0.5">
+                    {!grouped && (
+                        <UserAvatar
+                            user={message.sender}
+                            size="md"
+                            className={message.failed ? '' : 'opacity-60'}
+                        />
+                    )}
+                </div>
+            )}
 
-            <div className="max-w-[85%] min-w-0 rounded-2xl rounded-tr-md border border-primary/15 bg-primary/10 px-3.5 py-2.5 sm:max-w-[75%]">
+            <div
+                className={cn(
+                    'max-w-[85%] min-w-0 rounded-2xl border border-transparent px-3.5 py-2.5 sm:max-w-[75%]',
+                    variant === 'assistant'
+                        ? 'bg-muted'
+                        : 'rounded-tr-md bg-primary/10',
+                )}
+            >
                 {!grouped && (
                     <div className="flex items-baseline gap-2">
-                        <span className="text-sm font-bold">
-                            {message.sender.name}
-                        </span>
+                        {variant === 'chat' && (
+                            <span className="text-sm font-bold">
+                                {message.sender.name}
+                            </span>
+                        )}
                         <span className="text-xs text-muted-foreground">
                             {message.failed ? 'Not sent' : 'Sending…'}
                         </span>
