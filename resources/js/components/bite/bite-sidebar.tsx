@@ -1,6 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
-    Archive,
     ArrowLeft,
     Film,
     Image,
@@ -77,20 +76,16 @@ export function BiteSidebar({ onNavigate }: { onNavigate?: () => void }) {
                         archived={archived}
                         onNavigate={onNavigate}
                     />
-                    <Link
-                        href={biteIndex.url(workspace.slug, {
-                            query: archived ? {} : { archived: 1 },
-                        })}
-                        onClick={onNavigate}
-                        className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                    >
-                        {archived ? (
+                    {archived && (
+                        <Link
+                            href={biteIndex.url(workspace.slug)}
+                            onClick={onNavigate}
+                            className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                        >
                             <ArrowLeft className="size-4" />
-                        ) : (
-                            <Archive className="size-4" />
-                        )}
-                        {archived ? 'Recent chats' : 'Archived chats'}
-                    </Link>
+                            Recent chats
+                        </Link>
+                    )}
                 </>
             )}
         </div>
