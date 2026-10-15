@@ -36,7 +36,8 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[Title('Create Task')]
 #[Description(<<<'TEXT'
 Create a task (an issue) on a project board, under the name of the person who
-connected this assistant. Only create one when the person asked you to.
+connected this assistant. Only create one when the person asked you to. Pass
+`parent` to make it a subtask of another task.
 
 Before calling this, search with `search_tasks` to check it has not already
 been filed. Name the project by key (ENG) or name; if it matches nothing, the
@@ -171,7 +172,7 @@ class CreateTaskTool extends SnackTool
             'status' => $schema->string()->description('A column name. Defaults to the first column.'),
             'sprint' => $schema->string()->description('"active", an open sprint\'s name, or "backlog".'),
             'release' => $schema->string()->description('A release name such as v3.2.1.'),
-            'parent' => $schema->string()->description('The reference of a task in the same project to file this under.'),
+            'parent' => $schema->string()->description('Make this a subtask: the reference of its parent task in the same project, such as ENG-12. Use with type "subtask" for a Jira-style subtask.'),
             'labels' => $schema->array()->items($schema->string())->description('Label names the project already has.'),
             'due_on' => $schema->string()->description('A date such as 2026-10-31.'),
             'story_points' => $schema->integer()->min(0)->max(999),
