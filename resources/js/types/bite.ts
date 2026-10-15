@@ -22,3 +22,10 @@ export type BiteGeneration = {
     attachment: Attachment | null;
     chat_id: string | null;
 };
+
+export type BiteMediaModel = {
+    id: string;
+    label: string;
+    kind: MediaKind;
+    description: string;
+};

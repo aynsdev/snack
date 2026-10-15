@@ -177,6 +177,32 @@ describe('useConversationMessages', () => {
         );
     });
 
+    it('preserves the selected generation model when a failed send is retried', async () => {
+        api.post.mockRejectedValueOnce(new Error('Offline'));
+        const { result } = setup();
+
+        await act(async () => {
+            await result.current.send('A launch banner', [], 'recraft-4');
+        });
+
+        expect(result.current.pending[0].failed).toBe(true);
+        api.post.mockResolvedValueOnce({ message: makeMessage(2) });
+
+        await act(async () => {
+            result.current.retry(result.current.pending[0].nonce);
+        });
+
+        expect(api.post).toHaveBeenLastCalledWith(
+            '/w/snack-hq/dms/conv_01HZX/messages',
+            {
+                body: 'A launch banner',
+                attachment_ids: [],
+                bite_model: 'recraft-4',
+            },
+        );
+        expect(result.current.pending).toHaveLength(0);
+    });
+
     it('advances the read pointer for an active participant', () => {
         const { result } = setup();
 

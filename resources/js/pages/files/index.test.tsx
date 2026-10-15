@@ -35,12 +35,17 @@ function makeFile(overrides: Partial<FileRow> = {}): FileRow {
         download_url: '/files/1?signature=abc',
         thumbnail_url: null,
         preview_url: null,
+        stream_url: null,
         created_at: '2026-07-31T09:00:00+00:00',
         uploader: {
             id: 1,
             name: 'Alex',
             username: 'alex',
-            avatar_path: null,
+            avatar_url: null,
+            initials: 'A',
+            department: null,
+            status_emoji: null,
+            status_message: null,
             title: null,
             presence_status: 'online',
         },
@@ -75,14 +80,13 @@ describe('FilesIndex', () => {
             screen.queryByRole('link', { name: /budget\.pdf/ }),
         ).not.toBeInTheDocument();
 
-        await user.click(
-            screen.getByRole('button', { name: /budget\.pdf/ }),
-        );
+        await user.click(screen.getByRole('button', { name: /budget\.pdf/ }));
 
         expect(screen.getByRole('dialog')).toBeInTheDocument();
-        expect(
-            screen.getByRole('link', { name: /download/i }),
-        ).toHaveAttribute('href', '/files/1?signature=abc');
+        expect(screen.getByRole('link', { name: /download/i })).toHaveAttribute(
+            'href',
+            '/files/1?signature=abc',
+        );
     });
 
     it('previews a pdf in an iframe', async () => {
@@ -101,9 +105,10 @@ describe('FilesIndex', () => {
 
         await user.click(screen.getByRole('button', { name: /budget\.pdf/ }));
 
-        expect(
-            screen.getByTitle('budget.pdf'),
-        ).toHaveAttribute('src', '/files/1?inline=1&signature=abc');
+        expect(screen.getByTitle('budget.pdf')).toHaveAttribute(
+            'src',
+            '/files/1?inline=1&signature=abc',
+        );
     });
 
     it('previews an image in the dialog', async () => {

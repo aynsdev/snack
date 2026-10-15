@@ -55,7 +55,7 @@ export function BiteSidebar({ onNavigate }: { onNavigate?: () => void }) {
                     <Link
                         href={biteIndex.url(workspace.slug)}
                         onClick={onNavigate}
-                        className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border px-2 py-1.5 text-sm font-medium transition-colors hover:bg-sidebar-accent"
+                        className="flex w-full items-center gap-2 rounded-lg bg-foreground/5 px-2 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent"
                     >
                         <Plus aria-hidden="true" className="size-4" />
                         New chat

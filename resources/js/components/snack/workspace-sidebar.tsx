@@ -1161,7 +1161,7 @@ function SidebarHeader({
     return (
         <div
             className={cn(
-                'flex items-center justify-between gap-2 px-3 py-3',
+                'flex min-h-20 items-center justify-between gap-2 px-4 py-4',
                 // Clear of the drawer's dismiss button, which is absolutely
                 // positioned in the same corner as the compose button.
                 inDrawer && 'pr-11',
@@ -1169,7 +1169,7 @@ function SidebarHeader({
         >
             <DropdownMenu>
                 <DropdownMenuTrigger className="-ml-1 flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-sidebar-accent">
-                    <span className="truncate text-[0.9375rem] font-bold tracking-tight">
+                    <span className="truncate text-base font-semibold">
                         {workspace.name}
                     </span>
                     <ChevronDown

@@ -3,6 +3,7 @@
 namespace App\Actions\Conversations;
 
 use App\Actions\Messages\SendMessage;
+use App\Enums\MagnificModel;
 use App\Events\ConversationActivity;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
@@ -43,6 +44,7 @@ class SendConversationMessage
         string $body,
         ?Message $parent = null,
         ?Collection $attachments = null,
+        ?MagnificModel $biteModel = null,
     ): Message {
         $message = $this->sendMessage->handle(
             container: $conversation,
@@ -50,6 +52,7 @@ class SendConversationMessage
             body: $body,
             parent: $parent,
             attachments: $attachments,
+            biteModel: $biteModel,
         );
 
         /*

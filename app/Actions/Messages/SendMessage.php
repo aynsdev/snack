@@ -3,6 +3,7 @@
 namespace App\Actions\Messages;
 
 use App\Actions\Attachments\LinkAttachments;
+use App\Enums\MagnificModel;
 use App\Enums\MessageType;
 use App\Events\ChannelActivity;
 use App\Events\MessageSent;
@@ -58,6 +59,7 @@ class SendMessage
         string $body,
         ?Message $parent = null,
         ?Collection $attachments = null,
+        ?MagnificModel $biteModel = null,
     ): Message {
         $content = MessageBody::fromInput($body);
 
@@ -71,7 +73,7 @@ class SendMessage
 
         $files = $attachments ?? new Collection;
 
-        $message = DB::transaction(function () use ($container, $sender, $content, $root, $files): Message {
+        $message = DB::transaction(function () use ($container, $sender, $content, $root, $files, $biteModel): Message {
             $message = Message::create([
                 ...$content->toAttributes(),
 
@@ -92,7 +94,7 @@ class SendMessage
                 'type' => $container instanceof Channel && $container->type->requiresElevatedPostingRights()
                     ? MessageType::Announcement
                     : MessageType::Text,
-                'metadata' => [],
+                'metadata' => $biteModel === null ? [] : ['bite_model' => $biteModel->value],
             ]);
 
             /*

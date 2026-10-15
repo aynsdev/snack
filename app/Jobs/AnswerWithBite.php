@@ -7,6 +7,7 @@ use App\Ai\BiteAttachments;
 use App\Ai\BiteContext;
 use App\Ai\BiteUploads;
 use App\Enums\BiteCapability;
+use App\Enums\MagnificModel;
 use App\Events\BiteReplying;
 use App\Models\Channel;
 use App\Models\Conversation;
@@ -290,6 +291,9 @@ class AnswerWithBite implements ShouldQueue
      */
     private function promptFrom(Message $message): string
     {
-        return $message->body;
+        $selection = $message->metadata['bite_model'] ?? null;
+        $model = is_string($selection) ? MagnificModel::tryFrom($selection) : null;
+
+        return $message->body.($model === null ? '' : "\n\nThe person selected {$model->kind()->value} generation with {$model->label()} in the composer. Treat their message as the generation brief and use this model ({$model->value}).");
     }
 }

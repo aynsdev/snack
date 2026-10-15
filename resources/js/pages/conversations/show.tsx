@@ -421,7 +421,7 @@ function ConversationHeader({
     };
 
     return (
-        <header className="flex items-center gap-3 border-b border-border px-4 py-3">
+        <header className="flex min-h-16 items-center gap-3 border-b border-border/70 bg-card px-4 py-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-2">
                 {counterpart !== null ? (
                     <UserAvatar user={counterpart} size="sm" showPresence />
@@ -429,7 +429,7 @@ function ConversationHeader({
                     <AvatarGroup users={others} max={3} size="xs" />
                 )}
 
-                <h1 className="truncate text-base font-bold tracking-tight">
+                <h1 className="truncate text-base font-semibold">
                     {conversation.display_name}
                 </h1>
 

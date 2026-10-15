@@ -132,6 +132,23 @@ it('refuses a video model for an image', function () {
         ->and(BiteGeneration::count())->toBe(0);
 });
 
+it('honours the composer selection even when the agent requests a different model', function (string $selection, MediaKind $kind) {
+    $this->request->update(['metadata' => ['bite_model' => $selection]]);
+    $tool = $kind === MediaKind::Image
+        ? new GenerateImage(mediaContext(), app(BiteMedia::class))
+        : new GenerateVideo(mediaContext(), app(BiteMedia::class));
+
+    $tool->handle(new Request([
+        'prompt' => 'A rocket at sunrise',
+        'model' => $kind === MediaKind::Image ? 'mystic' : 'kling-2.6-pro',
+    ]));
+
+    expect(BiteGeneration::sole()->model->value)->toBe($selection);
+})->with([
+    ['recraft-4', MediaKind::Image],
+    ['veo-3.1', MediaKind::Video],
+]);
+
 it('animates the image attached to the message', function () {
     $source = imageAttachmentOn($this->request);
     $tool = new GenerateVideo(mediaContext(), app(BiteMedia::class));

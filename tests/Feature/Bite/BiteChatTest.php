@@ -3,6 +3,8 @@
 use App\Actions\Bite\StartBiteChat;
 use App\Ai\BiteContext;
 use App\Enums\ConversationType;
+use App\Enums\MagnificModel;
+use App\Enums\MediaKind;
 use App\Enums\WorkspaceRole;
 use App\Models\BiteGeneration;
 use App\Models\BiteSetting;
@@ -52,6 +54,72 @@ it('lets a person keep several chats with Bite', function () {
     startChat('two');
 
     expect(Conversation::query()->biteChats()->count())->toBe(2);
+});
+
+it('keeps the selected model on the first message and follow-up messages', function () {
+    $this->actingAs($this->owner)->post(route('bite.chats.store', $this->workspace->slug), [
+        'body' => 'A launch banner',
+        'bite_model' => 'recraft-4',
+    ])->assertRedirect();
+
+    $chat = Conversation::query()->biteChats()->sole();
+
+    expect($chat->messages()->sole()->metadata['bite_model'])->toBe('recraft-4');
+
+    $this->postJson(route('conversations.messages.store', [$this->workspace->slug, $chat]), [
+        'body' => 'Animate it',
+        'bite_model' => 'veo-3.1',
+    ])->assertCreated();
+
+    expect($chat->messages()->latest('id')->first()->metadata['bite_model'])->toBe('veo-3.1');
+});
+
+it('rejects an unknown generation model before writing a message', function () {
+    $this->actingAs($this->owner)->postJson(route('bite.chats.store', $this->workspace->slug), [
+        'body' => 'A banner',
+        'bite_model' => 'unlisted-model',
+    ])->assertUnprocessable()->assertJsonValidationErrors('bite_model');
+
+    expect(Conversation::query()->biteChats()->count())->toBe(0);
+
+    $chat = startChat();
+
+    $this->postJson(route('conversations.messages.store', [$this->workspace->slug, $chat]), [
+        'body' => 'A banner',
+        'bite_model' => 'unlisted-model',
+    ])->assertUnprocessable()->assertJsonValidationErrors('bite_model');
+
+    expect($chat->messages()->count())->toBe(0);
+});
+
+it('does not accept generation controls on a conversation between people', function () {
+    $colleague = joinWorkspace($this->workspace);
+    $chat = makeConversation($this->workspace, [$this->owner, $colleague]);
+
+    $this->actingAs($this->owner)
+        ->postJson(route('conversations.messages.store', [$this->workspace->slug, $chat]), [
+            'body' => 'Hello',
+            'bite_model' => 'mystic',
+        ])->assertUnprocessable()->assertJsonValidationErrors('bite_model');
+
+    expect($chat->messages()->count())->toBe(0);
+});
+
+it('only offers models for enabled generation capabilities', function () {
+    config()->set('services.magnific.key', 'test-key');
+    BiteSetting::factory()->forWorkspace($this->workspace)->create(['capabilities' => ['generate_image']]);
+
+    $assertModels = fn (Assert $page) => $page
+        ->has('mediaModels', count(MagnificModel::forKind(MediaKind::Image)))
+        ->where('mediaModels.0.id', 'mystic')
+        ->where('mediaModels.0.kind', 'image');
+
+    $this->actingAs($this->owner)->get(route('bite.index', $this->workspace->slug))->assertInertia($assertModels);
+    $this->get(route('bite.chats.show', [$this->workspace->slug, startChat()]))->assertInertia($assertModels);
+
+    config()->set('services.magnific.key', null);
+    $this->get(route('bite.index', $this->workspace->slug))
+        ->assertInertia(fn (Assert $page) => $page->has('mediaModels', 0));
 });
 
 it('lists only the person\'s own chats on the page', function () {

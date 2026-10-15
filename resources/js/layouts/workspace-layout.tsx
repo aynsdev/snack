@@ -109,7 +109,7 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
              * torn down on that click. See use-huddle.tsx.
              */}
             <HuddleProvider>
-                <div className="flex h-dvh overflow-hidden overscroll-none bg-background">
+                <div className="flex h-dvh overflow-hidden overscroll-none bg-sidebar">
                     {/*
                      * Mounted once, here, so the DM and channel lists and their
                      * badges stay current while the reader is somewhere else in the
@@ -147,7 +147,7 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
                      * are in — the rail on the left is enough to leave by.
                      */}
                     {!isActivityView && (
-                        <aside className="hidden w-64 shrink-0 border-r border-sidebar-border md:block lg:w-72">
+                        <aside className="hidden w-64 shrink-0 md:block lg:w-72">
                             <WorkspaceSidebar />
                         </aside>
                     )}
@@ -190,7 +190,7 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
                         </Sheet>
                     )}
 
-                    <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background md:my-3 md:mr-3 md:rounded-2xl md:border md:border-border md:shadow-sm">
                         {isMobile && (
                             <div className="flex items-center gap-2 border-b border-border pr-3 md:hidden">
                                 <button
@@ -211,7 +211,9 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
                             </div>
                         )}
 
-                        <main className="flex min-h-0 flex-1">{children}</main>
+                        <main className="flex min-h-0 flex-1 bg-muted/25">
+                            {children}
+                        </main>
                     </div>
                 </div>
 

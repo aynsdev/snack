@@ -1,7 +1,16 @@
 import { Form, Head, router } from '@inertiajs/react';
-import { MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import {
+    ArrowUpRight,
+    Film,
+    Image,
+    MessageSquare,
+    MoreVertical,
+    Pencil,
+    Trash2,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { BiteIcon } from '@/components/bite/bite-icon';
+import { BiteModelControls } from '@/components/bite/bite-model-controls';
 import InputError from '@/components/input-error';
 import type { MentionSource } from '@/components/snack/mention-picker';
 import { MessageComposer } from '@/components/snack/message-composer';
@@ -34,7 +43,7 @@ import {
 } from '@/routes/bite/chats';
 import { store as conversationMessageStore } from '@/routes/conversations/messages';
 import type { Conversation, Message, MessagePage } from '@/types';
-import type { BiteChatSummary } from '@/types/bite';
+import type { BiteChatSummary, BiteMediaModel } from '@/types/bite';
 
 type Props = {
     /** Read by the sidebar; see BiteSidebar. */
@@ -43,6 +52,7 @@ type Props = {
     chat: Conversation | null;
     history: MessagePage | null;
     canPost: boolean;
+    mediaModels: BiteMediaModel[];
 };
 
 /**
@@ -53,38 +63,69 @@ type Props = {
  * the same hooks, list and composer — minus the parts that only make sense
  * between people: huddles, pins, canvases, the roster.
  */
-export default function BiteShow({ chat, history, canPost }: Props) {
+export default function BiteShow({
+    chat,
+    history,
+    canPost,
+    mediaModels = [],
+}: Props) {
     return chat && history ? (
         <BiteChat
             key={chat.id}
             chat={chat}
             history={history}
             canPost={canPost}
+            mediaModels={mediaModels}
         />
     ) : (
-        <NewBiteChat />
+        <NewBiteChat mediaModels={mediaModels} />
     );
 }
 
 const SUGGESTIONS = [
-    'Summarise what happened in my channels today',
-    'Make a 16:9 banner for our product launch',
-    'Create a 5 second video of a rocket taking off at sunrise',
-    'Which tasks are assigned to me this sprint?',
+    {
+        title: 'Catch me up',
+        body: 'Summarise what happened in my channels today',
+        icon: MessageSquare,
+        kind: null,
+    },
+    {
+        title: 'Create an image',
+        body: 'Make a 16:9 banner for our product launch',
+        icon: Image,
+        kind: 'image',
+    },
+    {
+        title: 'Bring an idea to life',
+        body: 'Create a 5 second video of a rocket taking off at sunrise',
+        icon: Film,
+        kind: 'video',
+    },
+    {
+        title: 'Plan my next move',
+        body: 'Which tasks are assigned to me this sprint?',
+        icon: ArrowUpRight,
+        kind: null,
+    },
 ];
 
-function NewBiteChat() {
+function NewBiteChat({ mediaModels }: { mediaModels: BiteMediaModel[] }) {
+    const [model, setModel] = useState<string | null>(null);
     const workspace = useWorkspace();
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const start = (body: string, attachmentIds: number[] = []) => {
+    const start = (
+        body: string,
+        attachmentIds: number[] = [],
+        selectedModel = model,
+    ) => {
         setSending(true);
         setError(null);
 
         router.post(
             storeChat.url(workspace.slug),
-            { body, attachment_ids: attachmentIds },
+            { body, attachment_ids: attachmentIds, bite_model: selectedModel },
             {
                 onError: (errors) =>
                     setError(errors.body ?? Object.values(errors)[0] ?? null),
@@ -98,29 +139,59 @@ function NewBiteChat() {
             <Head title="Bite" />
 
             <div className="flex min-w-0 flex-1 flex-col">
-                <div className="flex flex-1 flex-col items-center justify-center gap-6 overflow-y-auto px-4 py-10">
-                    <BiteIcon className="size-14 rounded-2xl" />
+                <div className="snack-scroll flex flex-1 flex-col items-center justify-start gap-8 overflow-y-auto px-5 py-10 md:justify-center">
+                    <BiteIcon className="size-16 rounded-2xl shadow-sm" />
 
                     <div className="text-center">
-                        <h1 className="text-xl font-semibold tracking-tight">
-                            What can Bite do for you?
+                        <h1 className="text-3xl font-semibold text-balance">
+                            A little Bite. A big head start.
                         </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Ask about this workspace, or have it make an image
-                            or a video.
+                        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-pretty text-muted-foreground">
+                            Turn a question into clarity, an idea into an image,
+                            or a busy day into a plan.
                         </p>
                     </div>
 
-                    <ul className="grid w-full max-w-2xl gap-2 sm:grid-cols-2">
+                    <ul className="grid w-full max-w-2xl gap-3 sm:grid-cols-2">
                         {SUGGESTIONS.map((suggestion) => (
-                            <li key={suggestion}>
+                            <li key={suggestion.title}>
                                 <button
                                     type="button"
                                     disabled={sending}
-                                    onClick={() => start(suggestion)}
-                                    className="w-full rounded-xl border border-border px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                    onClick={() =>
+                                        start(
+                                            suggestion.body,
+                                            [],
+                                            suggestion.kind === null
+                                                ? null
+                                                : (mediaModels.find(
+                                                      (item) =>
+                                                          item.id === model &&
+                                                          item.kind ===
+                                                              suggestion.kind,
+                                                  )?.id ??
+                                                      mediaModels.find(
+                                                          (item) =>
+                                                              item.kind ===
+                                                              suggestion.kind,
+                                                      )?.id ??
+                                                      null),
+                                        )
+                                    }
+                                    className="group flex h-full w-full items-start gap-3 rounded-2xl border border-border/70 bg-card p-4 text-left shadow-xs hover:border-primary/40 hover:bg-accent disabled:opacity-50"
                                 >
-                                    {suggestion}
+                                    <suggestion.icon
+                                        aria-hidden="true"
+                                        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                                    />
+                                    <span>
+                                        <span className="block text-sm font-medium">
+                                            {suggestion.title}
+                                        </span>
+                                        <span className="mt-1 block text-xs leading-5 text-pretty text-muted-foreground">
+                                            {suggestion.body}
+                                        </span>
+                                    </span>
                                 </button>
                             </li>
                         ))}
@@ -135,6 +206,14 @@ function NewBiteChat() {
 
                 <MessageComposer
                     channelName="Bite"
+                    controls={
+                        <BiteModelControls
+                            models={mediaModels}
+                            value={model}
+                            onChange={setModel}
+                            disabled={sending}
+                        />
+                    }
                     disabled={sending}
                     workspaceSlug={workspace.slug}
                     onSend={(body, attachmentIds) => start(body, attachmentIds)}
@@ -148,15 +227,18 @@ function BiteChat({
     chat,
     history,
     canPost,
+    mediaModels,
 }: {
     chat: Conversation;
     history: MessagePage;
     canPost: boolean;
+    mediaModels: BiteMediaModel[];
 }) {
     const workspace = useWorkspace();
     const currentUser = useCurrentUser();
     const [threadRootId, setThreadRootId] = useState<number | null>(null);
     const [renaming, setRenaming] = useState(false);
+    const [model, setModel] = useState<string | null>(null);
 
     // Nobody to mention in a chat with Bite.
     const mentionSource = useMemo<MentionSource>(
@@ -195,7 +277,7 @@ function BiteChat({
             <Head title={`${chat.display_name} · Bite`} />
 
             <div className="flex min-w-0 flex-1 flex-col">
-                <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+                <header className="flex min-h-16 items-center justify-between gap-2 border-b border-border/70 bg-card px-4 py-3 sm:px-6">
                     <h1 className="flex min-w-0 items-center gap-2 text-[0.9375rem] font-semibold">
                         <BiteIcon className="size-5 shrink-0" />
                         <span className="truncate">{chat.display_name}</span>
@@ -252,7 +334,16 @@ function BiteChat({
                         mentionSource={mentionSource}
                         replying={biteReplying}
                         workspaceSlug={workspace.slug}
-                        onSend={timeline.send}
+                        controls={
+                            <BiteModelControls
+                                models={mediaModels}
+                                value={model}
+                                onChange={setModel}
+                            />
+                        }
+                        onSend={(body, attachments) =>
+                            timeline.send(body, attachments, model)
+                        }
                     />
                 ) : (
                     <div className="border-t border-border bg-muted/40 px-4 py-3">

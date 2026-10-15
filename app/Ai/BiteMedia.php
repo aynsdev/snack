@@ -38,7 +38,11 @@ final readonly class BiteMedia
             return 'Images and videos can only be made in a chat, where there is somewhere to post them.';
         }
 
-        $chosen = is_string($model) ? MagnificModel::tryFrom($model) : null;
+        $preference = $context->message->metadata['bite_model'] ?? null;
+        $preferred = is_string($preference) ? MagnificModel::tryFrom($preference) : null;
+        $chosen = $preferred?->kind() === $kind
+            ? $preferred
+            : (is_string($model) ? MagnificModel::tryFrom($model) : null);
 
         if ($chosen !== null && $chosen->kind() !== $kind) {
             return "{$chosen->label()} makes {$chosen->kind()->value}s, not {$kind->value}s. Pick one of the listed models.";

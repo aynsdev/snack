@@ -45,7 +45,7 @@ export function ConversationListItem({
                 'group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
                 'hover:bg-sidebar-accent',
                 isActive
-                    ? 'bg-brand text-primary-foreground hover:bg-brand'
+                    ? 'bg-foreground/8 font-medium text-foreground hover:bg-foreground/8'
                     : hasUnread
                       ? 'font-semibold text-unread'
                       : 'text-muted-foreground',

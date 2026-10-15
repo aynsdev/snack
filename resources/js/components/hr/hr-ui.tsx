@@ -60,7 +60,7 @@ export function HrPage({
         <>
             <Head title={`${title} · ${workspace.name}`} />
 
-            <div className="snack-scroll min-w-0 flex-1 overflow-y-auto">
+            <div className="snack-scroll min-w-0 flex-1 overflow-y-auto bg-muted/30">
                 <div
                     className={cn(
                         'mx-auto space-y-6 px-4 py-6 sm:px-6 sm:py-8',
@@ -69,11 +69,11 @@ export function HrPage({
                 >
                     <header className="flex flex-wrap items-start justify-between gap-4">
                         <div className="min-w-0">
-                            <h1 className="text-2xl font-bold tracking-tight">
+                            <h1 className="text-2xl font-semibold text-balance">
                                 {title}
                             </h1>
                             {description && (
-                                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                                <p className="mt-2 max-w-2xl text-sm text-pretty text-muted-foreground">
                                     {description}
                                 </p>
                             )}
@@ -107,12 +107,12 @@ export function Section({
     return (
         <section
             className={cn(
-                'rounded-xl border border-border bg-card p-4 sm:p-5',
+                'rounded-2xl border border-border/70 bg-card p-5 shadow-xs sm:p-6',
                 className,
             )}
         >
             <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold">{title}</h2>
+                <h2 className="text-sm font-semibold text-balance">{title}</h2>
                 {action}
             </div>
             {children}
