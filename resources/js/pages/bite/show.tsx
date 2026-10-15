@@ -1,49 +1,32 @@
-import { Form, Head, router } from '@inertiajs/react';
+import { Head, router, usePoll } from '@inertiajs/react';
 import {
+    Archive,
     ArrowUpRight,
     Film,
     Image,
     MessageSquare,
-    MoreVertical,
-    Pencil,
-    Trash2,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import { BiteChatActions } from '@/components/bite/bite-chat-actions';
+import {
+    BiteGenerationProgress,
+    BiteThinking,
+} from '@/components/bite/bite-generation-progress';
 import { BiteIcon } from '@/components/bite/bite-icon';
 import { BiteModelControls } from '@/components/bite/bite-model-controls';
-import InputError from '@/components/input-error';
-import type { MentionSource } from '@/components/snack/mention-picker';
 import { MessageComposer } from '@/components/snack/message-composer';
 import { MessageList } from '@/components/snack/message-list';
-import { ThreadPanel } from '@/components/snack/thread-panel';
-import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useBiteReplying } from '@/hooks/use-bite-replying';
 import { useConversationMessages } from '@/hooks/use-conversation-messages';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
 import { channels } from '@/lib/echo';
-import {
-    destroy as destroyChat,
-    store as storeChat,
-    update as updateChat,
-} from '@/routes/bite/chats';
-import { store as conversationMessageStore } from '@/routes/conversations/messages';
-import type { Conversation, Message, MessagePage } from '@/types';
-import type { BiteChatSummary, BiteMediaModel } from '@/types/bite';
+import { store as storeChat } from '@/routes/bite/chats';
+import type { Conversation, MessagePage } from '@/types';
+import type {
+    BiteChatSummary,
+    BiteMediaModel,
+    BitePendingGeneration,
+} from '@/types/bite';
 
 type Props = {
     /** Read by the sidebar; see BiteSidebar. */
@@ -53,6 +36,9 @@ type Props = {
     history: MessagePage | null;
     canPost: boolean;
     mediaModels: BiteMediaModel[];
+    mediaGenerations: BitePendingGeneration[];
+    chatMenu?: BiteChatSummary;
+    biteArchived?: boolean;
 };
 
 /**
@@ -68,17 +54,22 @@ export default function BiteShow({
     history,
     canPost,
     mediaModels = [],
+    mediaGenerations = [],
+    chatMenu,
+    biteArchived = false,
 }: Props) {
-    return chat && history ? (
+    return chat && history && chatMenu ? (
         <BiteChat
             key={chat.id}
             chat={chat}
             history={history}
             canPost={canPost}
             mediaModels={mediaModels}
+            mediaGenerations={mediaGenerations}
+            chatMenu={chatMenu}
         />
     ) : (
-        <NewBiteChat mediaModels={mediaModels} />
+        <NewBiteChat mediaModels={mediaModels} archived={biteArchived} />
     );
 }
 
@@ -109,7 +100,13 @@ const SUGGESTIONS = [
     },
 ];
 
-function NewBiteChat({ mediaModels }: { mediaModels: BiteMediaModel[] }) {
+function NewBiteChat({
+    mediaModels,
+    archived,
+}: {
+    mediaModels: BiteMediaModel[];
+    archived: boolean;
+}) {
     const [model, setModel] = useState<string | null>(null);
     const workspace = useWorkspace();
     const [sending, setSending] = useState(false);
@@ -133,6 +130,27 @@ function NewBiteChat({ mediaModels }: { mediaModels: BiteMediaModel[] }) {
             },
         );
     };
+
+    if (archived) {
+        return (
+            <>
+                <Head title="Archived chats · Bite" />
+                <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+                    <Archive
+                        aria-hidden="true"
+                        className="size-7 text-muted-foreground"
+                    />
+                    <h1 className="text-xl font-semibold text-balance">
+                        Archived chats
+                    </h1>
+                    <p className="max-w-sm text-sm text-pretty text-muted-foreground">
+                        Choose a chat from the sidebar. Restore it from its menu
+                        whenever you want to continue.
+                    </p>
+                </div>
+            </>
+        );
+    }
 
     return (
         <>
@@ -228,23 +246,19 @@ function BiteChat({
     history,
     canPost,
     mediaModels,
+    mediaGenerations,
+    chatMenu,
 }: {
     chat: Conversation;
     history: MessagePage;
     canPost: boolean;
     mediaModels: BiteMediaModel[];
+    mediaGenerations: BitePendingGeneration[];
+    chatMenu: BiteChatSummary;
 }) {
     const workspace = useWorkspace();
     const currentUser = useCurrentUser();
-    const [threadRootId, setThreadRootId] = useState<number | null>(null);
-    const [renaming, setRenaming] = useState(false);
     const [model, setModel] = useState<string | null>(null);
-
-    // Nobody to mention in a chat with Bite.
-    const mentionSource = useMemo<MentionSource>(
-        () => ({ kind: 'local', people: [] }),
-        [],
-    );
 
     const timeline = useConversationMessages({
         conversation: chat,
@@ -257,20 +271,22 @@ function BiteChat({
         channelName: channels.conversation(chat.id),
     });
 
-    const remove = () => {
-        if (
-            window.confirm(
-                'Delete this chat? Its messages, images and videos are removed for good.',
-            )
-        ) {
-            router.delete(
-                destroyChat.url({
-                    workspace: workspace.slug,
-                    conversation: chat.id,
-                }),
-            );
-        }
-    };
+    usePoll(4000, { only: ['mediaGenerations'] }, { mode: 'rest' });
+
+    const activity =
+        mediaGenerations.length > 0 ? (
+            <div>
+                {mediaGenerations.map((generation) => (
+                    <BiteGenerationProgress
+                        key={generation.id}
+                        generation={generation}
+                    />
+                ))}
+            </div>
+        ) : biteReplying !== null ||
+          timeline.pending.some((message) => !message.failed) ? (
+            <BiteThinking />
+        ) : null;
 
     return (
         <>
@@ -283,35 +299,12 @@ function BiteChat({
                         <span className="truncate">{chat.display_name}</span>
                     </h1>
 
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label="Chat options"
-                            >
-                                <MoreVertical className="size-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                                onSelect={() => setRenaming(true)}
-                            >
-                                <Pencil className="mr-2 size-4" />
-                                Rename
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onSelect={remove}
-                                className="text-destructive focus:text-destructive"
-                            >
-                                <Trash2 className="mr-2 size-4" />
-                                Delete chat
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    <BiteChatActions chat={chatMenu} label="Chat options" />
                 </header>
 
                 <MessageList
+                    variant="assistant"
+                    footer={activity}
                     messages={timeline.messages}
                     pending={timeline.pending}
                     hasMore={timeline.hasMore}
@@ -323,16 +316,11 @@ function BiteChat({
                     onRetry={timeline.retry}
                     onDiscard={timeline.discard}
                     onReachBottom={timeline.markAsRead}
-                    onOpenThread={(message: Message) =>
-                        setThreadRootId(message.id)
-                    }
                 />
 
                 {canPost ? (
                     <MessageComposer
                         channelName="Bite"
-                        mentionSource={mentionSource}
-                        replying={biteReplying}
                         workspaceSlug={workspace.slug}
                         controls={
                             <BiteModelControls
@@ -348,79 +336,13 @@ function BiteChat({
                 ) : (
                     <div className="border-t border-border bg-muted/40 px-4 py-3">
                         <p className="text-sm text-muted-foreground">
-                            Bite is switched off for you in this workspace. You
-                            can still read this chat.
+                            {chatMenu.is_archived
+                                ? 'This chat is archived. Restore it from the chat menu to continue.'
+                                : 'Bite is switched off for you in this workspace. You can still read this chat.'}
                         </p>
                     </div>
                 )}
             </div>
-
-            {threadRootId !== null && (
-                <ThreadPanel
-                    key={threadRootId}
-                    rootId={threadRootId}
-                    workspaceSlug={workspace.slug}
-                    sendUrl={conversationMessageStore.url({
-                        workspace: workspace.slug,
-                        conversation: chat.id,
-                    })}
-                    containerName={chat.display_name}
-                    mentionSource={mentionSource}
-                    currentUser={currentUser}
-                    canPost={canPost}
-                    onClose={() => setThreadRootId(null)}
-                />
-            )}
-
-            <Dialog open={renaming} onOpenChange={setRenaming}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Rename chat</DialogTitle>
-                    </DialogHeader>
-
-                    <Form
-                        action={updateChat({
-                            workspace: workspace.slug,
-                            conversation: chat.id,
-                        })}
-                        options={{ preserveScroll: true }}
-                        onSuccess={() => setRenaming(false)}
-                        className="space-y-4"
-                    >
-                        {({ processing, errors }) => (
-                            <>
-                                <div className="space-y-2">
-                                    <Label htmlFor="bite-chat-name">
-                                        Title
-                                    </Label>
-                                    <Input
-                                        id="bite-chat-name"
-                                        name="name"
-                                        autoFocus
-                                        required
-                                        maxLength={80}
-                                        defaultValue={chat.name ?? ''}
-                                    />
-                                    <InputError message={errors.name} />
-                                </div>
-
-                                <DialogFooter>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        onClick={() => setRenaming(false)}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button type="submit" disabled={processing}>
-                                        Save
-                                    </Button>
-                                </DialogFooter>
-                            </>
-                        )}
-                    </Form>
-                </DialogContent>
-            </Dialog>
         </>
     );
 }

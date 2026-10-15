@@ -24,6 +24,60 @@ const bo: SnackUser = {
  * getting it backwards means every multi-line message is sent half-written.
  */
 describe('MessageComposer', () => {
+    it('keeps thread following available when replying is disabled', async () => {
+        const user = userEvent.setup();
+        const toggle = vi.fn();
+        render(
+            <MessageComposer
+                channelName="thread"
+                onSend={vi.fn()}
+                disabled
+                disabledReason="You cannot reply here."
+                statusControl={<button onClick={toggle}>Follow thread</button>}
+            />,
+        );
+
+        await user.click(screen.getByRole('button', { name: 'Follow thread' }));
+        expect(toggle).toHaveBeenCalledOnce();
+        expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    });
+
+    it('shares the typing row with a thread follow control', async () => {
+        const user = userEvent.setup();
+        const toggle = vi.fn();
+        const { rerender } = render(
+            <MessageComposer
+                channelName="thread"
+                onSend={vi.fn()}
+                statusControl={
+                    <button onClick={toggle}>Following this thread</button>
+                }
+            />,
+        );
+
+        const following = screen.getByRole('button', {
+            name: 'Following this thread',
+        });
+        expect(
+            following.parentElement?.querySelector('[aria-live="polite"]'),
+        ).toBeInTheDocument();
+        await user.click(following);
+        expect(toggle).toHaveBeenCalledOnce();
+
+        rerender(
+            <MessageComposer
+                channelName="thread"
+                onSend={vi.fn()}
+                replying="Bite"
+                statusControl={
+                    <button onClick={toggle}>Following this thread</button>
+                }
+            />,
+        );
+        expect(screen.getByText('Bite is replying…')).toBeInTheDocument();
+        expect(screen.getByRole('textbox')).toBeInTheDocument();
+    });
+
     it('sends on Enter', async () => {
         const onSend = vi.fn();
         const user = userEvent.setup();

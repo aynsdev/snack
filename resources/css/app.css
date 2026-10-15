@@ -828,6 +828,32 @@
 | Respect the reader's motion preference. Snack animates a lot — hover states,
 | panel transitions, the typing indicator — and all of it is decorative.
 */
+@keyframes bite-generation-sweep {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(100%);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .bite-generation-sweep {
+        animation: bite-generation-sweep 2.8s linear infinite;
+        animation-play-state: paused;
+    }
+
+    .bite-activity-dot {
+        animation: pulse 2s ease-in-out infinite;
+        animation-play-state: paused;
+    }
+
+    .bite-activity[data-active='true'] .bite-generation-sweep,
+    .bite-activity[data-active='true'] .bite-activity-dot {
+        animation-play-state: running;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

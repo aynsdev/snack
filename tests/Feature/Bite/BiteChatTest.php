@@ -3,13 +3,16 @@
 use App\Actions\Bite\StartBiteChat;
 use App\Ai\BiteContext;
 use App\Enums\ConversationType;
+use App\Enums\GenerationStatus;
 use App\Enums\MagnificModel;
 use App\Enums\MediaKind;
 use App\Enums\WorkspaceRole;
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\BiteGeneration;
 use App\Models\BiteSetting;
 use App\Models\Conversation;
 use App\Services\BiteBot;
+use App\Services\MessageHistory;
 use App\Services\UnreadCounter;
 use App\Services\WorkspaceNavigator;
 use Illuminate\Support\Facades\Queue;
@@ -144,6 +147,58 @@ it('keeps another person out of a chat', function () {
         ->get(route('bite.chats.show', [$this->workspace->slug, $chat]))
         ->assertNotFound();
 });
+
+it('shows only in-progress generations from the current chat and viewer', function () {
+    $chat = startChat();
+    $request = makeConversationMessage($chat, $this->owner, 'Draw a rocket');
+    $attributes = [
+        'workspace_id' => $this->workspace->id,
+        'user_id' => $this->owner->id,
+        'request_message_id' => $request->id,
+    ];
+
+    $pending = BiteGeneration::factory()->create($attributes);
+    BiteGeneration::factory()->video()->create([...$attributes, 'status' => GenerationStatus::Processing]);
+    BiteGeneration::factory()->completed()->create($attributes);
+    BiteGeneration::factory()->create([...$attributes, 'status' => GenerationStatus::Failed]);
+    BiteGeneration::factory()->create([...$attributes, 'user_id' => joinWorkspace($this->workspace)->id]);
+
+    $otherRequest = makeConversationMessage(startChat('Another chat'), $this->owner, 'Another rocket');
+    BiteGeneration::factory()->create([...$attributes, 'request_message_id' => $otherRequest->id]);
+    $threadReply = makeConversationMessage($chat, $this->owner, 'A reply');
+    $threadReply->update(['parent_message_id' => $request->id]);
+    BiteGeneration::factory()->create([...$attributes, 'request_message_id' => $threadReply->id]);
+
+    $this->actingAs($this->owner)->get(route('bite.chats.show', [$this->workspace->slug, $chat]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('mediaGenerations', 2)
+            ->where('mediaGenerations.0.id', $pending->id)
+            ->where('mediaGenerations.0.model', 'Mystic')
+            ->where('mediaGenerations.1.status', 'processing'));
+});
+
+it('updates generation status without fetching message history again', function (GenerationStatus $status) {
+    $chat = startChat();
+    $request = makeConversationMessage($chat, $this->owner, 'Draw a rocket');
+    $generation = BiteGeneration::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'user_id' => $this->owner->id,
+        'request_message_id' => $request->id,
+    ]);
+
+    $this->mock(MessageHistory::class)->shouldNotReceive('page');
+    $url = route('bite.chats.show', [$this->workspace->slug, $chat]);
+    $this->actingAs($this->owner)->withHeaders([
+        'X-Inertia' => 'true',
+        'X-Inertia-Version' => (string) app(HandleInertiaRequests::class)->version(request()),
+        'X-Inertia-Partial-Component' => 'bite/show',
+        'X-Inertia-Partial-Data' => 'mediaGenerations',
+    ]);
+
+    $this->get($url)->assertOk()->assertJsonCount(1, 'props.mediaGenerations')->assertJsonMissingPath('props.history');
+    $generation->update(['status' => $status]);
+    $this->get($url)->assertOk()->assertJsonCount(0, 'props.mediaGenerations');
+})->with([GenerationStatus::Completed, GenerationStatus::Failed]);
 
 it('keeps Bite chats out of the DM list, its badges and its redirect', function () {
     $chat = startChat();

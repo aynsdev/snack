@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Files;
 
 use App\Http\Controllers\Controller;
 use App\Models\MessageAttachment;
-use App\Models\User;
+use App\Services\BiteChatSharing;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
@@ -84,7 +84,7 @@ class DownloadController extends Controller
      */
     public function show(MessageAttachment $attachment, Request $request): StreamedResponse
     {
-        $this->authorizeAccess($attachment, $request->user());
+        $this->authorizeAccess($attachment, $request);
 
         $inline = $request->boolean('inline')
             && in_array(strtolower($attachment->mime_type), self::INLINE_SAFE, true);
@@ -103,7 +103,7 @@ class DownloadController extends Controller
      */
     public function thumbnail(MessageAttachment $attachment, Request $request): StreamedResponse
     {
-        $this->authorizeAccess($attachment, $request->user());
+        $this->authorizeAccess($attachment, $request);
 
         abort_if($attachment->thumbnail_path === null, 404);
 
@@ -133,7 +133,7 @@ class DownloadController extends Controller
      */
     public function play(MessageAttachment $attachment, Request $request): Response
     {
-        $this->authorizeAccess($attachment, $request->user());
+        $this->authorizeAccess($attachment, $request);
 
         abort_unless($attachment->isPlayableVideo(), 404);
 
@@ -171,8 +171,9 @@ class DownloadController extends Controller
      * is no message yet, so there is no container policy to consult and no one
      * else with any claim to it.
      */
-    private function authorizeAccess(MessageAttachment $attachment, User $user): void
+    private function authorizeAccess(MessageAttachment $attachment, Request $request): void
     {
+        $user = $request->user();
         /*
          * A file on a card is read by whoever may read the card, which is
          * whoever may read its project — the same delegation TaskPolicy makes,
@@ -227,6 +228,12 @@ class DownloadController extends Controller
         $message = $attachment->message;
 
         abort_if($message === null, 404);
+
+        $shareToken = $request->query('share');
+
+        if (is_string($shareToken) && app(BiteChatSharing::class)->allowsFile($user, $message, $shareToken)) {
+            return;
+        }
 
         Gate::authorize('view', $message);
     }

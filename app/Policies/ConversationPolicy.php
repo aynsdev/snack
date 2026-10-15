@@ -69,6 +69,10 @@ class ConversationPolicy
             return Response::denyAsNotFound();
         }
 
+        if ($conversation->type->isBite() && $conversation->archived_at !== null) {
+            return Response::deny('Restore this archived chat to continue.');
+        }
+
         return $participant->hasLeft()
             ? Response::deny('You are no longer part of this conversation.')
             : Response::allow();

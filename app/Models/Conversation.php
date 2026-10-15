@@ -24,6 +24,11 @@ use Illuminate\Support\Str;
  * @property int $workspace_id
  * @property int|null $created_by
  * @property ConversationType $type
+ * @property bool $is_pinned
+ * @property Carbon|null $archived_at
+ * @property string|null $share_token
+ * @property int|null $shared_through_message_id
+ * @property Carbon|null $shared_at
  * @property string|null $name
  * @property string $participants_hash
  * @property Carbon|null $last_message_at
@@ -35,6 +40,8 @@ use Illuminate\Support\Str;
 #[Fillable(['workspace_id', 'created_by', 'public_id', 'type', 'name', 'participants_hash', 'last_message_at'])]
 class Conversation extends Model
 {
+    protected $attributes = ['is_pinned' => false];
+
     /** @use HasFactory<ConversationFactory> */
     use HasFactory;
 
@@ -46,6 +53,10 @@ class Conversation extends Model
         return [
             'type' => ConversationType::class,
             'last_message_at' => 'datetime',
+            'is_pinned' => 'boolean',
+            'archived_at' => 'datetime',
+            'shared_at' => 'datetime',
+            'shared_through_message_id' => 'integer',
         ];
     }
 

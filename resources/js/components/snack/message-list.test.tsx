@@ -122,6 +122,68 @@ function renderList(props: Partial<Parameters<typeof MessageList>[0]> = {}) {
  * a later change would silently stop appearing here.
  */
 describe('MessageList', () => {
+    it('omits profile details in an assistant chat and leaves assistant responses unboxed', () => {
+        renderList({
+            variant: 'assistant',
+            messages: [
+                makeMessage({ id: 1, body: 'My request' }),
+                makeMessage({
+                    id: 2,
+                    body: 'Assistant response',
+                    sender: { ...ADA, id: 2, name: 'Bite' },
+                }),
+            ],
+            pending: [makePending({ body: 'My next request' })],
+        });
+
+        expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
+        expect(screen.queryByText('Bite')).not.toBeInTheDocument();
+        expect(screen.queryByText('AL')).not.toBeInTheDocument();
+        expect(
+            screen.getByText('Assistant response').parentElement?.parentElement,
+        ).toHaveClass('border-0', 'bg-transparent');
+        expect(
+            screen.getByText('My request').parentElement?.parentElement,
+        ).toHaveClass('bg-muted');
+        expect(
+            screen.getByText('My next request').closest('article'),
+        ).toHaveClass('flex-row-reverse');
+    });
+
+    it('keeps generation activity in the scrollable conversation', () => {
+        const { container } = renderList({
+            footer: <div role="status">Imagining…</div>,
+        });
+        expect(container.querySelector('.snack-scroll')).toContainElement(
+            screen.getByRole('status'),
+        );
+    });
+
+    it('offers no threads or editing and deletion of assistant replies', () => {
+        renderList({
+            variant: 'assistant',
+            messages: [
+                makeMessage({
+                    sender: { ...ADA, id: 2, name: 'Bite' },
+                    reply_count: 3,
+                    can: { update: true, delete: true, pin: true },
+                }),
+            ],
+            onOpenThread: vi.fn(),
+        });
+
+        expect(
+            screen.queryByRole('button', { name: 'Delete message' }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole('button', { name: 'Edit message' }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole('button', { name: 'Reply in thread' }),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByText('3 replies')).not.toBeInTheDocument();
+    });
+
     it('aligns the viewer’s messages and pending sends right and other authors left', () => {
         renderList({
             messages: [

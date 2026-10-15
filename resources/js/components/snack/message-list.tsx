@@ -104,7 +104,11 @@ export function MessageList({
     onTogglePin,
     onToggleSave,
     header,
+    footer,
+    variant = 'chat',
 }: {
+    variant?: 'chat' | 'assistant';
+    footer?: React.ReactNode;
     messages: Message[];
     pending: PendingMessage[];
     hasMore: boolean;
@@ -392,7 +396,7 @@ export function MessageList({
         }
 
         element.scrollTop = element.scrollHeight;
-    }, [newestId, pending.length, totalSize]);
+    }, [newestId, pending.length, totalSize, footer]);
 
     /** Load older history as the top of the list comes into view. */
     useEffect(() => {
@@ -497,6 +501,7 @@ export function MessageList({
 
                             <MessageItem
                                 message={message}
+                                variant={variant}
                                 grouped={grouped}
                                 isOwn={message.sender?.id === currentUserId}
                                 onEdit={onEdit}
@@ -518,12 +523,14 @@ export function MessageList({
                         <PendingMessageItem
                             key={message.nonce}
                             message={message}
+                            variant={variant}
                             grouped={grouped}
                             onRetry={() => onRetry(message.nonce)}
                             onDiscard={() => onDiscard(message.nonce)}
                         />
                     ))}
                 </div>
+                {footer}
             </div>
         </div>
     );

@@ -61,8 +61,10 @@ export function MessageComposer({
     onStopTyping,
     onSend,
     controls,
+    statusControl,
 }: {
     controls?: ReactNode;
+    statusControl?: ReactNode;
     channelName: string;
     disabled?: boolean;
     disabledReason?: string;
@@ -361,6 +363,7 @@ export function MessageComposer({
     if (disabled && disabledReason !== undefined) {
         return (
             <div className="px-3 pt-2 pb-3 sm:px-5 sm:pb-4">
+                {statusControl && <div className="mb-1">{statusControl}</div>}
                 <p className="rounded-xl border border-border bg-muted/40 px-3.5 py-3 text-sm text-muted-foreground">
                     {disabledReason}
                 </p>
@@ -396,11 +399,14 @@ export function MessageComposer({
                 attach(event.dataTransfer.files);
             }}
         >
-            <TypingIndicator
-                typists={typists}
-                replying={replying}
-                className="mb-1"
-            />
+            <div className="mb-1 flex items-center gap-2">
+                {statusControl}
+                <TypingIndicator
+                    typists={typists}
+                    replying={replying}
+                    className="min-w-0 flex-1"
+                />
+            </div>
 
             <div className="relative">
                 <MentionPicker
