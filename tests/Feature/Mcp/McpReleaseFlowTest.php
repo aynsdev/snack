@@ -321,3 +321,27 @@ it('needs a story, task, or bug as a subtask’s parent', function () {
         ->tool(GetTaskTool::class, ['task' => $this->task->reference()])
         ->assertSee(['Subtasks (0 of 1 done):', 'Round half up', 'subtask']);
 });
+
+it('declares parent in the schemas clients read', function () {
+    foreach ([CreateTaskTool::class, UpdateTaskTool::class, UpdateTasksTool::class] as $tool) {
+        $schema = app($tool)->toArray()['inputSchema']['properties'];
+
+        expect($schema)->toHaveKey('parent')
+            ->and($schema['parent']['description'])->toContain('subtask');
+    }
+
+    expect(app(UpdateTaskTool::class)->toArray()['inputSchema']['properties']['parent']['description'])->toContain('"none"');
+});
+
+it('puts several tasks under one parent at once', function () {
+    $second = makeTask($this->project, $this->owner, ['title' => 'Fix the map pin']);
+    [$user] = connectAs($this->member, $this->workspace);
+
+    SnackServer::actingAs($user)
+        ->tool(UpdateTasksTool::class, ['tasks' => [$this->task->reference(), $second->reference()], 'parent' => $this->epic->reference()])
+        ->assertOk()
+        ->assertSee("parent → {$this->epic->reference()}");
+
+    expect($this->task->fresh()->parent_task_id)->toBe($this->epic->id)
+        ->and($second->fresh()->parent_task_id)->toBe($this->epic->id);
+});

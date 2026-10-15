@@ -31,13 +31,15 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[Title('Update Tasks')]
 #[Description(<<<'TEXT'
 Apply the same change to several tasks at once: move them to a status column,
-a sprint, or a release. Pass up to 50 task references, such as
+a sprint, or a release, or put them under one parent task. Pass up to 50 task references, such as
 ["ENG-42", "ENG-43"], and at least one of:
 
 - `status`: a column name, such as "Done".
 - `sprint`: "active", an open sprint's name, or "backlog". Unfinished
   subtasks move with their parent.
 - `release`: a release name such as "v3.2.1", or "none".
+- `parent`: put them all under one task (ENG-12) as its subtasks, or "none"
+  to take them out from under their parents.
 
 Every task is checked first; if any reference or name does not resolve, or
 the person cannot change one of them, nothing is changed and the reply says
@@ -69,12 +71,13 @@ class UpdateTasksTool extends SnackTool
             'status' => ['sometimes', 'string'],
             'sprint' => ['sometimes', 'string'],
             'release' => ['sometimes', 'string'],
+            'parent' => ['sometimes', 'string'],
         ]);
 
-        $change = array_intersect_key($request->all(), array_flip(['status', 'sprint', 'release']));
+        $change = array_intersect_key($request->all(), array_flip(['status', 'sprint', 'release', 'parent']));
 
         if ($change === []) {
-            return Response::error('Nothing to change was given. Pass status, sprint, or release.');
+            return Response::error('Nothing to change was given. Pass status, sprint, release, or parent.');
         }
 
         $plans = [];
@@ -140,6 +143,7 @@ class UpdateTasksTool extends SnackTool
             'status' => $schema->string()->description('Move them all to this column, by name.'),
             'sprint' => $schema->string()->description('"active", an open sprint\'s name, or "backlog".'),
             'release' => $schema->string()->description('A release name such as v3.2.1, or "none".'),
+            'parent' => $schema->string()->description('Make them all subtasks of the task with this reference (ENG-12), or "none" to remove their parents.'),
         ];
     }
 }

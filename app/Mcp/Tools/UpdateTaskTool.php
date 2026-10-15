@@ -37,7 +37,8 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[Description(<<<'TEXT'
 Change a task: its status (move it to another column), sprint, release,
 parent task, labels, assignee, priority, type, title, description, due date,
-or story points. Only the fields you pass are changed. Pass the task
+or story points. Pass `parent` to make it a subtask of another task, or
+`parent: "none"` to take it out from under its parent. Only the fields you pass are changed. Pass the task
 reference, such as ENG-42.
 
 - `status`: a column name from `get_project`, such as "Done".
@@ -175,7 +176,7 @@ class UpdateTaskTool extends SnackTool
             'story_points' => $schema->integer()->min(0)->max(999),
             'sprint' => $schema->string()->description('"active", an open sprint\'s name, or "backlog".'),
             'release' => $schema->string()->description('A release name such as v3.2.1, or "none".'),
-            'parent' => $schema->string()->description('The reference of a task in the same project, or "none".'),
+            'parent' => $schema->string()->description('Make this a subtask of the task with this reference (ENG-12), or "none" to remove its parent.'),
             'add_labels' => $schema->array()->items($schema->string())->description('Label names to add.'),
             'remove_labels' => $schema->array()->items($schema->string())->description('Label names to remove.'),
         ];
