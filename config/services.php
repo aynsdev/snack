@@ -45,6 +45,28 @@ return [
         'url' => env('LIVEKIT_URL', 'ws://localhost:7880'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Magnific
+    |--------------------------------------------------------------------------
+    |
+    | The image and video generation API behind Bite's `generate_image` and
+    | `generate_video` tools. Billed per generation, so the key is the switch:
+    | without one neither tool is handed to the model, whatever a workspace has
+    | ticked on its Bite screen. See App\Services\Magnific.
+    |
+    */
+
+    'magnific' => [
+        'key' => env('MAGNIFIC_API_KEY'),
+        'url' => env('MAGNIFIC_API_URL', 'https://api.magnific.com'),
+
+        // How long a generation may run before Bite gives up and says so. See
+        // App\Jobs\GenerateBiteMedia, which checks on it every few seconds.
+        'image_timeout_minutes' => (int) env('MAGNIFIC_IMAGE_TIMEOUT_MINUTES', 5),
+        'video_timeout_minutes' => (int) env('MAGNIFIC_VIDEO_TIMEOUT_MINUTES', 20),
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],

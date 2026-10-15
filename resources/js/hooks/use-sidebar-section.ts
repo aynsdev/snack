@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import {
     useActiveConversationId,
     useIsAssetsView,
+    useIsBiteView,
     useIsDirectMessagesView,
     useIsHrView,
     useIsProjectsView,
@@ -12,7 +13,7 @@ import {
  * project list, or the asset library's folder tree.
  */
 export type SidebarSection =
-    'workspace' | 'direct-messages' | 'projects' | 'assets' | 'hr';
+    'workspace' | 'direct-messages' | 'projects' | 'assets' | 'hr' | 'bite';
 
 const STORAGE_KEY = 'snack:sidebar-section';
 
@@ -45,6 +46,7 @@ export function useSidebarSection(): SidebarSection {
     const isProjectsView = useIsProjectsView();
     const isAssetsView = useIsAssetsView();
     const isHrView = useIsHrView();
+    const isBiteView = useIsBiteView();
 
     /*
      * A conversation inherits; everywhere else states. With no conversation in
@@ -67,9 +69,11 @@ export function useSidebarSection(): SidebarSection {
                 ? 'assets'
                 : isHrView
                   ? 'hr'
-                  : isDirectMessagesView
-                    ? 'direct-messages'
-                    : 'workspace';
+                  : isBiteView
+                    ? 'bite'
+                    : isDirectMessagesView
+                      ? 'direct-messages'
+                      : 'workspace';
 
     useEffect(() => {
         /*
@@ -83,7 +87,8 @@ export function useSidebarSection(): SidebarSection {
             conversationId === null &&
             section !== 'projects' &&
             section !== 'assets' &&
-            section !== 'hr'
+            section !== 'hr' &&
+            section !== 'bite'
         ) {
             remember(section);
         }

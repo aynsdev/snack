@@ -176,6 +176,28 @@ class Conversation extends Model
     // -- Scopes --------------------------------------------------------------
 
     /**
+     * Direct and group messages — everything the DM list shows.
+     *
+     * Bite chats are conversations too, so that the whole message pipeline
+     * serves them unchanged, but they belong on the Bite page. Every query that
+     * builds the DM list, its badges, or its redirect goes through this.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeMessaging(Builder $query): void
+    {
+        $query->where('type', '!=', ConversationType::Bite);
+    }
+
+    /**
+     * @param  Builder<$this>  $query
+     */
+    public function scopeBiteChats(Builder $query): void
+    {
+        $query->where('type', ConversationType::Bite);
+    }
+
+    /**
      * Conversations the user currently participates in.
      *
      * @param  Builder<$this>  $query

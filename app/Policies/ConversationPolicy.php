@@ -90,7 +90,7 @@ class ConversationPolicy
 
     public function rename(User $user, Conversation $conversation): Response
     {
-        if (! $conversation->type->supportsParticipantManagement()) {
+        if (! $conversation->type->supportsParticipantManagement() && ! $conversation->type->isBite()) {
             return Response::deny('Direct messages cannot be renamed.');
         }
 
@@ -106,7 +106,24 @@ class ConversationPolicy
             return Response::deny('Direct messages cannot be left.');
         }
 
+        if ($conversation->type->isBite()) {
+            return Response::deny('Delete a Bite chat instead.');
+        }
+
         return $this->post($user, $conversation);
+    }
+
+    /**
+     * A Bite chat is deleted outright by the person it belongs to. Nobody else
+     * is in it to lose anything — the other participant is the bot.
+     */
+    public function delete(User $user, Conversation $conversation): Response
+    {
+        if (! $conversation->type->isBite() || $conversation->created_by !== $user->id) {
+            return Response::deny();
+        }
+
+        return $this->view($user, $conversation);
     }
 
     public function pinMessages(User $user, Conversation $conversation): Response

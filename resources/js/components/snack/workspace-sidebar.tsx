@@ -24,6 +24,7 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { BiteSidebar } from '@/components/bite/bite-sidebar';
 import { HeaderClock } from '@/components/hr/header-clock';
 import { HrSidebar } from '@/components/hr/hr-sidebar';
 import { AssetSidebar } from '@/components/snack/assets/asset-sidebar';
@@ -158,6 +159,7 @@ export function WorkspaceSidebar({
     const isProjects = section === 'projects';
     const isAssets = section === 'assets';
     const isHr = section === 'hr';
+    const isBite = section === 'bite';
 
     const [composing, setComposing] = useState(false);
     const [dmFilter, setDmFilter] = useState('');
@@ -199,6 +201,34 @@ export function WorkspaceSidebar({
                 >
                     <AssetSidebar onNavigate={onNavigate} />
                 </nav>
+
+                <NotificationPermissionPrompt />
+            </div>
+        );
+    }
+
+    if (isBite) {
+        /*
+         * Inside Bite the sidebar is the chat history and the media filters,
+         * the way an assistant app keeps them — for the same reason HR shows
+         * its own pages rather than the channel list.
+         */
+        return (
+            <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+                <SidebarHeader
+                    onCompose={() => setComposing(true)}
+                    inDrawer={inDrawer}
+                />
+
+                <NewMessageDialog
+                    workspaceSlug={workspace.slug}
+                    open={composing}
+                    onOpenChange={setComposing}
+                />
+
+                <div className="snack-scroll flex-1 overflow-y-auto px-3 pt-1 pb-4">
+                    <BiteSidebar onNavigate={onNavigate} />
+                </div>
 
                 <NotificationPermissionPrompt />
             </div>

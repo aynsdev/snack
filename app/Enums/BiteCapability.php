@@ -33,6 +33,8 @@ enum BiteCapability: string
     case SearchTasks = 'search_tasks';
     case CreateTask = 'create_task';
     case PeopleReport = 'people_report';
+    case GenerateImage = 'generate_image';
+    case GenerateVideo = 'generate_video';
 
     public function label(): string
     {
@@ -45,6 +47,8 @@ enum BiteCapability: string
             self::SearchTasks => 'Search tasks',
             self::CreateTask => 'Create tasks',
             self::PeopleReport => 'HR reports',
+            self::GenerateImage => 'Generate images',
+            self::GenerateVideo => 'Generate videos',
         };
     }
 
@@ -59,6 +63,8 @@ enum BiteCapability: string
             self::SearchTasks => 'Look through the project boards for existing work.',
             self::CreateTask => 'File a task on a board. Always asks the person for approval first.',
             self::PeopleReport => 'Report attendance and task output per employee — lateness, undertime, absences. Only for admins, and only in a private DM with Bite.',
+            self::GenerateImage => 'Make images from a description with Magnific and post them in the chat. Each one is a paid generation, and only works when the server has a Magnific API key.',
+            self::GenerateVideo => 'Make short videos from a description or an image with Magnific. Paid per generation and slower than images; needs a Magnific API key on the server.',
         };
     }
 
@@ -72,7 +78,7 @@ enum BiteCapability: string
     public function writes(): bool
     {
         return match ($this) {
-            self::CreateTask, self::AttachFile => true,
+            self::CreateTask, self::AttachFile, self::GenerateImage, self::GenerateVideo => true,
             default => false,
         };
     }
@@ -93,6 +99,8 @@ enum BiteCapability: string
             self::SearchTasks => Tools\SearchTasks::class,
             self::CreateTask => Tools\CreateTask::class,
             self::PeopleReport => Tools\PeopleReport::class,
+            self::GenerateImage => Tools\GenerateImage::class,
+            self::GenerateVideo => Tools\GenerateVideo::class,
         };
     }
 

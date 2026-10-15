@@ -58,6 +58,7 @@ class ConversationController extends Controller
     {
         $conversation = $workspace->conversations()
             ->visibleTo($request->user())
+            ->messaging()
             // The sidebar's own ordering — see WorkspaceNavigator — so "the top
             // of the list" means the same thing here as it looks like there.
             ->orderByRaw('last_message_at DESC NULLS LAST')
@@ -105,9 +106,21 @@ class ConversationController extends Controller
         ]);
     }
 
-    public function show(Workspace $workspace, Conversation $conversation, Request $request): Response
+    public function show(Workspace $workspace, Conversation $conversation, Request $request): Response|RedirectResponse
     {
         $this->authorize('view', $conversation);
+
+        /*
+         * A Bite chat lives on the Bite page. Notifications, search results and
+         * saved items all link here by conversation, so this is the one place
+         * that sends every one of them on to the right page.
+         */
+        if ($conversation->type->isBite()) {
+            return to_route('bite.chats.show', [
+                'workspace' => $workspace->slug,
+                'conversation' => $conversation,
+            ]);
+        }
 
         $user = $request->user();
 

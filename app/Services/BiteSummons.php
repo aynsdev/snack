@@ -7,6 +7,7 @@ use App\Models\Channel;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
+use App\Models\Workspace;
 
 /**
  * Whether a message was addressed to Bite, and the account to answer as.
@@ -199,6 +200,23 @@ class BiteSummons
      * missing environment variable into a failed-jobs table rather than into
      * nothing happening.
      */
+    /**
+     * Whether this person may open the Bite page and chat with Bite there.
+     *
+     * The same three checks a summons passes — installation, workspace switch,
+     * audience — so the sidebar never offers a chat that would go unanswered.
+     */
+    public function availableTo(Workspace $workspace, ?User $user): bool
+    {
+        if ($user === null || ! $this->available()) {
+            return false;
+        }
+
+        $settings = BiteSetting::forWorkspace($workspace);
+
+        return $settings->is_enabled && $settings->audience->admits($user->roleIn($workspace));
+    }
+
     public function available(): bool
     {
         if (config('snack.bite.enabled') !== true) {

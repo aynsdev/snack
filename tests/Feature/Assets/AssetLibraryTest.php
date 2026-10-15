@@ -239,7 +239,8 @@ it('tells the client what this viewer may do', function () {
 
 /**
  * The library's page is one query for the tree and one for the shelf, plus the
- * viewer, their membership, and the header's time clock. Asking the policy per row is what would quietly
+ * viewer, their membership, the header's time clock, and the workspace's Bite
+ * settings (whether the rail offers Bite). Asking the policy per row is what would quietly
  * turn that into one query per tile — see AssetLibraryController::render, which
  * loads the memberships once for exactly this reason.
  */
@@ -257,5 +258,5 @@ it('does not issue a query per row', function () {
 
     actingAs($owner)->get(route('assets.index', $workspace))->assertOk();
 
-    expect($queries)->toBeLessThan(21);
+    expect($queries)->toBeLessThan(22);
 });

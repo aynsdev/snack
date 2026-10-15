@@ -25,7 +25,7 @@ export type ChannelType = 'public' | 'private' | 'announcement';
 export type ChannelRole = 'admin' | 'member';
 
 /** Mirrors App\Enums\ConversationType. */
-export type ConversationType = 'direct' | 'group';
+export type ConversationType = 'direct' | 'group' | 'bite';
 
 /** Mirrors App\Enums\MessageType. */
 export type MessageType = 'text' | 'file' | 'system' | 'announcement';
@@ -132,6 +132,8 @@ export type WorkspaceAbilities = {
     manage_people: boolean;
     view_audit_logs: boolean;
     is_guest: boolean;
+    /** Bite is on here and this person is in its audience. */
+    use_bite: boolean;
 };
 
 /** Mirrors App\Http\Resources\WorkspaceResource. */

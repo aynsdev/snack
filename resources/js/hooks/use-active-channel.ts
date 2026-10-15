@@ -211,6 +211,28 @@ export function useIsHuddlesView(): boolean {
 }
 
 /**
+ * Whether the current page is the Bite page — a chat, the new-chat state, or
+ * the media gallery.
+ */
+export function useIsBiteView(): boolean {
+    const { currentUrl } = useCurrentUrl();
+
+    // /w/{workspace}/ai — the Bite page, its chats and its media.
+    return /^\/w\/[^/]+\/ai(?:[/?#]|$)/.test(currentUrl);
+}
+
+/**
+ * The Bite chat id in the current URL, or null when no chat is open.
+ */
+export function useActiveBiteChatId(): string | null {
+    const { currentUrl } = useCurrentUrl();
+
+    const match = currentUrl.match(/^\/w\/[^/]+\/ai\/chats\/([^/?#]+)/);
+
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+/**
  * Whether the current page is anywhere in HR — the overview, the clock, leave,
  * or an employee file.
  */
