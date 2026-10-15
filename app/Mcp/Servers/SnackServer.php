@@ -2,21 +2,31 @@
 
 namespace App\Mcp\Servers;
 
+use App\Mcp\Tools\AddLinkTool;
 use App\Mcp\Tools\BrowseAssetsTool;
 use App\Mcp\Tools\BrowseWorkspaceTool;
 use App\Mcp\Tools\CommentOnTaskTool;
+use App\Mcp\Tools\CreateReleaseTool;
 use App\Mcp\Tools\CreateTaskTool;
 use App\Mcp\Tools\FindFilesTool;
 use App\Mcp\Tools\GetProjectTool;
+use App\Mcp\Tools\GetReleaseTool;
 use App\Mcp\Tools\GetTaskTool;
+use App\Mcp\Tools\LinkTasksTool;
 use App\Mcp\Tools\ListMyTasksTool;
+use App\Mcp\Tools\ListReleasesTool;
+use App\Mcp\Tools\ListSprintsTool;
 use App\Mcp\Tools\ListTasksTool;
 use App\Mcp\Tools\ReadChannelTool;
 use App\Mcp\Tools\ReadFileTool;
 use App\Mcp\Tools\ReadThreadTool;
+use App\Mcp\Tools\RemoveLinkTool;
 use App\Mcp\Tools\SearchMessagesTool;
 use App\Mcp\Tools\SearchTasksTool;
 use App\Mcp\Tools\SendMessageTool;
+use App\Mcp\Tools\UnlinkTasksTool;
+use App\Mcp\Tools\UpdateReleaseTool;
+use App\Mcp\Tools\UpdateTasksTool;
 use App\Mcp\Tools\UpdateTaskTool;
 use App\Mcp\Tools\WhoAmITool;
 use Laravel\Mcp\Server;
@@ -52,9 +62,18 @@ is up front: call `whoami` whenever a request says "me", "my", or "I".
   project, `get_project` shows a board's columns and people, `list_tasks` lists
   its cards (assignee "me" works), and `get_task` opens one by reference
   (ENG-42).
-- `send_message`, `create_task`, `update_task`, and `comment_on_task` act
-  under the person's own name and notify their colleagues. Only use them when
-  the person has asked you to.
+- `list_sprints` and `list_releases` show where work can be placed;
+  `get_release` lists one release's tasks as a checklist. Tasks take a
+  `sprint`, a `release`, and a `parent` task on create and update, and
+  `update_tasks` moves many at once. When a name matches nothing, the reply
+  lists the valid options.
+- `add_link` puts a web link such as a pull request on a task; `link_tasks`
+  says one task blocks, relates to, or duplicates another.
+- Every tool that changes something — `send_message`, `create_task`,
+  `update_task`, `update_tasks`, `comment_on_task`, `add_link`,
+  `remove_link`, `link_tasks`, `unlink_tasks`, `create_release`, and
+  `update_release` — acts under the person's own name and may notify their
+  colleagues. Only use them when the person has asked you to.
 TEXT)]
 class SnackServer extends Server
 {
@@ -75,7 +94,17 @@ class SnackServer extends Server
         GetTaskTool::class,
         CreateTaskTool::class,
         UpdateTaskTool::class,
+        UpdateTasksTool::class,
         CommentOnTaskTool::class,
+        AddLinkTool::class,
+        RemoveLinkTool::class,
+        LinkTasksTool::class,
+        UnlinkTasksTool::class,
+        ListSprintsTool::class,
+        ListReleasesTool::class,
+        GetReleaseTool::class,
+        CreateReleaseTool::class,
+        UpdateReleaseTool::class,
     ];
 
     protected array $resources = [

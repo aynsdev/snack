@@ -10,7 +10,6 @@ use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\Release;
 use App\Models\Sprint;
-use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
@@ -85,7 +84,6 @@ class ProjectBoard
 
             'members' => $this->members($project),
             'labels' => $this->labels($project),
-            'epics' => $this->epics($project),
             'releases' => $this->releases($project),
 
             // What the viewer may do here, so the board can hide the controls it
@@ -131,7 +129,6 @@ class ProjectBoard
 
             'members' => $this->members($project),
             'labels' => $this->labels($project),
-            'epics' => $this->epics($project),
             'releases' => $this->releases($project),
 
             'canContribute' => $viewer->can('contribute', $project),
@@ -188,29 +185,6 @@ class ProjectBoard
             ->map(fn (Release $release): array => [
                 'id' => $release->id,
                 'name' => $release->name,
-            ])
-            ->all();
-    }
-
-    /**
-     * The project's epics, for the picker on a card.
-     *
-     * Trimmed to what the picker shows rather than serialized as tasks: an epic
-     * is a task, and sending it as one would put a full card payload into a
-     * dropdown, once per epic, on every board load.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function epics(Project $project): array
-    {
-        return $project->tasks()
-            ->where('type', 'epic')
-            ->orderBy('number')
-            ->get()
-            ->map(fn (Task $epic): array => [
-                'id' => $epic->id,
-                'title' => $epic->title,
-                'reference' => $project->reference($epic->number),
             ])
             ->all();
     }

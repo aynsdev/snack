@@ -1086,8 +1086,47 @@ export type Task = {
      */
     comments?: TaskComment[];
     attachments?: Attachment[];
+    /** Web links and linked cards — also only from `tasks.show`. */
+    links?: TaskLink[];
+    relations?: TaskRelation[];
     created_at: string | null;
     updated_at: string | null;
+};
+
+/** A web link on a card, such as a pull request. */
+export type TaskLink = {
+    id: number;
+    url: string;
+    title: string | null;
+    /** The title, or the URL without its scheme. */
+    label: string;
+};
+
+export type TaskRelationType = 'blocks' | 'relates_to' | 'duplicates';
+
+/**
+ * Another card this one is linked to, worded from this card's side —
+ * "blocks", "is blocked by", "relates to", "duplicates", "is duplicated by".
+ */
+export type TaskRelation = {
+    id: number;
+    type: TaskRelationType;
+    wording: string;
+    task: {
+        id: number;
+        reference: string;
+        title: string;
+        status: string;
+        is_complete: boolean;
+    };
+};
+
+/** A card offered by the parent and link pickers. */
+export type TaskPickerOption = {
+    id: number;
+    reference: string;
+    title: string;
+    type: TaskType;
 };
 
 /**
@@ -1191,13 +1230,6 @@ export type SummaryActivity = {
 export type ReleaseOption = {
     id: number;
     name: string;
-};
-
-/** An epic as the picker on a card offers it. */
-export type EpicOption = {
-    id: number;
-    title: string;
-    reference: string;
 };
 
 /** What arrives over `project.{id}` when one card changes. */

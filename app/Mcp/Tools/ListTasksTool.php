@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Enums\TaskPriority;
 use App\Enums\TaskType;
+use App\Mcp\Tools\Concerns\PlacesTasks;
 use App\Mcp\Tools\Concerns\ResolvesProjectWork;
 use App\Models\Task;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -27,14 +28,19 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[Title('List Tasks')]
 #[Description(<<<'TEXT'
 List the tasks on one project, optionally filtered by status column, assignee,
-type, or priority. By default this shows what is on the board right now (the
-active sprint, for a sprint project) and leaves finished work out.
+type, priority, sprint, release, or parent task. By default this shows what is
+on the board right now (the active sprint, for a sprint project) and leaves
+finished work out.
 
 - `scope`: `board` (default) — the current board; `backlog` — tasks not in any
   sprint; `all` — everything.
 - `status`: a column name from `get_project`, such as "In review".
 - `assignee`: @username, "me" for the connected person, or "none" for
   unassigned tasks.
+- `sprint`: "active", an open sprint's name, or "backlog". Overrides `scope`.
+- `release`: a release name such as "v3.2.1", or "none" for unscheduled work.
+  Overrides `scope`.
+- `parent`: a task's reference, to list its subtasks. Overrides `scope`.
 
 Each row starts with the task reference (ENG-42) that `get_task`,
 `update_task`, and `comment_on_task` take.
@@ -42,6 +48,7 @@ TEXT)]
 #[IsReadOnly]
 class ListTasksTool extends SnackTool
 {
+    use PlacesTasks;
     use ResolvesProjectWork;
 
     public function handle(Request $request): Response
@@ -68,6 +75,45 @@ class ListTasksTool extends SnackTool
             'all' => $project->tasks()->getQuery(),
             default => $project->boardTasks(),
         };
+
+        /*
+         * Naming a sprint, release, or parent already says which tasks are
+         * meant, so it widens the query to the whole project rather than
+         * intersecting with whatever `scope` defaulted to.
+         */
+        if (array_filter([$request->get('sprint'), $request->get('release'), $request->get('parent')], is_string(...)) !== []) {
+            $query = $project->tasks()->getQuery();
+        }
+
+        if (is_string($request->get('sprint'))) {
+            $sprint = $this->sprintNamed($project, $request->get('sprint'));
+
+            if (is_string($sprint)) {
+                return Response::error(str_replace(' Nothing was changed.', '', $sprint));
+            }
+
+            $query->where('sprint_id', $sprint === false ? null : $sprint->id);
+        }
+
+        if (is_string($request->get('release'))) {
+            $release = $this->releaseNamed($project, $request->get('release'));
+
+            if (is_string($release)) {
+                return Response::error(str_replace(' Nothing was changed.', '', $release));
+            }
+
+            $query->where('release_id', $release?->id);
+        }
+
+        if (is_string($request->get('parent'))) {
+            $parent = $this->parentNamed($context, $project, $request->get('parent'), TaskType::Task, null);
+
+            if (! $parent instanceof Task) {
+                return Response::error(str_replace(' Nothing was changed.', '', $parent ?? 'Name a task, such as ENG-12.'));
+            }
+
+            $query->where('parent_task_id', $parent->id);
+        }
 
         if ($status !== '') {
             $column = $project->columns()->where('name', 'ilike', $status)->first();
@@ -139,6 +185,9 @@ class ListTasksTool extends SnackTool
             'assignee' => $schema->string()->description('Optional: @username, "me", or "none" for unassigned.'),
             'type' => $schema->string()->description('Optional: only this type.')->enum(TaskType::values()),
             'priority' => $schema->string()->description('Optional: only this priority.')->enum(TaskPriority::values()),
+            'sprint' => $schema->string()->description('Optional: "active", an open sprint\'s name, or "backlog".'),
+            'release' => $schema->string()->description('Optional: a release name, or "none" for unscheduled work.'),
+            'parent' => $schema->string()->description('Optional: a task\'s reference, to list its subtasks.'),
             'include_done' => $schema->boolean()->description('Include finished tasks. Defaults to false unless a status is given.'),
             'limit' => $schema->integer()->description('How many to return. Defaults to 50, maximum 100.')->min(1)->max(100),
         ];

@@ -6,6 +6,7 @@ use App\Actions\Projects\MoveTask;
 use App\Actions\Projects\SaveTask;
 use App\Enums\TaskPriority;
 use App\Enums\TaskType;
+use App\Mcp\Tools\Concerns\PlacesTasks;
 use App\Mcp\Tools\Concerns\ResolvesProjectWork;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Gate;
@@ -34,21 +35,30 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[Name('update_task')]
 #[Title('Update Task')]
 #[Description(<<<'TEXT'
-Change a task: its status (move it to another column), assignee, priority,
-type, title, description, due date, or story points. Only the fields you pass
-are changed. Pass the task reference, such as ENG-42.
+Change a task: its status (move it to another column), sprint, release,
+parent task, labels, assignee, priority, type, title, description, due date,
+or story points. Only the fields you pass are changed. Pass the task
+reference, such as ENG-42.
 
 - `status`: a column name from `get_project`, such as "Done".
+- `sprint`: "active" for the running sprint, an open sprint's name, or
+  "backlog". See `list_sprints`.
+- `release`: a release name such as "v3.2.1", or "none". See `list_releases`.
+- `parent`: the reference of any task in the same project, or "none". An
+  epic cannot have a parent, and a task cannot go under its own subtask.
+- `add_labels` / `remove_labels`: label names the project already has.
 - `assignee`: @username of a project member, "me" for the connected person,
   or "none" to unassign. The new assignee is notified.
 - `due_on`: a date (2026-10-31), or "none" to clear it.
 
-Only change what the person asked you to change.
+A name that matches nothing is refused with the valid options, and nothing
+is changed. Only change what the person asked you to change.
 TEXT)]
 #[IsReadOnly(false)]
 #[IsDestructive(false)]
 class UpdateTaskTool extends SnackTool
 {
+    use PlacesTasks;
     use ResolvesProjectWork;
 
     public function handle(Request $request, SaveTask $saveTask, MoveTask $moveTask): Response
@@ -69,6 +79,13 @@ class UpdateTaskTool extends SnackTool
             'type' => ['sometimes', Rule::enum(TaskType::class)],
             'due_on' => ['sometimes', 'string'],
             'story_points' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:999'],
+            'sprint' => ['sometimes', 'string'],
+            'release' => ['sometimes', 'string'],
+            'parent' => ['sometimes', 'string'],
+            'add_labels' => ['sometimes', 'array'],
+            'add_labels.*' => ['string'],
+            'remove_labels' => ['sometimes', 'array'],
+            'remove_labels.*' => ['string'],
         ]);
 
         $task = $this->task($context, $request->get('task'));
@@ -105,27 +122,26 @@ class UpdateTaskTool extends SnackTool
         }
 
         if (array_key_exists('due_on', $arguments)) {
-            $due = trim((string) $arguments['due_on']);
+            $due = $this->dueDate($arguments['due_on']);
 
-            if (strtolower($due) !== 'none' && strtotime($due) === false) {
-                return Response::error("[{$due}] is not a date. Use a date like 2026-10-31, or \"none\". Nothing was changed.");
+            if ($due === false) {
+                return Response::error("[{$arguments['due_on']}] is not a date. Use a date like 2026-10-31, or \"none\". Nothing was changed.");
             }
 
-            $attributes['due_on'] = strtolower($due) === 'none' ? null : date('Y-m-d', (int) strtotime($due));
+            $attributes['due_on'] = $due;
             $changed[] = 'due date';
         }
 
-        $column = null;
+        $placement = $this->placement($context, $project, $arguments, $task);
 
-        if (array_key_exists('status', $arguments)) {
-            $column = $project->columns()->where('name', 'ilike', trim((string) $arguments['status']))->first();
-
-            if ($column === null) {
-                return Response::error("{$project->key} has no column called [{$arguments['status']}]. Use `get_project` to see its columns. Nothing was changed.");
-            }
+        if (is_string($placement)) {
+            return Response::error($placement);
         }
 
-        if ($attributes === [] && $column === null) {
+        $attributes = [...$attributes, ...$placement['save']];
+        $changed = [...$changed, ...$placement['changed']];
+
+        if ($changed === []) {
             return Response::error('Nothing to change was given.');
         }
 
@@ -133,9 +149,8 @@ class UpdateTaskTool extends SnackTool
             $task = $saveTask->update($task, $context->user, $attributes);
         }
 
-        if ($column !== null && $column->id !== $task->board_column_id) {
-            $task = $moveTask->handle($task, ['board_column_id' => $column->id]);
-            $changed[] = "status → {$column->name}";
+        if ($this->moves($task, $placement['move'])) {
+            $task = $moveTask->handle($task, $placement['move']);
         }
 
         return Response::text("Updated {$task->reference()}: ".implode(', ', $changed).'.');
@@ -156,6 +171,11 @@ class UpdateTaskTool extends SnackTool
             'description' => $schema->string()->description('A new description. Replaces the old one entirely.'),
             'due_on' => $schema->string()->description('A date such as 2026-10-31, or "none".'),
             'story_points' => $schema->integer()->min(0)->max(999),
+            'sprint' => $schema->string()->description('"active", an open sprint\'s name, or "backlog".'),
+            'release' => $schema->string()->description('A release name such as v3.2.1, or "none".'),
+            'parent' => $schema->string()->description('The reference of a task in the same project, or "none".'),
+            'add_labels' => $schema->array()->items($schema->string())->description('Label names to add.'),
+            'remove_labels' => $schema->array()->items($schema->string())->description('Label names to remove.'),
         ];
     }
 }

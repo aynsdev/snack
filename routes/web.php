@@ -88,7 +88,10 @@ use App\Http\Controllers\Projects\TaskAttachmentController;
 use App\Http\Controllers\Projects\TaskCommentController;
 use App\Http\Controllers\Projects\TaskController;
 use App\Http\Controllers\Projects\TaskLabelController;
+use App\Http\Controllers\Projects\TaskLinkController;
 use App\Http\Controllers\Projects\TaskMoveController;
+use App\Http\Controllers\Projects\TaskPickerController;
+use App\Http\Controllers\Projects\TaskRelationController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\Standups\StandupController;
@@ -808,6 +811,29 @@ Route::middleware(['auth', 'verified', 'workspace'])
             ->name('tasks.comments.update');
         Route::delete('tasks/{task}/comments/{comment}', [TaskCommentController::class, 'destroy'])
             ->name('tasks.comments.destroy');
+
+        /*
+         * Links on a card: web links such as pull requests, and other cards
+         * it blocks, relates to, or duplicates. A relation shows on both
+         * cards, so it is removed through either — which is why its route is
+         * not scoped to the card and the controller checks instead.
+         */
+        Route::post('tasks/{task}/links', [TaskLinkController::class, 'store'])
+            ->middleware('throttle:messages')
+            ->name('tasks.links.store');
+        Route::delete('tasks/{task}/links/{link}', [TaskLinkController::class, 'destroy'])
+            ->name('tasks.links.destroy');
+        Route::post('tasks/{task}/relations', [TaskRelationController::class, 'store'])
+            ->middleware('throttle:messages')
+            ->name('tasks.relations.store');
+        Route::delete('tasks/{task}/relations/{relation}', [TaskRelationController::class, 'destroy'])
+            ->withoutScopedBindings()
+            ->name('tasks.relations.destroy');
+
+        // Cards to pick as this card's parent, or to link it to.
+        Route::get('tasks/{task}/picker', [TaskPickerController::class, 'index'])
+            ->middleware('throttle:message-reads')
+            ->name('tasks.picker');
 
         Route::post('tasks/{task}/attachments', [TaskAttachmentController::class, 'store'])
             ->middleware('throttle:uploads')

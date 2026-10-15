@@ -4,7 +4,10 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\ResolvesProjectWork;
 use App\Models\MessageAttachment;
+use App\Models\Task;
 use App\Models\TaskComment;
+use App\Models\TaskLink;
+use App\Support\TaskRelations;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -22,7 +25,8 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[Title('Get Task')]
 #[Description(<<<'TEXT'
 Get one task in full: its status, type, priority, assignee, reporter, sprint,
-due date, labels, description, comments, and attached files. Pass the task
+release, parent, due date, labels, description, subtasks, web links (such as
+pull requests), linked tasks, comments, and attached files. Pass the task
 reference, such as ENG-42. Attached files are listed with a file id that
 `read_file` takes.
 TEXT)]
@@ -60,7 +64,7 @@ class GetTaskTool extends SnackTool
             'Assignee' => $task->assignee !== null ? "{$task->assignee->name} (@{$task->assignee->username})" : 'unassigned',
             'Reporter' => $task->reporter?->name,
             'Sprint' => $task->sprint_id !== null ? $task->sprint->name : ($task->project->uses_sprints ? 'backlog' : null),
-            'Epic' => $task->epic !== null ? $task->project->reference($task->epic->number).' '.$task->epic->title : null,
+            'Parent' => $task->epic !== null ? $task->project->reference($task->epic->number).' '.$task->epic->title : null,
             'Release' => $task->release?->name,
             'Story points' => $task->story_points,
             'Due' => $task->due_on?->toFormattedDateString(),
@@ -88,10 +92,40 @@ class GetTaskTool extends SnackTool
             ->map(fn (MessageAttachment $file): string => "- file #{$file->id} {$file->original_name} ({$file->mime_type}, {$file->humanSize()})")
             ->implode("\n");
 
+        $subtasks = $task->children()
+            ->with(['column:id,name', 'assignee:id,username'])
+            ->orderBy('number')
+            ->get()
+            ->map(fn (Task $child): string => sprintf(
+                '- %s — %s [%s] %s',
+                $task->project->reference($child->number),
+                $child->title,
+                $child->column->name,
+                $child->assignee !== null ? "@{$child->assignee->username}" : 'unassigned',
+            ))
+            ->implode("\n");
+
+        $links = $task->links()->get()
+            ->map(fn (TaskLink $link): string => "- {$link->label()} — {$link->url}")
+            ->implode("\n");
+
+        $related = collect(TaskRelations::for($task, $context->user))
+            ->map(fn (array $relation): string => sprintf(
+                '- %s %s — %s [%s]',
+                $relation['wording'],
+                $relation['task']->reference(),
+                $relation['task']->title,
+                $relation['task']->column->name,
+            ))
+            ->implode("\n");
+
         $sections = [
             "{$task->reference()} — {$task->title}",
             collect($fields)->map(fn (mixed $value, string $label): string => "{$label}: {$value}")->implode("\n"),
             "Description:\n".($task->description !== null && trim($task->description) !== '' ? trim($task->description) : '(none)'),
+            $subtasks !== '' ? "Subtasks:\n{$subtasks}" : null,
+            $links !== '' ? "Links:\n{$links}" : null,
+            $related !== '' ? "Linked tasks:\n{$related}" : null,
             $files !== '' ? "Files:\n{$files}" : null,
             "Comments:\n".($comments !== '' ? $comments : '(none)'),
         ];

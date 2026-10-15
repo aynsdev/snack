@@ -5,7 +5,9 @@ namespace App\Http\Resources;
 use App\Models\MessageAttachment;
 use App\Models\Task;
 use App\Models\TaskLabel;
+use App\Models\TaskLink;
 use App\Support\BranchName;
+use App\Support\TaskRelations;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -123,8 +125,39 @@ class TaskResource extends JsonResource
                     ->all(),
             ),
 
+            /*
+             * Links, like the discussion, only come with an opened card. The
+             * relations are read from both sides and filtered to what the
+             * viewer may open — see TaskRelations — so they ride on the same
+             * `links` load rather than a relation of their own.
+             */
+            'links' => $this->whenLoaded(
+                'links',
+                fn (): array => $this->links->map(fn (TaskLink $link): array => self::link($link))->all(),
+            ),
+
+            'relations' => $this->whenLoaded(
+                'links',
+                fn (): array => TaskRelations::payload($this->resource, $request->user()),
+            ),
+
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * One web link as the task panel draws it.
+     *
+     * @return array{id: int, url: string, title: string|null, label: string}
+     */
+    public static function link(TaskLink $link): array
+    {
+        return [
+            'id' => $link->id,
+            'url' => $link->url,
+            'title' => $link->title,
+            'label' => $link->label(),
         ];
     }
 }

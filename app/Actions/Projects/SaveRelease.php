@@ -5,6 +5,7 @@ namespace App\Actions\Projects;
 use App\Events\BoardChanged;
 use App\Models\Project;
 use App\Models\Release;
+use Carbon\CarbonInterface;
 
 /**
  * Planning a release, editing one, and taking one off the plan.
@@ -62,11 +63,14 @@ class SaveRelease
      * Unfinished work in the release stays in it. A version that shipped with
      * things cut still shipped with them cut, and quietly moving them out would
      * rewrite what went out in it.
+     *
+     * `$at` records a release that went out earlier than it was marked; without
+     * it, an already-released version keeps the date it first recorded.
      */
-    public function markReleased(Release $release, bool $released): Release
+    public function markReleased(Release $release, bool $released, ?CarbonInterface $at = null): Release
     {
         $release->forceFill([
-            'released_at' => $released ? ($release->released_at ?? now()) : null,
+            'released_at' => $released ? ($at ?? $release->released_at ?? now()) : null,
         ])->save();
 
         BoardChanged::dispatch($release->project);

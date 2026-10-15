@@ -27,6 +27,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Project $project
+ * @property-read int|null $tasks_count  present when the query counted them
+ * @property-read int|null $completed_tasks_count  likewise
  */
 #[Fillable([
     'project_id', 'name', 'goal', 'starts_at', 'ends_at',
