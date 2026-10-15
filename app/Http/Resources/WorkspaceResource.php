@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Workspace;
+use App\Services\BiteSummons;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -46,6 +47,7 @@ class WorkspaceResource extends JsonResource
                 'manage_people' => $role?->canManagePeople() ?? false,
                 'view_audit_logs' => $role?->canViewAuditLogs() ?? false,
                 'is_guest' => $role?->isGuest() ?? false,
+                'use_bite' => app(BiteSummons::class)->availableTo($this->resource, $request->user()),
             ],
         ];
     }

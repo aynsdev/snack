@@ -217,6 +217,7 @@ class WorkspaceNavigator
     {
         $conversations = $workspace->conversations()
             ->visibleTo($user)
+            ->messaging()
             ->with([
                 'activeUsers',
                 'participants' => fn ($query) => $query->where('user_id', $user->id),

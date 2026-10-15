@@ -182,10 +182,13 @@ it('still answers in a direct message when channels are restricted', function ()
 
 /**
  * Every one but the HR report, which is withheld in a channel whatever the
- * settings say — see PeopleReportTest.
+ * settings say — see PeopleReportTest — and image and video generation, which
+ * are withheld without a Magnific key — see BiteMediaTest.
  */
 it('gives Bite every capability when the workspace has chosen none', function () {
-    expect(collect(agentFor()->tools())->count())->toBe(count(BiteCapability::cases()) - 1);
+    config()->set('services.magnific.key', null);
+
+    expect(collect(agentFor()->tools())->count())->toBe(count(BiteCapability::cases()) - 3);
 });
 
 /**

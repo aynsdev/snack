@@ -10,6 +10,7 @@ import {
     MessageSquare,
 } from 'lucide-react';
 import { useState } from 'react';
+import { BiteIcon } from '@/components/bite/bite-icon';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import {
@@ -27,6 +28,7 @@ import {
     useActiveConversationId,
     useIsActivityView,
     useIsAssetsView,
+    useIsBiteView,
     useIsCanvasesView,
     useIsFilesView,
     useIsHomeView,
@@ -44,6 +46,7 @@ import {
 import { cn } from '@/lib/utils';
 import { index as activityIndex } from '@/routes/activity';
 import { index as assetsIndex } from '@/routes/assets';
+import { index as biteIndex } from '@/routes/bite';
 import { index as dmsIndex } from '@/routes/conversations';
 import { index as filesIndex } from '@/routes/files';
 import { index as hrIndex } from '@/routes/hr';
@@ -98,6 +101,7 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
     const isProjects = useIsProjectsView();
     const isAssets = useIsAssetsView();
     const isHr = useIsHrView();
+    const isBite = useIsBiteView();
 
     const directMessages = Object.values(unread.conversations).reduce(
         (total, counts) => total + counts.messages,
@@ -149,6 +153,21 @@ export function NavRail({ onNavigate }: { onNavigate?: () => void }) {
                         onNavigate?.();
                     }}
                 />
+
+                {/*
+                 * Bite: chats with the workspace assistant, and the images and
+                 * videos it made. Beside DMs because that is what it is — a
+                 * conversation — and only shown to people Bite would answer.
+                 */}
+                {workspace.abilities.use_bite && (
+                    <NavRailItem
+                        icon={BiteIcon}
+                        label="Bite"
+                        href={biteIndex(workspace.slug)}
+                        isActive={isBite}
+                        onNavigate={onNavigate}
+                    />
+                )}
 
                 <NavRailItem
                     icon={Inbox}
@@ -341,7 +360,7 @@ function NavRailItem({
     isActive = false,
     onNavigate,
 }: {
-    icon: typeof House;
+    icon: typeof House | typeof BiteIcon;
     label: string;
     /** A Wayfinder route definition. Omitted for a destination that does not
      *  exist yet. */

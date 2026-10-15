@@ -168,6 +168,7 @@ function mockWorkspace(
                             manage_people: false,
                             view_audit_logs: false,
                             is_guest: false,
+                            use_bite: false,
                         },
                     },
                     channels: [],

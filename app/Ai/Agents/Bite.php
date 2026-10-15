@@ -6,11 +6,13 @@ use App\Ai\BiteAttachments;
 use App\Ai\BiteContext;
 use App\Ai\BiteFiles;
 use App\Ai\BiteKnowledge;
+use App\Ai\BiteMedia;
 use App\Ai\Tools;
 use App\Enums\BiteCapability;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Services\Magnific;
 use Laravel\Ai\Attributes\MaxSteps;
 use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Concerns\RemembersConversations;
@@ -106,7 +108,9 @@ class Bite implements Agent, Conversational, HasTools
 
         Answering questions about this workspace using its own data — what people
         said, what files exist, what is on the project boards, who works here —
-        and filing tasks when asked. You are not a general-purpose chatbot. If
+        and filing tasks when asked. If you have the `generate_image` or
+        `generate_video` tools, you can also make images and videos when someone
+        asks for one. You are not a general-purpose chatbot. If
         someone asks you something that has nothing to do with this workspace,
         answer briefly and without ceremony.
 
@@ -357,6 +361,16 @@ class Bite implements Agent, Conversational, HasTools
                  */
                 BiteCapability::PeopleReport => $this->context->mayReadPeopleRecords()
                     ? new Tools\PeopleReport($this->context)
+                    : null,
+                /*
+                 * Withheld without a Magnific key: every call is a paid
+                 * generation, and the key is the installation's switch.
+                 */
+                BiteCapability::GenerateImage => Magnific::isConfigured()
+                    ? new Tools\GenerateImage($this->context, app(BiteMedia::class))
+                    : null,
+                BiteCapability::GenerateVideo => Magnific::isConfigured()
+                    ? new Tools\GenerateVideo($this->context, app(BiteMedia::class))
                     : null,
             };
 

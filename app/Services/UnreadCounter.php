@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ConversationType;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\DB;
@@ -239,6 +240,8 @@ class UnreadCounter
             // be badged about a thread they walked away from.
             ->whereNull('conversation_participants.left_at')
             ->where('conversations.workspace_id', $workspace->id)
+            // Bite chats are badged on the Bite page, not summed into DMs.
+            ->where('conversations.type', '!=', ConversationType::Bite->value)
             ->whereNotNull('messages.sender_id')
             ->whereRaw('messages.sender_id IS DISTINCT FROM ?', [$user->id])
             ->groupBy('conversations.public_id')

@@ -5,6 +5,8 @@ use App\Http\Controllers\Ai\BiteApprovalController;
 use App\Http\Controllers\Assets\AssetController;
 use App\Http\Controllers\Assets\AssetFolderController;
 use App\Http\Controllers\Assets\AssetLibraryController;
+use App\Http\Controllers\Bite\BiteChatController;
+use App\Http\Controllers\Bite\BiteMediaController;
 use App\Http\Controllers\CanvasController;
 use App\Http\Controllers\CanvasCoverController;
 use App\Http\Controllers\Channels\ChannelArchiveController;
@@ -352,6 +354,23 @@ Route::middleware(['auth', 'verified', 'workspace'])
          * "dms" rather than "conversations" so the URL a person sees is the word
          * they use for the thing.
          */
+        /*
+         * The Bite page: a person's own chats with Bite, and the images and
+         * videos it has made for them. Under `ai/` because `bite` is already
+         * the admin's settings screen. Each chat is a conversation of type
+         * `bite`, so its messages, reads and broadcasts use the `dms/...`
+         * routes below like any other — only listing and starting them is
+         * Bite's own.
+         */
+        Route::get('ai', [BiteChatController::class, 'index'])->name('bite.index');
+        Route::get('ai/media', [BiteMediaController::class, 'index'])->name('bite.media.index');
+        Route::post('ai/chats', [BiteChatController::class, 'store'])
+            ->middleware('throttle:messages')
+            ->name('bite.chats.store');
+        Route::get('ai/chats/{conversation}', [BiteChatController::class, 'show'])->name('bite.chats.show');
+        Route::patch('ai/chats/{conversation}', [BiteChatController::class, 'update'])->name('bite.chats.update');
+        Route::delete('ai/chats/{conversation}', [BiteChatController::class, 'destroy'])->name('bite.chats.destroy');
+
         Route::get('dms/directory', [DirectoryController::class, 'index'])
             ->middleware('throttle:message-reads')
             ->name('conversations.directory.index');

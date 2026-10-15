@@ -130,7 +130,8 @@ final readonly class BiteContext
      */
     public function isPrivateWithBite(): bool
     {
-        if (! $this->container instanceof Conversation || $this->container->type !== ConversationType::Direct) {
+        if (! $this->container instanceof Conversation
+            || ! in_array($this->container->type, [ConversationType::Direct, ConversationType::Bite], true)) {
             return false;
         }
 
@@ -155,6 +156,10 @@ final readonly class BiteContext
 
         if ($this->container === null) {
             return 'an external assistant';
+        }
+
+        if ($this->container->type->isBite()) {
+            return 'a private chat with you on the Bite page';
         }
 
         return 'a direct message';
