@@ -46,6 +46,9 @@ use Illuminate\Support\Carbon;
  * @property-read BoardColumn $column
  * @property-read Collection<int, TaskComment> $comments
  * @property-read Collection<int, MessageAttachment> $attachments
+ * @property-read Collection<int, Task> $children
+ * @property-read int|null $subtasks_count  present when the card data was loaded
+ * @property-read int|null $completed_subtasks_count  likewise
  * @property-read Collection<int, TaskLink> $links
  * @property-read Collection<int, TaskRelation> $outgoingRelations
  * @property-read Collection<int, TaskRelation> $incomingRelations
@@ -296,6 +299,9 @@ class Task extends Model
             'labels',
             'epic:id,project_id,number,title,type',
             'release:id,project_id,name',
+        ])->withCount([
+            'children as subtasks_count',
+            'children as completed_subtasks_count' => fn (Builder $children) => $children->whereNotNull('completed_at'),
         ]);
     }
 }

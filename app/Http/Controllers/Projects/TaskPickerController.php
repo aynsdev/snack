@@ -18,8 +18,9 @@ use Illuminate\Http\Request;
  *
  * For `purpose=parent` the card itself and everything beneath it are left
  * out, since choosing any of them would make a loop — the same rule SaveTask
- * enforces when the choice comes back — and epics never have a parent, so an
- * epic gets nothing.
+ * enforces when the choice comes back — as are cards that cannot hold this
+ * one's type: nothing goes under a subtask, and a subtask never sits straight
+ * under an epic. Epics never have a parent, so an epic gets nothing.
  */
 class TaskPickerController extends Controller
 {
@@ -50,7 +51,9 @@ class TaskPickerController extends Controller
             ->get(['id', 'project_id', 'number', 'title', 'type', 'completed_at', 'parent_task_id']);
 
         if ($forParent) {
-            $candidates = $candidates->reject(fn (Task $candidate): bool => $candidate->isOrDescendsFrom($task->id));
+            $candidates = $candidates
+                ->filter(fn (Task $candidate): bool => $candidate->type->canHoldChild($task->type))
+                ->reject(fn (Task $candidate): bool => $candidate->isOrDescendsFrom($task->id));
         }
 
         return response()->json([

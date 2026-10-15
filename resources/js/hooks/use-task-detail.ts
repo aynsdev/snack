@@ -362,6 +362,12 @@ export function useTaskDetail({
         /** Rejects on failure, so the picker can stay open. */
         addRelation,
         removeRelation,
+        /** Re-read the card, after a change made through another endpoint. */
+        refresh: useCallback(
+            () =>
+                client.invalidateQueries({ queryKey: ['task-detail', taskId] }),
+            [client, taskId],
+        ),
     };
 }
 

@@ -63,6 +63,7 @@ class TaskController extends Controller
             'task' => (new TaskResource($task->load([
                 'project', 'assignee', 'labels', 'epic', 'release', 'reporter',
                 'comments.author', 'attachments', 'links',
+                'children.column', 'children.assignee',
             ])))->resolve($request),
         ]);
     }

@@ -29,6 +29,7 @@ import {
     useBoard,
 } from '@/hooks/use-board';
 import type { BoardFilters } from '@/hooks/use-board';
+import { useOpenTask } from '@/hooks/use-open-task';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
 import { backlog as backlogRoute } from '@/routes/projects';
 import { store as joinProject } from '@/routes/projects/membership';
@@ -120,18 +121,15 @@ export default function ProjectBoardPage({
     );
 
     /*
-     * Which card is open, held as an id rather than as the task itself.
-     *
-     * The panel then reads that id out of the live list, so an edit made here —
-     * or arriving over the socket from somebody else — redraws the open panel.
-     * Holding the object would pin it to whatever the card looked like when it
-     * was clicked.
+     * Which card is open, held as an id rather than as the task itself, so an
+     * edit made here — or arriving over the socket — redraws the open panel.
+     * See useOpenTask.
      */
-    const [openTaskId, setOpenTaskId] = useState<number | null>(
-        openTask?.id ?? null,
-    );
-
-    const selected = tasks.find((task) => task.id === openTaskId) ?? null;
+    const openPanel = useOpenTask({
+        tasks,
+        workspaceSlug: workspace.slug,
+        initialTask: openTask,
+    });
 
     /*
      * A sprint project between sprints has no board to draw.
@@ -276,7 +274,7 @@ export default function ProjectBoardPage({
                             workspaceSlug={workspace.slug}
                             projectSlug={project.slug}
                             draggingId={dragging?.id ?? null}
-                            onOpenTask={(task) => setOpenTaskId(task.id)}
+                            onOpenTask={(task) => void openPanel.open(task.id)}
                             onDragStart={setDragging}
                             onDragEnd={() => setDragging(null)}
                             onDrop={handleDrop}
@@ -310,7 +308,7 @@ export default function ProjectBoardPage({
             )}
 
             <TaskPanel
-                task={selected}
+                task={openPanel.selected}
                 columns={columns}
                 members={members}
                 labels={labels}
@@ -318,7 +316,9 @@ export default function ProjectBoardPage({
                 workspaceSlug={workspace.slug}
                 canContribute={canContribute}
                 canDelete={canContribute}
-                onClose={() => setOpenTaskId(null)}
+                onClose={openPanel.close}
+                onOpenTask={(task) => void openPanel.open(task.id)}
+                onCreateTask={create}
                 onUpdate={update}
                 onDelete={remove}
                 onMoveToColumn={(task, columnId) => {

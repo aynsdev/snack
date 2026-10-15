@@ -126,6 +126,37 @@ class TaskResource extends JsonResource
             ),
 
             /*
+             * How far along the card's subtasks are, for the badge on the card.
+             * Counted with the board's query; a single card (an edit, a
+             * broadcast) counts its own so the badge does not vanish when one
+             * card is redrawn.
+             */
+            'subtask_progress' => $this->subtaskProgress(),
+
+            /*
+             * The subtasks themselves, only with an opened card — the panel's
+             * checklist, flattened to what a row draws.
+             */
+            'subtasks' => $this->whenLoaded(
+                'children',
+                fn (): array => $this->children
+                    ->sortBy('number')
+                    ->map(fn (Task $child): array => [
+                        'id' => $child->id,
+                        'reference' => $this->project->reference($child->number),
+                        'title' => $child->title,
+                        'type' => $child->type->value,
+                        'status' => $child->column->name,
+                        'is_complete' => $child->isComplete(),
+                        'assignee' => $child->assignee === null
+                            ? null
+                            : (new UserResource($child->assignee))->resolve($request),
+                    ])
+                    ->values()
+                    ->all(),
+            ),
+
+            /*
              * Links, like the discussion, only come with an opened card. The
              * relations are read from both sides and filtered to what the
              * viewer may open — see TaskRelations — so they ride on the same
@@ -159,5 +190,25 @@ class TaskResource extends JsonResource
             'title' => $link->title,
             'label' => $link->label(),
         ];
+    }
+
+    /**
+     * Subtasks done and in all, or null for a card with none.
+     *
+     * @return array{done: int, total: int}|null
+     */
+    private function subtaskProgress(): ?array
+    {
+        $total = $this->resource->getAttribute('subtasks_count')
+            ?? $this->resource->children()->count();
+
+        if ($total === 0) {
+            return null;
+        }
+
+        $done = $this->resource->getAttribute('completed_subtasks_count')
+            ?? $this->resource->children()->whereNotNull('completed_at')->count();
+
+        return ['done' => (int) $done, 'total' => (int) $total];
     }
 }

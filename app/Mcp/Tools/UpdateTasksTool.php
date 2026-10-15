@@ -35,7 +35,8 @@ a sprint, or a release. Pass up to 50 task references, such as
 ["ENG-42", "ENG-43"], and at least one of:
 
 - `status`: a column name, such as "Done".
-- `sprint`: "active", an open sprint's name, or "backlog".
+- `sprint`: "active", an open sprint's name, or "backlog". Unfinished
+  subtasks move with their parent.
 - `release`: a release name such as "v3.2.1", or "none".
 
 Every task is checked first; if any reference or name does not resolve, or

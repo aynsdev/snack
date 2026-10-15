@@ -2,6 +2,7 @@
 
 namespace App\Actions\Projects;
 
+use App\Enums\TaskType;
 use App\Events\TaskChanged;
 use App\Models\BoardColumn;
 use App\Models\Project;
@@ -33,6 +34,8 @@ use Illuminate\Support\Facades\DB;
  */
 class MoveTask
 {
+    public function __construct(private readonly AnnounceParentProgress $parents) {}
+
     /**
      * @param  array{
      *     board_column_id?: int|null,
@@ -45,6 +48,8 @@ class MoveTask
     public function handle(Task $task, array $target): Task
     {
         $project = $task->project;
+        $previousSprintId = $task->sprint_id;
+        $wasComplete = $task->isComplete();
 
         DB::transaction(function () use ($project, $task, $target): void {
             $column = $this->column($project, $target['board_column_id'] ?? null) ?? $task->column;
@@ -75,7 +80,43 @@ class MoveTask
 
         event(TaskChanged::for($task->refresh(), 'moved'));
 
+        if ($task->sprint_id !== $previousSprintId) {
+            $this->carrySubtasks($task);
+        }
+
+        if ($task->isComplete() !== $wasComplete) {
+            $this->parents->announce([$task->parent_task_id]);
+        }
+
         return $task;
+    }
+
+    /**
+     * Subtasks go where their parent goes, as in Jira: committing a story to
+     * a sprint commits its pieces, and sending it back to the backlog takes
+     * them too. Each keeps its own status and is appended to the bottom of
+     * its column in the new sprint. Finished subtasks stay where they were
+     * done — a closed sprint's record of them must not change.
+     *
+     * Only subtasks. A story under another story is its own piece of work,
+     * planned on its own.
+     */
+    private function carrySubtasks(Task $parent): void
+    {
+        $parent->children()
+            ->where('type', TaskType::Subtask)
+            ->whereNull('completed_at')
+            ->where(fn ($query) => $parent->sprint_id === null
+                ? $query->whereNotNull('sprint_id')
+                : $query->whereNull('sprint_id')->orWhere('sprint_id', '!=', $parent->sprint_id))
+            ->get()
+            ->each(function (Task $subtask) use ($parent): void {
+                $subtask->setRelation('project', $parent->project);
+
+                $this->handle($subtask, $parent->sprint_id === null
+                    ? ['in_backlog' => true]
+                    : ['sprint_id' => $parent->sprint_id]);
+            });
     }
 
     private function column(Project $project, ?int $columnId): ?BoardColumn

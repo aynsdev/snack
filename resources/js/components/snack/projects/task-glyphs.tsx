@@ -5,6 +5,7 @@ import {
     ChevronsDown,
     ChevronsUp,
     ChevronUp,
+    CornerDownRight,
     Equal,
     SquareCheck,
     Zap,
@@ -72,7 +73,29 @@ export const TASK_TYPES: Record<
     task: { icon: SquareCheck, color: 'text-blue-500', label: 'Task' },
     bug: { icon: Bug, color: 'text-rose-500', label: 'Bug' },
     epic: { icon: Zap, color: 'text-violet-500', label: 'Epic' },
+    subtask: {
+        icon: CornerDownRight,
+        color: 'text-sky-500',
+        label: 'Subtask',
+    },
 };
+
+/**
+ * The types a card can be switched to.
+ *
+ * A subtask is always a piece of another card, so Subtask is only offered to
+ * a card that has a parent. The server holds the rest of the rules (a card
+ * with subtasks cannot become one) and answers with the type that stuck.
+ */
+export function typeOptionsFor(task: {
+    type: TaskType;
+    epic?: unknown;
+}): TaskType[] {
+    return (Object.keys(TASK_TYPES) as TaskType[]).filter(
+        (type) =>
+            type !== 'subtask' || task.type === 'subtask' || task.epic != null,
+    );
+}
 
 export const TASK_PRIORITIES: Record<
     TaskPriority,

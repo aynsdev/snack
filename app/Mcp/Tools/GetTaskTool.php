@@ -92,15 +92,18 @@ class GetTaskTool extends SnackTool
             ->map(fn (MessageAttachment $file): string => "- file #{$file->id} {$file->original_name} ({$file->mime_type}, {$file->humanSize()})")
             ->implode("\n");
 
-        $subtasks = $task->children()
+        $children = $task->children()
             ->with(['column:id,name', 'assignee:id,username'])
             ->orderBy('number')
-            ->get()
+            ->get();
+
+        $subtasks = $children
             ->map(fn (Task $child): string => sprintf(
-                '- %s — %s [%s] %s',
+                '- %s — %s [%s · %s] %s',
                 $task->project->reference($child->number),
                 $child->title,
                 $child->column->name,
+                $child->type->value,
                 $child->assignee !== null ? "@{$child->assignee->username}" : 'unassigned',
             ))
             ->implode("\n");
@@ -119,11 +122,18 @@ class GetTaskTool extends SnackTool
             ))
             ->implode("\n");
 
+        $subtaskHeading = sprintf(
+            '%s (%d of %d done)',
+            $task->type->isContainer() ? 'Child issues' : 'Subtasks',
+            $children->filter(fn (Task $child): bool => $child->isComplete())->count(),
+            $children->count(),
+        );
+
         $sections = [
             "{$task->reference()} — {$task->title}",
             collect($fields)->map(fn (mixed $value, string $label): string => "{$label}: {$value}")->implode("\n"),
             "Description:\n".($task->description !== null && trim($task->description) !== '' ? trim($task->description) : '(none)'),
-            $subtasks !== '' ? "Subtasks:\n{$subtasks}" : null,
+            $subtasks !== '' ? "{$subtaskHeading}:\n{$subtasks}" : null,
             $links !== '' ? "Links:\n{$links}" : null,
             $related !== '' ? "Linked tasks:\n{$related}" : null,
             $files !== '' ? "Files:\n{$files}" : null,

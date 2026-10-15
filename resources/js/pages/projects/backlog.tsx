@@ -18,6 +18,7 @@ import {
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { orderedTasks, useBoard } from '@/hooks/use-board';
+import { useOpenTask } from '@/hooks/use-open-task';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import {
@@ -83,9 +84,7 @@ export default function ProjectBacklogPage({
     });
 
     const [dragging, setDragging] = useState<Task | null>(null);
-    const [openTaskId, setOpenTaskId] = useState<number | null>(null);
-
-    const selected = tasks.find((task) => task.id === openTaskId) ?? null;
+    const openPanel = useOpenTask({ tasks, workspaceSlug: workspace.slug });
     const backlog = orderedTasks(
         tasks.filter((task) => task.sprint_id === null),
     );
@@ -135,8 +134,8 @@ export default function ProjectBacklogPage({
     };
 
     const deleteTask = (task: Task) => {
-        if (task.id === openTaskId) {
-            setOpenTaskId(null);
+        if (task.id === openPanel.openTaskId) {
+            openPanel.close();
         }
 
         void remove(task.id);
@@ -189,7 +188,7 @@ export default function ProjectBacklogPage({
                         labels={labels}
                         canContribute={canContribute}
                         draggingId={dragging?.id ?? null}
-                        onOpenTask={(task) => setOpenTaskId(task.id)}
+                        onOpenTask={(task) => void openPanel.open(task.id)}
                         onDragStart={setDragging}
                         onDragEnd={() => setDragging(null)}
                         onDropInto={() => dropInto(sprint.id)}
@@ -226,7 +225,7 @@ export default function ProjectBacklogPage({
                     labels={labels}
                     canContribute={canContribute}
                     draggingId={dragging?.id ?? null}
-                    onOpenTask={(task) => setOpenTaskId(task.id)}
+                    onOpenTask={(task) => void openPanel.open(task.id)}
                     onDragStart={setDragging}
                     onDragEnd={() => setDragging(null)}
                     onDropInto={() => dropInto(null)}
@@ -244,7 +243,7 @@ export default function ProjectBacklogPage({
             </div>
 
             <TaskPanel
-                task={selected}
+                task={openPanel.selected}
                 columns={columns}
                 members={members}
                 labels={labels}
@@ -252,7 +251,9 @@ export default function ProjectBacklogPage({
                 workspaceSlug={workspace.slug}
                 canContribute={canContribute}
                 canDelete={canContribute}
-                onClose={() => setOpenTaskId(null)}
+                onClose={openPanel.close}
+                onOpenTask={(task) => void openPanel.open(task.id)}
+                onCreateTask={create}
                 onUpdate={update}
                 onDelete={remove}
                 onMoveToColumn={(task, columnId) => {
