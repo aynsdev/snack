@@ -21,7 +21,10 @@ use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Promptable;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Storage\DatabaseConversationStore;
 
 /**
  * The workspace assistant.
@@ -276,7 +279,7 @@ class Bite implements Agent, Conversational, HasTools
          * approval validation the real provider path does.
          */
         if ($this->currentConversation() !== null) {
-            return $this->rememberedMessages();
+            return array_map($this->withoutPartialReplayBlocks(...), [...$this->rememberedMessages()]);
         }
 
         $limit = $this->context->settings()->contextMessages();
@@ -380,6 +383,41 @@ class Bite implements Agent, Conversational, HasTools
         }
 
         return $tools;
+    }
+
+    /**
+     * Replay a stored assistant turn from its tool calls when the provider's
+     * raw blocks only cover some of them.
+     *
+     * A paused turn is stored as one row carrying every tool call the run made,
+     * but its raw provider blocks are only the *last* step's. Bite typically
+     * runs `search_tasks` and then `create_task`, so the blocks hold the
+     * `create_task` call alone. The SDK replays those blocks verbatim (see
+     * {@see DatabaseConversationStore::reconstructToolTurn()}),
+     * which drops the `search_tasks` call while still sending its result, and
+     * Anthropic rejects a `tool_result` with no matching `tool_use`. That
+     * rejection is what surfaced as "I could not finish that" on every
+     * approval that followed a search.
+     *
+     * Without the blocks, the gateway builds the turn from the stored tool
+     * calls, which are complete. Nothing else is lost: Bite does not use
+     * extended thinking, so the blocks carry no signatures that must survive.
+     */
+    private function withoutPartialReplayBlocks(\Laravel\Ai\Messages\Message $message): \Laravel\Ai\Messages\Message
+    {
+        if (! $message instanceof AssistantMessage || blank($message->providerContentBlocks)) {
+            return $message;
+        }
+
+        $replayedCallIds = collect($message->providerContentBlocks)
+            ->where('type', 'tool_use')
+            ->pluck('id');
+
+        $isComplete = $message->toolCalls->every(
+            fn (ToolCall $toolCall): bool => $replayedCallIds->contains($toolCall->id),
+        );
+
+        return $isComplete ? $message : new AssistantMessage($message->content, $message->toolCalls);
     }
 
     /**
