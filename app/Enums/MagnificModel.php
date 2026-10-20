@@ -118,8 +118,8 @@ enum MagnificModel: string
     public function summary(): string
     {
         return match ($this) {
-            self::Mystic => 'photorealistic, Magnific\'s own (default)',
-            self::Flux2Klein => 'very fast',
+            self::Mystic => 'text or image, photorealistic, Magnific\'s own (default)',
+            self::Flux2Klein => 'text or image, very fast',
             self::FluxPro11 => 'high quality, good prompt following',
             self::Hyperflux => 'fastest, cheapest',
             self::Seedream45 => 'fast, high quality',
@@ -139,9 +139,14 @@ enum MagnificModel: string
         };
     }
 
+    /**
+     * Whether the model can take an image along with the prompt: the first
+     * frame for a video, a style reference for an image.
+     */
     public function acceptsImage(): bool
     {
         return in_array($this, [
+            self::Mystic, self::Flux2Klein,
             self::Kling26Pro, self::Kling3Turbo, self::Hailuo23, self::SeedancePro, self::Veo31, self::Veo31Fast,
         ], true);
     }
@@ -199,7 +204,12 @@ enum MagnificModel: string
         $body = ['prompt' => $prompt];
 
         if ($imageBase64 !== null && $this->acceptsImage()) {
-            $body[$this === self::Hailuo23 ? 'first_frame_image' : 'image'] = $imageBase64;
+            $body[match ($this) {
+                self::Mystic => 'style_reference',
+                self::Flux2Klein => 'input_image',
+                self::Hailuo23 => 'first_frame_image',
+                default => 'image',
+            }] = $imageBase64;
         }
 
         $ratio = $this->ratioFor($aspectRatio);

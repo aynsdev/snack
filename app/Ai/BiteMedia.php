@@ -51,7 +51,11 @@ final readonly class BiteMedia
         $chosen ??= MagnificModel::defaultFor($kind);
 
         if ($source !== null && ! $chosen->acceptsImage()) {
-            return "{$chosen->label()} cannot start from an image. Use one of the models marked \"text or image\".";
+            $why = $kind === MediaKind::Image ? 'cannot use a reference image' : 'cannot start from an image';
+
+            return $chosen === $preferred
+                ? "{$chosen->label()} was picked in the composer and {$why}. Ask the person to pick a model marked \"text or image\", or to remove the image."
+                : "{$chosen->label()} {$why}. Use one of the models marked \"text or image\".";
         }
 
         $generation = BiteGeneration::create([
@@ -75,7 +79,7 @@ final readonly class BiteMedia
     }
 
     /**
-     * The image a video should start from.
+     * The image a video should start from, or an image should take after.
      *
      * In order: a file the model named by id (re-resolved against the asker, as
      * every model-supplied id is — see {@see BiteFiles}); an image attached to

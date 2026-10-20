@@ -87,8 +87,14 @@ return [
              * instant a job is pushed. The value is only a ceiling on how long
              * one blocking call waits before looping — it does not delay
              * pickup — so it wants to be comfortably under `retry_after`.
+             *
+             * Except for delayed and released jobs: those are moved onto the
+             * queue only between blocking calls, so a job released for two
+             * seconds runs after up to two plus this. Bite's media job releases
+             * itself to check on Magnific every few seconds, so this is kept to
+             * a second — one cheap Redis call per idle worker per second.
              */
-            'block_for' => (int) env('REDIS_QUEUE_BLOCK_FOR', 5),
+            'block_for' => (int) env('REDIS_QUEUE_BLOCK_FOR', 1),
             'after_commit' => false,
         ],
 

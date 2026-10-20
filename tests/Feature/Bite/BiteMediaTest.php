@@ -17,6 +17,7 @@ use App\Models\BiteSetting;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Services\BiteBot;
+use App\Services\ImageProcessor;
 use App\Services\Magnific;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
@@ -81,6 +82,9 @@ it('spells each model request the way that model expects', function (MagnificMod
     expect($model->payload('a cat', '16:9', 7, $image))->toBe(['prompt' => 'a cat', ...$expected]);
 })->with([
     'mystic, named ratio' => [MagnificModel::Mystic, null, ['aspect_ratio' => 'widescreen_16_9']],
+    'mystic, style reference' => [MagnificModel::Mystic, 'b64', ['style_reference' => 'b64', 'aspect_ratio' => 'widescreen_16_9']],
+    'flux 2 klein, input image' => [MagnificModel::Flux2Klein, 'b64', ['input_image' => 'b64', 'aspect_ratio' => 'widescreen_16_9']],
+    'recraft, text only ignores the image' => [MagnificModel::Recraft4, 'b64', ['aspect_ratio' => 'widescreen_16_9']],
     'nano banana, colon ratio' => [MagnificModel::NanoBananaPro, null, ['aspect_ratio' => '16:9']],
     'kling, string duration' => [MagnificModel::Kling26Pro, 'b64', ['image' => 'b64', 'aspect_ratio' => 'widescreen_16_9', 'duration' => '5']],
     'veo, integer duration' => [MagnificModel::Veo31, null, ['aspect_ratio' => '16:9', 'duration' => 6]],
@@ -149,6 +153,40 @@ it('honours the composer selection even when the agent requests a different mode
     ['veo-3.1', MediaKind::Video],
 ]);
 
+it('uses the image attached to the message as a reference', function () {
+    $reference = imageAttachmentOn($this->request);
+    $tool = new GenerateImage(mediaContext(), app(BiteMedia::class));
+
+    $result = (string) $tool->handle(new Request(['prompt' => 'the same poster, in blue']));
+
+    $generation = BiteGeneration::sole();
+
+    expect($result)->toContain('using [source.png] as a reference')
+        ->and($generation->source_attachment_id)->toBe($reference->id)
+        ->and($generation->model)->toBe(MagnificModel::Mystic);
+});
+
+it('uses the previous image in the chat as a reference when asked to', function () {
+    $earlier = Message::query()->whereKey($this->request->id)->sole();
+    $reference = imageAttachmentOn($earlier);
+    $next = app(SendConversationMessage::class)->handle($this->chat, $this->owner, 'another one like that');
+
+    $tool = new GenerateImage(mediaContext($next), app(BiteMedia::class));
+    $tool->handle(new Request(['prompt' => 'same style, a dog', 'use_previous_image' => true]));
+
+    expect(BiteGeneration::sole()->source_attachment_id)->toBe($reference->id);
+});
+
+it('refuses a text-only image model when there is a reference', function () {
+    imageAttachmentOn($this->request);
+    $tool = new GenerateImage(mediaContext(), app(BiteMedia::class));
+
+    $result = (string) $tool->handle(new Request(['prompt' => 'x', 'model' => 'recraft-4']));
+
+    expect($result)->toContain('cannot use a reference image')
+        ->and(BiteGeneration::count())->toBe(0);
+});
+
 it('animates the image attached to the message', function () {
     $source = imageAttachmentOn($this->request);
     $tool = new GenerateVideo(mediaContext(), app(BiteMedia::class));
@@ -214,7 +252,7 @@ function runGeneration(BiteGeneration $generation): GenerateBiteMedia
 {
     $job = (new GenerateBiteMedia($generation))->withFakeQueueInteractions();
 
-    $job->handle(app(Magnific::class), app(BiteBot::class));
+    $job->handle(app(Magnific::class), app(BiteBot::class), app(ImageProcessor::class));
 
     return $job;
 }
@@ -224,7 +262,7 @@ it('submits the task and checks back later', function () {
 
     $generation = queuedGeneration(['prompt' => 'a cat', 'aspect_ratio' => '1:1']);
 
-    runGeneration($generation)->assertReleased(GenerateBiteMedia::POLL_SECONDS);
+    runGeneration($generation)->assertReleased(GenerateBiteMedia::IMAGE_POLL_SECONDS);
 
     expect($generation->fresh())
         ->task_id->toBe('task-1')
@@ -232,6 +270,54 @@ it('submits the task and checks back later', function () {
 
     Http::assertSent(fn (HttpRequest $request): bool => $request->hasHeader('x-magnific-api-key', 'magnific-key')
         && $request['aspect_ratio'] === 'square_1_1');
+});
+
+it('sends the reference image along with the prompt', function () {
+    Http::fake(['api.magnific.test/v1/ai/mystic' => Http::response(['data' => ['task_id' => 'task-1', 'status' => 'CREATED']])]);
+
+    $reference = imageAttachmentOn($this->request);
+    $generation = queuedGeneration(['prompt' => 'a cat', 'source_attachment_id' => $reference->id]);
+
+    runGeneration($generation);
+
+    Http::assertSent(fn (HttpRequest $request): bool => $request['style_reference'] === base64_encode('source-bytes'));
+});
+
+it('scales a large reference image down before sending it', function () {
+    Http::fake(['api.magnific.test/v1/ai/mystic' => Http::response(['data' => ['task_id' => 'task-1', 'status' => 'CREATED']])]);
+
+    $photo = imagecreatetruecolor(2100, 700);
+    ob_start();
+    imagejpeg($photo);
+    Storage::disk('local')->put('workspaces/photo.jpg', (string) ob_get_clean());
+
+    $reference = MessageAttachment::create([
+        'workspace_id' => $this->workspace->id,
+        'message_id' => $this->request->id,
+        'uploaded_by' => $this->owner->id,
+        'disk' => 'local',
+        'path' => 'workspaces/photo.jpg',
+        'original_name' => 'photo.jpg',
+        'mime_type' => 'image/jpeg',
+        'size' => 1,
+        'metadata' => [],
+    ]);
+
+    runGeneration(queuedGeneration(['prompt' => 'a cat', 'source_attachment_id' => $reference->id]));
+
+    Http::assertSent(function (HttpRequest $request): bool {
+        [$width, $height] = getimagesizefromstring(base64_decode($request['style_reference']));
+
+        return $width === GenerateBiteMedia::SOURCE_MAX_EDGE && $height === 683;
+    });
+});
+
+it('checks on a video less often than an image', function () {
+    Http::fake(['api.magnific.test/*' => Http::response(['data' => ['task_id' => 'task-3', 'status' => 'IN_PROGRESS']])]);
+
+    $generation = queuedGeneration(['kind' => MediaKind::Video, 'model' => MagnificModel::Veo31, 'duration' => 6, 'task_id' => 'task-3', 'status' => GenerationStatus::Processing]);
+
+    runGeneration($generation)->assertReleased(GenerateBiteMedia::VIDEO_POLL_SECONDS);
 });
 
 it('posts the finished video into the chat as Bite', function () {

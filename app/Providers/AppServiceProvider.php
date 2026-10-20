@@ -135,10 +135,16 @@ class AppServiceProvider extends ServiceProvider
      * a fifth process listening on a port nobody visits. Reverb and the queue
      * worker — both required for real time, since message events are queued
      * broadcasts — are registered by their own packages and stay.
+     *
+     * A second worker joins the first. With one, everything queues behind
+     * whatever Bite is doing: a reply that takes twenty seconds of model calls
+     * holds up every message broadcast, and the image Bite queued halfway
+     * through cannot even be submitted until the reply it is part of is done.
      */
     protected function configureDevCommands(): void
     {
         DevCommands::except('server');
+        DevCommands::artisan('queue:listen --tries=1 --timeout=0', 'queue-2');
     }
 
     /**
