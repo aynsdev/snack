@@ -9,6 +9,7 @@ use App\Models\BiteGeneration;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Services\BiteBot;
+use App\Services\ImageProcessor;
 use App\Services\Magnific;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -39,9 +40,20 @@ class GenerateBiteMedia implements ShouldQueue
     use Queueable;
 
     /**
-     * How long between checks on a running task.
+     * How long between checks on a running task. Most images are ready in
+     * seconds, so they are checked often; a video takes minutes, and checking
+     * it as often would only cost requests.
      */
-    public const POLL_SECONDS = 5;
+    public const IMAGE_POLL_SECONDS = 2;
+
+    public const VIDEO_POLL_SECONDS = 5;
+
+    /**
+     * The longest edge a source or reference image is sent at. Large enough
+     * for any model here to read detail from, small enough that a phone photo
+     * is not uploaded as megabytes of base64 on every submit.
+     */
+    public const SOURCE_MAX_EDGE = 2048;
 
     public int $timeout = 150;
 
@@ -52,7 +64,12 @@ class GenerateBiteMedia implements ShouldQueue
         return $this->generation->created_at->addMinutes($this->budgetMinutes() + 5);
     }
 
-    public function handle(Magnific $magnific, BiteBot $bots): void
+    public function pollSeconds(): int
+    {
+        return $this->generation->kind === MediaKind::Video ? self::VIDEO_POLL_SECONDS : self::IMAGE_POLL_SECONDS;
+    }
+
+    public function handle(Magnific $magnific, BiteBot $bots, ImageProcessor $images): void
     {
         $generation = $this->generation->fresh();
 
@@ -64,9 +81,9 @@ class GenerateBiteMedia implements ShouldQueue
 
         try {
             if ($generation->task_id === null) {
-                $this->submit($magnific);
+                $this->submit($magnific, $images);
 
-                $this->release(self::POLL_SECONDS);
+                $this->release($this->pollSeconds());
 
                 return;
             }
@@ -82,7 +99,7 @@ class GenerateBiteMedia implements ShouldQueue
                     throw new GenerationFailed('It took too long and was abandoned.');
                 }
 
-                $this->release(self::POLL_SECONDS);
+                $this->release($this->pollSeconds());
 
                 return;
             }
@@ -123,7 +140,7 @@ class GenerateBiteMedia implements ShouldQueue
         $this->giveUp(app(BiteBot::class), 'Something went wrong while generating it.');
     }
 
-    private function submit(Magnific $magnific): void
+    private function submit(Magnific $magnific, ImageProcessor $images): void
     {
         $generation = $this->generation;
 
@@ -133,7 +150,7 @@ class GenerateBiteMedia implements ShouldQueue
                 $generation->prompt,
                 $generation->aspect_ratio,
                 $generation->duration,
-                $this->sourceImage(),
+                $this->sourceImage($images),
             ),
             $generation->hasSourceImage(),
         );
@@ -142,9 +159,15 @@ class GenerateBiteMedia implements ShouldQueue
     }
 
     /**
-     * The image a video starts from, base64-encoded as Magnific accepts it.
+     * The source or reference image, base64-encoded as Magnific accepts it.
+     *
+     * Scaled down and re-encoded when it is larger than {@see SOURCE_MAX_EDGE}
+     * or in a format not every model reads (only JPEG and PNG are): smaller to
+     * send, and readable everywhere. Anything else goes as it is — decoding a
+     * photo costs a worker tens of megabytes, worth it only when it changes the
+     * result. When it cannot be decoded, the original goes and Magnific decides.
      */
-    private function sourceImage(): ?string
+    private function sourceImage(ImageProcessor $images): ?string
     {
         $source = $this->generation->sourceAttachment;
 
@@ -161,10 +184,26 @@ class GenerateBiteMedia implements ShouldQueue
         }
 
         if (! is_string($bytes) || $bytes === '') {
-            throw new GenerationFailed('The starting image could not be read.');
+            throw new GenerationFailed('The image it was based on could not be read.');
         }
 
-        return base64_encode($bytes);
+        if ($this->isSendableAsIs($bytes)) {
+            return base64_encode($bytes);
+        }
+
+        return base64_encode($images->fit($bytes, self::SOURCE_MAX_EDGE)?->contents ?? $bytes);
+    }
+
+    /**
+     * A JPEG or PNG within the size limit, read from its header alone.
+     */
+    private function isSendableAsIs(string $bytes): bool
+    {
+        $info = @getimagesizefromstring($bytes);
+
+        return $info !== false
+            && in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG], true)
+            && max($info[0], $info[1]) <= self::SOURCE_MAX_EDGE;
     }
 
     private function deliver(Magnific $magnific, BiteBot $bots, string $url): void

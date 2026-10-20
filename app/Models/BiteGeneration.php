@@ -108,7 +108,7 @@ class BiteGeneration extends Model
     }
 
     /**
-     * Whether the image a video starts from was sent along.
+     * Whether an image was sent along: the frame a video starts from, or an image's reference.
      */
     public function hasSourceImage(): bool
     {
