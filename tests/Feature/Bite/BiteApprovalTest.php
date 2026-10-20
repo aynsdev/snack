@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Messages\SendMessage;
 use App\Ai\Agents\Bite;
 use App\Ai\BiteAttachments;
 use App\Ai\BiteContext;
@@ -10,6 +11,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\BiteBot;
 use App\Support\BiteCard;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
@@ -296,4 +298,65 @@ it('sends the room transcript when it is not resuming', function () {
         ->implode(' | ');
 
     expect($bodies)->toContain('please file that bug');
+});
+
+/**
+ * The real provider path rather than the fake gateway, which skips the
+ * replay validation that broke this. Bite searches before it files, so the
+ * paused turn holds two tool calls while the stored raw blocks hold only the
+ * last one — and Anthropic refuses a tool result with no tool use before it.
+ */
+it('resumes an approval that followed another tool call in the same turn', function () {
+    config()->set('ai.conversations.generate_title', false);
+
+    makeProject($this->workspace, $this->ada, ['name' => 'Web', 'key' => 'PWA']);
+
+    $step = fn (string $stopReason, array $content): array => [
+        'id' => 'msg_'.Str::random(8),
+        'type' => 'message',
+        'role' => 'assistant',
+        'model' => 'claude-haiku-4-5',
+        'stop_reason' => $stopReason,
+        'content' => $content,
+        'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
+    ];
+
+    Http::fake(['api.anthropic.com/*' => Http::sequence()
+        ->push($step('tool_use', [['type' => 'tool_use', 'id' => 'toolu_search', 'name' => 'SearchTasks', 'input' => ['query' => 'emergency contact']]]))
+        ->push($step('tool_use', [['type' => 'tool_use', 'id' => 'toolu_create', 'name' => 'CreateTask', 'input' => ['project' => 'PWA', 'title' => 'Fix emergency contact creation']]]))
+        ->push($step('end_turn', [['type' => 'text', 'text' => 'Filed PWA-1.']])),
+    ]);
+
+    $root = makeMessage($this->channel, $this->bo, 'Creating an emergency contact fails with a 500.');
+
+    app(SendMessage::class)->handle(
+        container: $this->channel,
+        sender: $this->ada,
+        body: '@bite create a ticket for this',
+        parent: $root,
+    );
+
+    $card = Message::query()->where('sender_id', $this->bot->id)->latest('id')->firstOrFail();
+
+    $this->actingAs($this->ada)
+        ->postJson(route('bite.approvals.store', [$this->workspace, $card]), ['decision' => 'approve'])
+        ->assertOk();
+
+    $resume = Http::recorded()->last()[0];
+
+    $toolUses = collect($resume->data()['messages'])
+        ->where('role', 'assistant')
+        ->flatMap(fn (array $message): array => $message['content'])
+        ->where('type', 'tool_use')
+        ->pluck('id');
+
+    $toolResults = collect($resume->data()['messages'])
+        ->where('role', 'user')
+        ->flatMap(fn (array $message): array => is_array($message['content']) ? $message['content'] : [])
+        ->where('type', 'tool_result')
+        ->pluck('tool_use_id');
+
+    expect($toolResults->diff($toolUses))->toBeEmpty()
+        ->and(Task::query()->where('title', 'Fix emergency contact creation')->exists())->toBeTrue()
+        ->and(Message::query()->where('sender_id', $this->bot->id)->latest('id')->value('body'))->toBe('Filed PWA-1.');
 });
