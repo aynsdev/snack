@@ -29,6 +29,7 @@ class UpdateNotificationPreferencesRequest extends FormRequest
         return [
             'default_level' => ['required', Rule::enum(NotificationLevel::class)],
             'email_enabled' => ['required', 'boolean'],
+            'push_enabled' => ['sometimes', 'boolean'],
             'digest_enabled' => ['required', 'boolean'],
 
             /*
@@ -82,5 +83,13 @@ class UpdateNotificationPreferencesRequest extends FormRequest
         return $start === '' || $start === $end
             ? null
             : ['start' => $start, 'end' => $end];
+    }
+
+    /**
+     * Null when the form did not mention push — see UpdateNotificationPreferences.
+     */
+    public function pushEnabled(): ?bool
+    {
+        return $this->has('push_enabled') ? $this->boolean('push_enabled') : null;
     }
 }

@@ -56,6 +56,32 @@ class NotificationDelivery
     }
 
     /**
+     * Whether this notification should also go to the person's phones.
+     *
+     * The same rule as email, for the same reason — a push is for someone who
+     * is not looking at Snack — with the mobile app counted as "looking": it
+     * sends presence heartbeats while it is open, so a person reading in the
+     * app is not buzzed about what is already on their screen. Its own switch,
+     * because plenty of people want one and not the other.
+     */
+    public function shouldPush(User $user, ?WorkspaceMember $membership): bool
+    {
+        if ($membership === null || ! $membership->wantsPushNotifications()) {
+            return false;
+        }
+
+        if ($user->presence_status->suppressesNotifications()) {
+            return false;
+        }
+
+        if ($this->isWithinQuietHours($user, $membership)) {
+            return false;
+        }
+
+        return $this->isAway($user) && $user->pushDevices()->exists();
+    }
+
+    /**
      * Whether the user is away from Snack right now.
      *
      * Public because the digest asks the same question for a different reason:

@@ -29,7 +29,14 @@ class UpdateNotificationPreferences
         bool $emailEnabled,
         bool $digestEnabled,
         ?array $doNotDisturb,
+        ?bool $pushEnabled = null,
     ): WorkspaceMember {
+        /*
+         * Null keeps what is stored. Push is set from the mobile app, and the
+         * web settings form — which has no phone to speak for — leaves it out.
+         */
+        $pushEnabled ??= $membership->wantsPushNotifications();
+
         $membership->forceFill([
             'notification_preferences' => [
                 /*
@@ -40,6 +47,7 @@ class UpdateNotificationPreferences
                  */
                 'default_level' => $defaultLevel->value,
                 'email' => ['enabled' => $emailEnabled],
+                'push' => ['enabled' => $pushEnabled],
                 'digest' => ['enabled' => $digestEnabled],
                 // Omitted entirely rather than stored as null, so
                 // WorkspaceMember::doNotDisturbSchedule() has one shape to read.

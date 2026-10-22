@@ -848,4 +848,19 @@ return [
         'download_link_ttl_hours' => (int) env('SNACK_MCP_DOWNLOAD_LINK_TTL_HOURS', 24),
     ],
 
+    'mobile' => [
+        /*
+         * Where the mobile app opens its WebSocket — the public address of
+         * Reverb, which is the one the browser bundle is built with rather
+         * than the internal one the server publishes to. Handed to the app by
+         * `GET /api/v1/config` so a build does not hard-code a host.
+         */
+        'reverb' => [
+            'key' => env('REVERB_APP_KEY'),
+            'host' => env('VITE_REVERB_HOST', env('REVERB_HOST')),
+            'port' => (int) env('VITE_REVERB_PORT', env('REVERB_PORT', 443)),
+            'scheme' => env('VITE_REVERB_SCHEME', env('REVERB_SCHEME', 'https')),
+        ],
+    ],
+
 ];

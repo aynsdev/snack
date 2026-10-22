@@ -137,6 +137,16 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
     }
 
     /**
+     * Phones registered for push notifications — see PushDevice.
+     *
+     * @return HasMany<PushDevice, $this>
+     */
+    public function pushDevices(): HasMany
+    {
+        return $this->hasMany(PushDevice::class);
+    }
+
+    /**
      * @return HasMany<WorkspaceMember, $this>
      */
     public function workspaceMemberships(): HasMany

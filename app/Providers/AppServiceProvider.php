@@ -3,10 +3,12 @@
 namespace App\Providers;
 
 use App\Actions\Presence\RecordPresence;
+use App\Http\Middleware\EnsureMobileToken;
 use App\Mcp\OAuthClientRepository;
 use App\Models\OAuthToken;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Notifications\Channels\PushChannel;
 use App\Notifications\Channels\WorkspaceDatabaseChannel;
 use App\Support\WorkspaceContext;
 use Carbon\CarbonImmutable;
@@ -81,6 +83,16 @@ class AppServiceProvider extends ServiceProvider
                 ->get(['workspaces.id', 'workspaces.name', 'workspaces.slug']),
         ]));
 
+        /*
+         * The scope the mobile app's tokens carry — see EnsureMobileToken.
+         * Merged rather than set, because the MCP package registers its own
+         * `mcp:use` scope the same way.
+         */
+        Passport::tokensCan([
+            ...Passport::$scopes,
+            EnsureMobileToken::SCOPE => 'Use the Snack mobile app',
+        ]);
+
         Passport::tokensExpireIn(now()->addHour());
         Passport::refreshTokensExpireIn(now()->addDays(90));
     }
@@ -125,6 +137,12 @@ class AppServiceProvider extends ServiceProvider
         Notification::extend(
             'database',
             fn (Application $app): WorkspaceDatabaseChannel => $app->make(WorkspaceDatabaseChannel::class),
+        );
+
+        // Mobile push — see PushChannel. Named so `via()` can say `push`.
+        Notification::extend(
+            'push',
+            fn (Application $app): PushChannel => $app->make(PushChannel::class),
         );
     }
 

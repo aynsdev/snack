@@ -6,6 +6,7 @@ use App\Enums\NotificationReason;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Notifications\Contracts\ScopedToWorkspace;
+use App\Notifications\Messages\PushMessage;
 use App\Services\NotificationDelivery;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -47,7 +48,26 @@ class MessageNotification extends Notification implements ScopedToWorkspace, Sho
         private readonly NotificationReason $reason,
         private readonly Workspace $workspace,
         private readonly array $payload,
+        private readonly bool $pushOnly = false,
     ) {}
+
+    /**
+     * The phone half of a message that was folded into an existing row.
+     *
+     * {@see App\Services\NotificationCoalescer} rewrites the inbox row in place
+     * rather than sending a second notification — right for the inbox, but the
+     * phone still has to buzz for the new line. This sends only that, carrying
+     * the existing row's id so tapping it marks the right row read.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public static function pushFor(NotificationReason $reason, Workspace $workspace, array $payload, string $notificationId): self
+    {
+        $notification = new self($reason, $workspace, $payload, pushOnly: true);
+        $notification->id = $notificationId;
+
+        return $notification;
+    }
 
     public function workspace(): Workspace
     {
@@ -90,10 +110,14 @@ class MessageNotification extends Notification implements ScopedToWorkspace, Sho
          * notification centre that only fills in while you are watching is not
          * a centre.
          */
-        $via = ['database', 'broadcast'];
+        $via = $this->pushOnly ? [] : ['database', 'broadcast'];
 
-        if ($notifiable instanceof User && $this->shouldMail($notifiable)) {
+        if (! $this->pushOnly && $notifiable instanceof User && $this->shouldMail($notifiable)) {
             $via[] = 'mail';
+        }
+
+        if ($notifiable instanceof User && $this->shouldPush($notifiable)) {
+            $via[] = 'push';
         }
 
         return $via;
@@ -154,6 +178,44 @@ class MessageNotification extends Notification implements ScopedToWorkspace, Sho
             ->line('"'.$this->preview().'"')
             ->action('Open '.$this->workspace->name, $this->url())
             ->line('You are getting this because you were away when it arrived. You can turn these off in your notification preferences.');
+    }
+
+    /**
+     * The lock-screen version: who and where as the title, what was said as
+     * the body, and enough data for the app to open the right conversation.
+     */
+    public function toPush(object $notifiable): PushMessage
+    {
+        $actor = (string) data_get($this->payload, 'actor.name', 'Someone');
+        $container = data_get($this->payload, 'container');
+        $where = $this->containerLabel();
+
+        return new PushMessage(
+            title: $where === null || $where === 'your conversation' ? $actor : "{$actor} in {$where}",
+            body: $this->reason === NotificationReason::DirectMessage
+                ? $this->preview()
+                : $this->reason->headline($actor).': '.$this->preview(),
+            data: [
+                'notification_id' => $this->id,
+                'reason' => $this->reason->value,
+                'workspace' => $this->workspace->slug,
+                'container_kind' => is_array($container) ? $container['kind'] : null,
+                'container' => is_array($container)
+                    ? ($container['kind'] === 'channel' ? $container['slug'] : $container['id'])
+                    : null,
+                'message_id' => data_get($this->payload, 'message_id'),
+                'thread_root_id' => data_get($this->payload, 'thread_root_id'),
+            ],
+            thread: is_array($container) ? $container['kind'].':'.$container['id'] : null,
+        );
+    }
+
+    private function shouldPush(User $notifiable): bool
+    {
+        return app(NotificationDelivery::class)->shouldPush(
+            $notifiable,
+            $notifiable->membershipIn($this->workspace),
+        );
     }
 
     private function shouldMail(User $notifiable): bool

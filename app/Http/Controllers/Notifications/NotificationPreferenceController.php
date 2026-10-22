@@ -131,6 +131,7 @@ class NotificationPreferenceController extends Controller
             emailEnabled: $request->boolean('email_enabled'),
             digestEnabled: $request->boolean('digest_enabled'),
             doNotDisturb: $request->doNotDisturb(),
+            pushEnabled: $request->pushEnabled(),
         );
 
         return back()->with('success', 'Notification preferences saved.');
