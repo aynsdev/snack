@@ -7,10 +7,9 @@ use App\Enums\AuditAction;
 use App\Models\OAuthToken;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Support\PersonalAccessClient;
 use Illuminate\Support\Facades\DB;
 use Laravel\Mcp\Server\Registrar;
-use Laravel\Passport\ClientRepository;
-use Laravel\Passport\Passport;
 use Laravel\Passport\PersonalAccessTokenResult;
 
 /**
@@ -30,7 +29,7 @@ class CreateConnectorToken
 {
     public function __construct(
         private readonly RecordAuditLog $audit,
-        private readonly ClientRepository $clients,
+        private readonly PersonalAccessClient $personalAccessClient,
     ) {}
 
     /**
@@ -38,7 +37,7 @@ class CreateConnectorToken
      */
     public function handle(Workspace $workspace, User $user, string $name): PersonalAccessTokenResult
     {
-        $this->ensurePersonalAccessClient();
+        $this->personalAccessClient->ensure();
 
         return DB::transaction(function () use ($workspace, $user, $name): PersonalAccessTokenResult {
             $issued = $user->createToken($name, [Registrar::OAUTH_SCOPE]);
@@ -62,23 +61,5 @@ class CreateConnectorToken
 
             return $issued;
         });
-    }
-
-    /**
-     * Passport issues personal tokens through a "personal access" client that
-     * has to exist first. Created on demand rather than left as a deploy step,
-     * because a forgotten `passport:client --personal` would surface as a 500
-     * on the one button this page has.
-     */
-    private function ensurePersonalAccessClient(): void
-    {
-        $exists = Passport::client()->newQuery()
-            ->where('revoked', false)
-            ->get()
-            ->contains(fn ($client): bool => $client->hasGrantType('personal_access'));
-
-        if (! $exists) {
-            $this->clients->createPersonalAccessGrantClient(config('app.name').' connectors');
-        }
     }
 }

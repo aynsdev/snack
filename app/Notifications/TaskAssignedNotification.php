@@ -3,8 +3,11 @@
 namespace App\Notifications;
 
 use App\Enums\NotificationReason;
+use App\Models\User;
 use App\Models\Workspace;
 use App\Notifications\Contracts\ScopedToWorkspace;
+use App\Notifications\Messages\PushMessage;
+use App\Services\NotificationDelivery;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\BroadcastMessage;
@@ -71,7 +74,31 @@ class TaskAssignedNotification extends Notification implements ScopedToWorkspace
      */
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast'];
+        $via = ['database', 'broadcast'];
+
+        if ($notifiable instanceof User && app(NotificationDelivery::class)->shouldPush($notifiable, $notifiable->membershipIn($this->workspace))) {
+            $via[] = 'push';
+        }
+
+        return $via;
+    }
+
+    public function toPush(object $notifiable): PushMessage
+    {
+        $actor = (string) data_get($this->payload, 'actor.name', 'Someone');
+        $reference = (string) data_get($this->payload, 'task.reference', '');
+
+        return new PushMessage(
+            title: "{$actor} assigned you {$reference}",
+            body: (string) data_get($this->payload, 'task.title', ''),
+            data: [
+                'notification_id' => $this->id,
+                'reason' => NotificationReason::TaskAssigned->value,
+                'workspace' => $this->workspace->slug,
+                'project' => data_get($this->payload, 'task.project_slug'),
+                'task' => $reference,
+            ],
+        );
     }
 
     /**

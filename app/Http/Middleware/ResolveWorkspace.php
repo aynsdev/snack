@@ -48,8 +48,11 @@ class ResolveWorkspace
         $this->context->set($workspace, $membership);
 
         // Remember where the user was so a bare "/" can send them back to the
-        // workspace they were last using.
-        $request->session()->put('snack.current_workspace', $workspace->slug);
+        // workspace they were last using. The mobile API is sessionless — the
+        // app keeps track of its own workspace.
+        if ($request->hasSession()) {
+            $request->session()->put('snack.current_workspace', $workspace->slug);
+        }
 
         return $next($request);
     }

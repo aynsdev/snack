@@ -176,6 +176,15 @@ class WorkspaceMember extends Pivot
     }
 
     /**
+     * Whether to push to this member's phones about things they missed while
+     * away. Opt-out, for the reason email is.
+     */
+    public function wantsPushNotifications(): bool
+    {
+        return (bool) data_get($this->notification_preferences, 'push.enabled', true);
+    }
+
+    /**
      * Whether to include this member in the daily digest.
      *
      * Off by default, unlike the per-event email: a digest is a summary nobody
@@ -195,13 +204,14 @@ class WorkspaceMember extends Pivot
      * path agree on what the JSON column is allowed to contain — a jsonb column
      * with no schema will otherwise accumulate keys nothing reads.
      *
-     * @return array{default_level: string, email_enabled: bool, digest_enabled: bool, do_not_disturb: array{start: string, end: string}|null}
+     * @return array{default_level: string, email_enabled: bool, push_enabled: bool, digest_enabled: bool, do_not_disturb: array{start: string, end: string}|null}
      */
     public function notificationSettings(): array
     {
         return [
             'default_level' => $this->defaultNotificationLevel()->value,
             'email_enabled' => $this->wantsEmailNotifications(),
+            'push_enabled' => $this->wantsPushNotifications(),
             'digest_enabled' => $this->wantsDailyDigest(),
             'do_not_disturb' => $this->doNotDisturbSchedule(),
         ];

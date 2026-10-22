@@ -47,6 +47,42 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Expo push
+    |--------------------------------------------------------------------------
+    |
+    | Push notifications to the Snack mobile app, which is built with Expo and
+    | registers Expo push tokens. Works without configuration — Expo holds the
+    | FCM and APNs credentials uploaded with EAS. The access token is needed
+    | only if the Expo project enables enhanced push security.
+    | See App\Services\Push\ExpoPush.
+    |
+    */
+
+    'expo' => [
+        'access_token' => env('EXPO_ACCESS_TOKEN'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Firebase Cloud Messaging
+    |--------------------------------------------------------------------------
+    |
+    | Push straight to FCM (HTTP v1), for clients that register a raw FCM
+    | registration token instead of an Expo push token. The
+    | credentials are a Firebase service account: either the path to its JSON
+    | key file or the JSON itself, for hosts that only take environment
+    | variables. Unset is not an error — no push is attempted and everything
+    | else about notifications carries on. See App\Services\Push\FirebaseMessaging.
+    |
+    */
+
+    'fcm' => [
+        'project_id' => env('FCM_PROJECT_ID'),
+        'credentials' => env('FCM_CREDENTIALS'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Magnific
     |--------------------------------------------------------------------------
     |

@@ -1,0 +1,49 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1\Hr;
+
+use App\Enums\LeaveStatus;
+use App\Http\Controllers\Controller;
+use App\Http\Resources\Hr\LeaveRequestResource;
+use App\Models\Employee;
+use App\Models\Workspace;
+use App\Services\Hr\HrDashboardStats;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+/**
+ * HR's own dashboard: the workforce at a glance and everything waiting on HR.
+ * People managers only — everybody else has the HR home.
+ */
+class HrAnalyticsController extends Controller
+{
+    public function index(Workspace $workspace, Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', [Employee::class, $workspace]);
+
+        $stats = new HrDashboardStats($workspace);
+
+        return response()->json(['data' => [
+            'kpis' => $stats->kpis(),
+            'departments' => $stats->departments(),
+            'employment_types' => $stats->employmentTypes(),
+            'movement' => $stats->movement(),
+            'attendance' => $stats->attendance(),
+            'leave_by_type' => $stats->leaveByType(),
+            'out_this_week' => $stats->outThisWeek(),
+            'celebrations' => $stats->celebrations(),
+            'expiring_contracts' => $stats->expiringContracts(),
+            'pending_requests' => $stats->pendingRequests(),
+            'late_arrivals' => $stats->lateArrivals(),
+            'checklists' => $stats->checklistsInProgress(),
+            'pending_leave' => LeaveRequestResource::collection(
+                $workspace->leaveRequests()
+                    ->where('status', LeaveStatus::Pending)
+                    ->with(['employee.user', 'leaveType', 'reviewer', 'workspace'])
+                    ->orderBy('starts_on')
+                    ->limit(10)
+                    ->get(),
+            )->resolve($request),
+        ]]);
+    }
+}

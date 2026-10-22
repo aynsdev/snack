@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Api\IssueMobileToken;
 use App\Actions\Connectors\CreateConnectorToken;
 use App\Actions\Projects\CreateProject;
 use App\Enums\ChannelRole;
@@ -380,4 +381,19 @@ function connectAs(User $user, Workspace $workspace): array
 function mcpCall(string $method, array $params = []): array
 {
     return ['jsonrpc' => '2.0', 'id' => 1, 'method' => $method, 'params' => $params];
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mobile API
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * A mobile app bearer token for this person — what `POST /api/v1/auth/token`
+ * hands back. Use with `$this->withToken(mobileToken($user))`.
+ */
+function mobileToken(User $user): string
+{
+    return app(IssueMobileToken::class)->handle($user, 'Test phone')->accessToken;
 }

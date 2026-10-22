@@ -188,6 +188,8 @@ class NotificationCoalescer
         // Setting it is what makes this an update rather than a second arrival.
         $notification->id = $row->id;
 
+        $user->notify(MessageNotification::pushFor($reason, $workspace, $data, $row->id));
+
         event(new BroadcastNotificationCreated($user, $notification, [
             ...$data,
             'is_read' => false,

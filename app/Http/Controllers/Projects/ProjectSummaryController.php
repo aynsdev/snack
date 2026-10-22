@@ -67,7 +67,7 @@ class ProjectSummaryController extends Controller
      *
      * @return array<string, int>
      */
-    private function recentCounts(Project $project): array
+    protected function recentCounts(Project $project): array
     {
         $since = now()->subDays(self::WINDOW_DAYS);
         $soon = now()->addDays(self::WINDOW_DAYS);
@@ -108,7 +108,7 @@ class ProjectSummaryController extends Controller
      *
      * @return array<int, array<string, mixed>>
      */
-    private function byStatus(Project $project): array
+    protected function byStatus(Project $project): array
     {
         $counts = $project->tasks()
             ->toBase()
@@ -129,7 +129,7 @@ class ProjectSummaryController extends Controller
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function byPriority(Project $project): array
+    protected function byPriority(Project $project): array
     {
         $counts = $project->tasks()
             ->toBase()
@@ -151,7 +151,7 @@ class ProjectSummaryController extends Controller
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function byType(Project $project): array
+    protected function byType(Project $project): array
     {
         $counts = $project->tasks()
             ->toBase()
@@ -178,7 +178,7 @@ class ProjectSummaryController extends Controller
      *
      * @return array<int, array<string, mixed>>
      */
-    private function activity(Project $project): array
+    protected function activity(Project $project): array
     {
         return $project->tasks()
             ->with(['assignee', 'column'])
