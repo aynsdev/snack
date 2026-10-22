@@ -144,8 +144,13 @@ export function BoardColumnView({
             </header>
 
             <div
-                className="snack-scroll min-h-24 flex-1 overflow-y-auto px-2 pb-2"
+                className="snack-scroll min-h-24 flex-1 overflow-y-auto overscroll-x-auto px-2 pb-2"
                 /*
+                 * `overscroll-x-auto` hands sideways scrolling back to the board.
+                 * `snack-scroll` contains overscroll on both axes, and since an
+                 * `overflow-y` scroller is a scroll container sideways too, a
+                 * horizontal swipe over a column otherwise stopped dead inside it.
+                 *
                  * The column itself is a drop target as well as the seams, so a
                  * card released over empty space below the last one still lands
                  * — at the end, which is where it looks like it is going.
