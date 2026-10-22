@@ -140,4 +140,16 @@ describe('BoardColumnView', () => {
         expect(screen.queryByText('Column options')).toBeNull();
         expect(screen.getByRole('heading')).toHaveTextContent('In progress');
     });
+
+    it('lets a sideways scroll over its cards reach the board', () => {
+        renderColumn(false);
+
+        // `snack-scroll` contains overscroll on both axes; the column only
+        // means to keep its vertical scroll to itself.
+        const cards = screen
+            .getByRole('region', { name: 'In progress' })
+            .querySelector('.overflow-y-auto');
+
+        expect(cards).toHaveClass('overscroll-x-auto');
+    });
 });
