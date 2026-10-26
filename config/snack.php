@@ -861,6 +861,21 @@ return [
             'port' => (int) env('VITE_REVERB_PORT', env('REVERB_PORT', 443)),
             'scheme' => env('VITE_REVERB_SCHEME', env('REVERB_SCHEME', 'https')),
         ],
+
+        /*
+         * The sign-in handed to App Store and Play Store reviewers, written by
+         * `php artisan db:seed --class=AppReviewSeeder --force`. The account is
+         * a member of its own demo workspace — `workspace` is that workspace's
+         * slug — filled with made-up colleagues and conversation, so a reviewer
+         * can try everything without being anywhere near a real team.
+         */
+        'app_review' => [
+            'name' => env('SNACK_APP_REVIEW_NAME', 'App Review'),
+            'email' => env('SNACK_APP_REVIEW_EMAIL', 'appreview@pedi.ph'),
+            'username' => env('SNACK_APP_REVIEW_USERNAME', 'appreview'),
+            'password' => env('SNACK_APP_REVIEW_PASSWORD'),
+            'workspace' => env('SNACK_APP_REVIEW_WORKSPACE', 'snack-demo'),
+        ],
     ],
 
 ];
