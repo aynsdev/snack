@@ -6,7 +6,10 @@ use App\Actions\Audit\RecordAuditLog;
 use App\Enums\AuditAction;
 use App\Enums\ChannelType;
 use App\Models\Channel;
+use App\Models\Project;
 use App\Models\User;
+use App\Services\Outbound\AgentSettingsEvents;
+use App\Services\Outbound\OutboundEvents;
 use App\Services\SlugGenerator;
 
 /**
@@ -36,12 +39,41 @@ class UpdateChannel
     public function __construct(
         private readonly SlugGenerator $slugs,
         private readonly RecordAuditLog $audit,
+        private readonly AgentSettingsEvents $agentSettings,
+        private readonly OutboundEvents $events,
     ) {}
 
     /**
      * @param  array{name?: string, description?: string|null, topic?: string|null, type?: ChannelType}  $attributes
      */
     public function handle(Channel $channel, User $actor, array $attributes): Channel
+    {
+        /*
+         * Read again under the workspace lock, and the edit applied to that
+         * read: another edit committed while this one waited must not be
+         * undone by it, nor described wrongly in the audit log or to the
+         * agent dispatcher.
+         */
+        $fresh = $this->events->transaction([$channel->workspace_id], function () use ($channel, $actor, $attributes): Channel {
+            $fresh = Channel::query()->lock('for no key update')->findOrFail($channel->id);
+            $fresh->setRelation('workspace', $channel->workspace);
+
+            $this->apply($fresh, $actor, $attributes);
+
+            return $fresh;
+        });
+
+        // The caller's instance is brought up to date rather than replaced, so
+        // anything it already holds — loaded relations, a route binding — stays.
+        $channel->setRawAttributes($fresh->getAttributes(), sync: true);
+
+        return $channel;
+    }
+
+    /**
+     * @param  array{name?: string, description?: string|null, topic?: string|null, type?: ChannelType}  $attributes
+     */
+    private function apply(Channel $channel, User $actor, array $attributes): void
     {
         $before = $this->snapshot($channel);
 
@@ -70,23 +102,40 @@ class UpdateChannel
          * readable.
          */
         if (! $channel->isDirty()) {
-            return $channel;
+            return;
         }
 
-        $channel->save();
+        $save = function (array $projectIds) use ($channel, $actor, $before): void {
+            $channel->save();
 
-        $this->audit->handle(
-            workspace: $channel->workspace,
-            action: AuditAction::ChannelUpdated,
-            actor: $actor,
-            auditable: $channel,
-            // Both sides, because "who renamed #general and what was it called
-            // before?" is the question this entry exists to answer.
-            oldValues: $before,
-            newValues: $this->snapshot($channel),
-        );
+            /*
+             * An announcement channel is one only admins may post in, so it can
+             * no longer hold an agent's threads: projects using it lose it, the
+             * same as if a lead had cleared the setting.
+             */
+            if ($channel->type === ChannelType::Announcement && $projectIds !== []) {
+                Project::query()->whereKey($projectIds)->update(['agent_channel_id' => null]);
+            }
 
-        return $channel;
+            $this->audit->handle(
+                workspace: $channel->workspace,
+                action: AuditAction::ChannelUpdated,
+                actor: $actor,
+                auditable: $channel,
+                // Both sides, because "who renamed #general and what was it called
+                // before?" is the question this entry exists to answer.
+                oldValues: $before,
+                newValues: $this->snapshot($channel),
+            );
+        };
+
+        // A rename, or a change of who can see or post in it, changes what
+        // agents using this channel can do — see AgentSettingsEvents.
+        if ($channel->isDirty(['name', 'type'])) {
+            $this->agentSettings->aroundChannelChange($channel, $save, visibility: $channel->isDirty('type'), actor: $actor);
+        } else {
+            $save([]);
+        }
     }
 
     /**

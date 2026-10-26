@@ -1,17 +1,19 @@
 import { Bell, BellOff, Loader2 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { MentionSource } from '@/components/snack/mention-picker';
 import { MessageComposer } from '@/components/snack/message-composer';
 import {
     MessageItem,
     PendingMessageItem,
 } from '@/components/snack/message-item';
+import { PlanActions } from '@/components/snack/plan-actions';
 import { RightPanel } from '@/components/snack/right-panel';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBiteReplying } from '@/hooks/use-bite-replying';
 import { useThread } from '@/hooks/use-thread';
 import { channels } from '@/lib/echo';
 import { continuesGroup, pendingContinuesGroup } from '@/lib/message-grouping';
+import { actionablePlanId } from '@/lib/plan-actions';
 import { cn } from '@/lib/utils';
 import type { ReactionGroup, SnackUser } from '@/types';
 
@@ -65,6 +67,19 @@ export function ThreadPanel({
         channelName: channels.thread(rootId),
         visibility: 'private',
     });
+
+    const viewerId = currentUser?.id ?? null;
+    const { replies, reply: sendReply } = thread;
+
+    const planId = useMemo(
+        () => (canPost ? actionablePlanId(replies, viewerId) : null),
+        [canPost, replies, viewerId],
+    );
+
+    const sendDecision = useCallback(
+        (body: string) => sendReply(body),
+        [sendReply],
+    );
 
     const scroller = useRef<HTMLDivElement>(null);
     const atBottom = useRef(true);
@@ -121,7 +136,11 @@ export function ThreadPanel({
     };
 
     return (
-        <RightPanel title="Thread" onClose={onClose}>
+        <RightPanel
+            title="Thread"
+            onClose={onClose}
+            resizeKey={`thread:${currentUser?.id ?? 'guest'}`}
+        >
             <div className="flex h-full min-h-0 flex-col">
                 <div
                     ref={scroller}
@@ -185,6 +204,14 @@ export function ThreadPanel({
                                         onDelete={thread.remove}
                                         onReact={onReact}
                                         currentUserId={currentUser?.id ?? null}
+                                        footer={
+                                            reply.id === planId ? (
+                                                <PlanActions
+                                                    key={reply.id}
+                                                    onSend={sendDecision}
+                                                />
+                                            ) : undefined
+                                        }
                                     />
                                 ))}
 

@@ -3,10 +3,12 @@
 namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\ResolvesProjectWork;
+use App\Mcp\Tools\Concerns\ScopesAgentReads;
 use App\Models\MessageAttachment;
 use App\Models\Task;
 use App\Models\TaskComment;
 use App\Models\TaskLink;
+use App\Support\OneLine;
 use App\Support\TaskRelations;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -34,6 +36,7 @@ TEXT)]
 class GetTaskTool extends SnackTool
 {
     use ResolvesProjectWork;
+    use ScopesAgentReads;
 
     /**
      * Comments returned at most. A card with more than this is a meeting, and
@@ -43,10 +46,10 @@ class GetTaskTool extends SnackTool
 
     public function handle(Request $request): Response
     {
-        $context = $this->context($request);
+        $context = $this->readContext($request);
 
-        if ($context === null) {
-            return $this->unauthorized();
+        if ($context instanceof Response) {
+            return $context;
         }
 
         $task = $this->task($context, $request->get('task'));
@@ -64,7 +67,7 @@ class GetTaskTool extends SnackTool
             'Assignee' => $task->assignee !== null ? "{$task->assignee->name} (@{$task->assignee->username})" : 'unassigned',
             'Reporter' => $task->reporter?->name,
             'Sprint' => $task->sprint_id !== null ? $task->sprint->name : ($task->project->uses_sprints ? 'backlog' : null),
-            'Parent' => $task->epic !== null ? $task->project->reference($task->epic->number).' '.$task->epic->title : null,
+            'Parent' => $task->epic !== null ? $task->project->reference($task->epic->number).' '.OneLine::clean($task->epic->title) : null,
             'Release' => $task->release?->name,
             'Story points' => $task->story_points,
             'Due' => $task->due_on?->toFormattedDateString(),
@@ -130,7 +133,9 @@ class GetTaskTool extends SnackTool
         );
 
         $sections = [
-            "{$task->reference()} — {$task->title}",
+            // Flattened here as well as on save: the lines below are read as
+            // "Key: value" fields, and a title saved before that must not add one.
+            $task->reference().' — '.OneLine::clean($task->title),
             collect($fields)->map(fn (mixed $value, string $label): string => "{$label}: {$value}")->implode("\n"),
             "Description:\n".($task->description !== null && trim($task->description) !== '' ? trim($task->description) : '(none)'),
             $subtasks !== '' ? "{$subtaskHeading}:\n{$subtasks}" : null,

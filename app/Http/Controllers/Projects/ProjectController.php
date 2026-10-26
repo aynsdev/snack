@@ -12,8 +12,11 @@ use App\Http\Requests\Projects\UpdateProjectRequest;
 use App\Http\Resources\ProjectGroupResource;
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\UserResource;
+use App\Models\BoardColumn;
+use App\Models\Channel;
 use App\Models\Project;
 use App\Models\ProjectGroup;
+use App\Models\User;
 use App\Models\Workspace;
 use App\Services\ProjectBoard;
 use Illuminate\Http\RedirectResponse;
@@ -129,6 +132,8 @@ class ProjectController extends Controller
     {
         $this->authorize('view', $project);
 
+        $canManage = $request->user()->can('update', $project);
+
         return Inertia::render('projects/settings', [
             'project' => (new ProjectResource($project->loadCount(['members', 'tasks'])))->resolve($request),
 
@@ -149,7 +154,22 @@ class ProjectController extends Controller
                     'color' => $label->color,
                 ])
                 ->all(),
-            'canManage' => $request->user()->can('update', $project),
+            'canManage' => $canManage,
+
+            /*
+             * What the Agents section offers: the channels this viewer could
+             * point the project's agents at, and the project's own columns.
+             * Only channels they can see — choosing one decides which
+             * conversations leave Snack, and nobody may choose one they were
+             * never in. See UpdateProjectRequest, which enforces the same.
+             * Empty for anyone who cannot change them; the section is a lead's.
+             */
+            'agentChannels' => $canManage ? $this->agentChannels($workspace, $project, $request) : [],
+            'columns' => $canManage
+                ? $project->columns()->ordered()->get(['id', 'name'])
+                    ->map(fn (BoardColumn $column): array => ['id' => $column->id, 'name' => $column->name])
+                    ->all()
+                : [],
 
             // Who can still be added: everyone in the workspace who is not
             // already on the project. Deferred because the settings page opens
@@ -175,8 +195,8 @@ class ProjectController extends Controller
             project: $project,
             actor: $request->user(),
             attributes: $request->safe()->only([
-                'name', 'key', 'description', 'color', 'uses_sprints', 'card_fields',
-                'next_task_number',
+                'name', 'key', 'description', 'repository_url', 'repository_base_branch', 'color', 'uses_sprints', 'card_fields',
+                'next_task_number', ...Project::AGENT_SETTINGS,
             ]),
         );
 
@@ -246,6 +266,27 @@ class ProjectController extends Controller
         $setArchived->handle($project, $request->user(), archived: false);
 
         return back()->with('success', "{$project->name} restored.");
+    }
+
+    /**
+     * @return array<int, array{id: int, name: string}>
+     */
+    private function agentChannels(Workspace $workspace, Project $project, Request $request): array
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $role = $user->roleIn($workspace);
+
+        if ($role === null) {
+            return [];
+        }
+
+        return $workspace->channels()
+            ->choosableAsAgentChannel($user, $role)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (Channel $channel): array => ['id' => $channel->id, 'name' => $channel->name])
+            ->all();
     }
 
     /**

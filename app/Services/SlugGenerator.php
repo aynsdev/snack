@@ -137,7 +137,8 @@ class SlugGenerator
     {
         return $this->unique(
             base: $this->normalize($name, fallback: 'member'),
-            isTaken: fn (string $slug): bool => User::query()->where('username', $slug)->exists(),
+            isTaken: fn (string $slug): bool => in_array($slug, config('snack.users.reserved_usernames', []), true)
+                || User::query()->where('username', $slug)->exists(),
         );
     }
 

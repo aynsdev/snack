@@ -46,6 +46,10 @@ class TaskCommentPolicy
             return $contribute;
         }
 
+        if ($comment->agent !== null) {
+            return Response::deny('A comment an agent wrote cannot be edited.');
+        }
+
         return $comment->author_id === $user->id
             ? Response::allow()
             : Response::deny('Only the person who wrote a comment can edit it.');

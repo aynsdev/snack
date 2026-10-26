@@ -59,10 +59,13 @@ final readonly class MessageBody
             // Normalize CRLF/CR to LF so a Windows composer and a Mac one
             // produce byte-identical rows for the same message.
             ->replace(["\r\n", "\r"], "\n")
-            // Strip C0 control characters except tab and newline, then the
+            // Strip C0 control characters except tab and newline, the other
+            // line breaks (NEL, line and paragraph separators) that would let a
+            // body forge the next line of a thread read as text, then the
             // zero-width and bidirectional-override characters that can make a
             // message render differently from what it actually contains.
             ->replaceMatches('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '')
+            ->replaceMatches('/[\x{0085}\x{2028}\x{2029}]/u', '')
             ->replaceMatches('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}\x{FEFF}]/u', '')
             // Three or more consecutive newlines collapse to one blank line.
             ->replaceMatches('/\n{3,}/', "\n\n")

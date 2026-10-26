@@ -5,6 +5,7 @@ namespace App\Actions\Projects;
 use App\Actions\Audit\RecordAuditLog;
 use App\Enums\AuditAction;
 use App\Events\BoardChanged;
+use App\Models\Project;
 use App\Models\Sprint;
 use App\Models\Task;
 use App\Models\User;
@@ -54,6 +55,15 @@ class CompleteSprint
             : $project->sprints()->open()->whereKeyNot($sprint->id)->whereKey($moveToSprintId)->first();
 
         $result = DB::transaction(function () use ($sprint, $project, $destination): array {
+            /*
+             * The project row, then the sprint's cards in id order, before the
+             * bulk update below takes them in whatever order it meets them —
+             * the order every change that reports to the agent dispatcher
+             * locks in (see App\Services\Outbound\OutboundEvents).
+             */
+            Project::query()->whereKey($project->id)->lock('for no key update')->first();
+            Task::query()->where('sprint_id', $sprint->id)->orderBy('id')->lockForUpdate()->pluck('id');
+
             $doneColumnIds = $project->columns()->where('category', 'done')->pluck('id')->all();
 
             $completed = Task::query()

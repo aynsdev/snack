@@ -29,6 +29,9 @@ class TaskCommentResource extends JsonResource
             'id' => $this->id,
             'body' => $this->body,
             'edited_at' => $this->edited_at?->toIso8601String(),
+
+            // Only the connector's name, as on messages: which token is the owner's business.
+            'agent' => is_array($this->agent) ? ['name' => (string) ($this->agent['name'] ?? '')] : null,
             'created_at' => $this->created_at?->toIso8601String(),
 
             'author' => $this->author === null

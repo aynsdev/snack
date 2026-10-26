@@ -254,6 +254,51 @@ describe('useThread', () => {
         expect(result.current.root?.reply_count).toBe(2);
     });
 
+    it('applies an edit to the root without listing it as a reply', async () => {
+        const { result } = mount();
+
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        act(() => {
+            listeners.get('.message.updated')?.({
+                message: makeMessage(10, {
+                    body: 'Status: planning',
+                    is_edited: true,
+                    reply_count: 1,
+                    can: undefined,
+                }),
+            });
+        });
+
+        expect(result.current.root?.body).toBe('Status: planning');
+        expect(result.current.root?.can).toEqual({
+            update: true,
+            delete: true,
+            pin: true,
+        });
+        expect(result.current.replies.map((reply) => reply.id)).toEqual([11]);
+        expect(result.current.root?.reply_count).toBe(1);
+    });
+
+    it('applies an edit to a reply in place', async () => {
+        const { result } = mount();
+
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        act(() => {
+            listeners.get('.message.updated')?.({
+                message: makeMessage(11, {
+                    parent_message_id: 10,
+                    body: 'Plan v2',
+                }),
+            });
+        });
+
+        expect(result.current.replies.map((reply) => reply.body)).toEqual([
+            'Plan v2',
+        ]);
+    });
+
     it('does not count an edit as a new reply', async () => {
         const { result } = mount();
 

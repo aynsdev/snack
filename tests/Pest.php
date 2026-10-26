@@ -6,7 +6,9 @@ use App\Actions\Projects\CreateProject;
 use App\Enums\ChannelRole;
 use App\Enums\ChannelType;
 use App\Enums\ColumnCategory;
+use App\Enums\ConnectorKind;
 use App\Enums\MemberStatus;
+use App\Enums\OutboundEventType;
 use App\Enums\ProjectRole;
 use App\Enums\WorkspaceRole;
 use App\Events\BiteReplying;
@@ -37,12 +39,15 @@ use App\Models\ChannelMember;
 use App\Models\Conversation;
 use App\Models\Huddle;
 use App\Models\Message;
+use App\Models\OutboundEvent;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
+use App\Services\Outbound\OutboundEvents;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\Events\BroadcastNotificationCreated;
 use Illuminate\Support\Facades\Event;
@@ -357,9 +362,9 @@ function makeHuddle(Channel|Conversation $container, array $participants = []): 
  *
  * @return array{0: User, 1: string}
  */
-function connectAs(User $user, Workspace $workspace): array
+function connectAs(User $user, Workspace $workspace, ConnectorKind $kind = ConnectorKind::Token): array
 {
-    $issued = app(CreateConnectorToken::class)->handle($workspace, $user, 'Test client');
+    $issued = app(CreateConnectorToken::class)->handle($workspace, $user, 'Test client', $kind);
     $token = $issued->getToken();
 
     $user->withAccessToken(new AccessToken([
@@ -396,4 +401,79 @@ function mcpCall(string $method, array $params = []): array
 function mobileToken(User $user): string
 {
     return app(IssueMobileToken::class)->handle($user, 'Test phone')->accessToken;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Agents
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * Point the outbox at a dispatcher, which turns event recording on.
+ *
+ * Off by default (phpunit.xml blanks both settings), so only a test that asks
+ * for it ever writes an outbound event. With the sync queue a recorded event is
+ * delivered the moment its transaction commits, so a test that turns this on
+ * fakes the HTTP call or the queue as well.
+ */
+function enableAgentDispatcher(string $url = 'https://dispatcher.test/events', ?string $secret = null): void
+{
+    $secret ??= dispatcherSecret();
+
+    config([
+        'snack.agents.dispatcher_url' => $url,
+        'snack.agents.dispatcher_secret' => $secret,
+    ]);
+}
+
+/**
+ * A secret strong enough for the dispatcher to accept — see
+ * App\Support\SharedSecret: 32 random-looking bytes, base64.
+ */
+function dispatcherSecret(): string
+{
+    return 'q3J8vN1xR0ZtYwBc5kLmP2sDf9GhUe7Ai4oTn6KbXyE=';
+}
+
+/**
+ * A project whose agents talk in the given channel.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function makeAgentProject(Workspace $workspace, User $lead, Channel $channel, array $attributes = []): Project
+{
+    $project = makeProject($workspace, $lead, $attributes);
+    $project->forceFill(['agent_channel_id' => $channel->id])->save();
+
+    return $project;
+}
+
+/**
+ * The outbox, oldest first, optionally narrowed to one type.
+ *
+ * @return EloquentCollection<int, OutboundEvent>
+ */
+function outboundEvents(?OutboundEventType $type = null): EloquentCollection
+{
+    return OutboundEvent::query()
+        ->when($type !== null, fn ($query) => $query->where('type', $type))
+        ->orderBy('id')
+        ->get();
+}
+
+/**
+ * Record one event the way a change does — in its own outbound transaction —
+ * and hand back the row it wrote, or null when nothing was written.
+ *
+ * @param  array<string, mixed>  $data
+ */
+function recordOutboundEvent(Workspace $workspace, array $data = ['probe' => true], OutboundEventType $type = OutboundEventType::ProjectAgentSettingsChanged): ?OutboundEvent
+{
+    $events = app(OutboundEvents::class);
+    $before = OutboundEvent::query()->max('id');
+
+    $events->transaction([$workspace->id], fn () => $events->record($type, $workspace, $data));
+
+    return OutboundEvent::query()->where('id', '>', $before ?? 0)->orderByDesc('id')->first();
 }

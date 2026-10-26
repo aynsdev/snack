@@ -26,6 +26,7 @@ class ProjectResource extends JsonResource
     public function toArray(Request $request): array
     {
         $user = $request->user();
+        $canManage = $user?->can('update', $this->resource) ?? false;
 
         return [
             'id' => $this->id,
@@ -33,6 +34,8 @@ class ProjectResource extends JsonResource
             'slug' => $this->slug,
             'key' => $this->key,
             'description' => $this->description,
+            'repository_url' => $this->repository_url,
+            'repository_base_branch' => $this->repository_base_branch,
             'color' => $this->color,
             'uses_sprints' => $this->uses_sprints,
             'is_archived' => $this->is_archived,
@@ -51,6 +54,19 @@ class ProjectResource extends JsonResource
             // project has ever opened its settings — see Project::cardFields().
             'card_fields' => $this->cardFields(),
 
+            /*
+             * Where the project's agents talk and which columns they use. Only
+             * for someone who can change them: which channel a project exports
+             * to the agent dispatcher is the leads' business, not every reader's.
+             */
+            'agent_channel_id' => $this->when($canManage, fn (): ?int => $this->agent_channel_id),
+            'agent_in_progress_column_id' => $this->when($canManage, fn (): ?int => $this->agent_in_progress_column_id),
+            'agent_review_column_id' => $this->when($canManage, fn (): ?int => $this->agent_review_column_id),
+
+            // Whether the task panel offers its agent controls. Says only that
+            // agents are on, not where they talk.
+            'agents_enabled' => $this->agent_channel_id !== null && $this->agentsEnabled(),
+
             'member_count' => $this->whenCounted('members'),
             'task_count' => $this->whenCounted('tasks'),
             'is_member' => $user !== null && $this->hasMember($user),
@@ -62,7 +78,7 @@ class ProjectResource extends JsonResource
 
             'abilities' => [
                 'contribute' => $user?->can('contribute', $this->resource) ?? false,
-                'manage' => $user?->can('update', $this->resource) ?? false,
+                'manage' => $canManage,
 
                 /*
                  * Whether this person can put themselves on the project, or

@@ -28,6 +28,19 @@ class TaskLabel extends Model
     use HasFactory;
 
     /**
+     * The label the agent dispatcher looks for. It only starts work when the
+     * assignee put it on, so the panel adds it only for the assignee.
+     */
+    public const AGENT = 'agent';
+
+    /**
+     * Somebody asked for the assignee's agent; the assignee starts it.
+     */
+    public const AGENT_REQUESTED = 'agent-requested';
+
+    public const RESERVED = [self::AGENT, self::AGENT_REQUESTED];
+
+    /**
      * @return BelongsTo<Project, $this>
      */
     public function project(): BelongsTo

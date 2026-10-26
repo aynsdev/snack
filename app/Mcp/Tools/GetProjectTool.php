@@ -3,9 +3,14 @@
 namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\ResolvesProjectWork;
+use App\Mcp\Tools\Concerns\ScopesAgentReads;
 use App\Models\BoardColumn;
+use App\Models\Project;
 use App\Models\ProjectMember;
+use App\Models\User;
+use App\Support\OneLine;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Facades\Gate;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -30,13 +35,14 @@ TEXT)]
 class GetProjectTool extends SnackTool
 {
     use ResolvesProjectWork;
+    use ScopesAgentReads;
 
     public function handle(Request $request): Response
     {
-        $context = $this->context($request);
+        $context = $this->readContext($request);
 
-        if ($context === null) {
-            return $this->unauthorized();
+        if ($context instanceof Response) {
+            return $context;
         }
 
         $project = $this->project($context, $request->get('project'));
@@ -81,9 +87,34 @@ class GetProjectTool extends SnackTool
             "Columns on the board:\n{$columns}",
             'Members: '.($members !== '' ? $members : 'none'),
             $labels !== '' ? "Labels: {$labels}" : null,
+            $this->agentSettings($project, $context->user),
         ]);
 
         return Response::text(implode("\n\n", $lines));
+    }
+
+    /**
+     * The project's agent settings as they take effect — off while the project
+     * or its channel is archived. The channel is named only to someone who can
+     * see it, and its absence is not remarked on to anyone else: "a channel
+     * you cannot see" would confirm that a private one exists.
+     */
+    private function agentSettings(Project $project, User $user): string
+    {
+        if (! $project->agentsEnabled()) {
+            return 'Agents: off';
+        }
+
+        $channel = $project->agentChannel;
+
+        if ($channel === null || Gate::forUser($user)->denies('view', $channel)) {
+            return 'Agents: on';
+        }
+
+        $inProgress = $project->agentInProgressColumn->name ?? 'not set';
+        $review = $project->agentReviewColumn->name ?? 'not set';
+
+        return 'Agents: #'.OneLine::clean($channel->name)." (in progress: {$inProgress}, review: {$review})";
     }
 
     /**

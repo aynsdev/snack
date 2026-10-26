@@ -7,6 +7,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Models\User;
 use App\Services\RegistrationGate;
 use App\Services\SlugGenerator;
+use App\Support\OneLine;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
@@ -38,6 +39,11 @@ class CreateNewUser implements CreatesNewUsers
             throw ValidationException::withMessages([
                 'email' => 'Registration is by invitation only.',
             ]);
+        }
+
+        // Cleaned before it is validated, for the reason ProfileUpdateRequest gives.
+        if (is_string($input['name'] ?? null)) {
+            $input['name'] = OneLine::clean($input['name']);
         }
 
         Validator::make($input, [

@@ -6,6 +6,7 @@ use App\Events\MessageUpdated;
 use App\Jobs\IndexMessage;
 use App\Models\Message;
 use App\Services\MessageBody;
+use App\Services\Outbound\AgentChannelMessages;
 
 /**
  * Rewrites a message's body.
@@ -16,7 +17,10 @@ use App\Services\MessageBody;
  */
 class UpdateMessage
 {
-    public function __construct(private readonly SyncMentions $mentions) {}
+    public function __construct(
+        private readonly SyncMentions $mentions,
+        private readonly AgentChannelMessages $agentChannels,
+    ) {}
 
     public function handle(Message $message, string $body): Message
     {
@@ -27,10 +31,31 @@ class UpdateMessage
             return $message;
         }
 
-        $message->forceFill([
-            ...$content->toAttributes(),
-            'edited_at' => now(),
-        ])->save();
+        // A transaction so the agent channel's outbox row commits with the edit
+        // it describes — see AgentChannelMessages.
+        $edited = $this->agentChannels->transaction($message->workspace_id, $message->channel_id, $this->agentChannels->reportable($message), function () use ($message, $content): bool {
+            /*
+             * Locked and read again: a message deleted since this request
+             * loaded it stays deleted. Saving the stale copy would write the
+             * new text onto the deleted row and send it to the dispatcher.
+             */
+            if (Message::query()->whereKey($message->id)->lockForUpdate()->doesntExist()) {
+                return false;
+            }
+
+            $message->forceFill([
+                ...$content->toAttributes(),
+                'edited_at' => now(),
+            ])->save();
+
+            $this->agentChannels->updated($message);
+
+            return true;
+        }, threadRootId: $message->threadRootId());
+
+        if (! $edited) {
+            return $message;
+        }
 
         /*
          * Re-synced rather than left alone: adding a handle in an edit has to
@@ -50,7 +75,7 @@ class UpdateMessage
         // it is rebuilt rather than patched.
         IndexMessage::dispatch($message->id);
 
-        MessageUpdated::dispatch($message);
+        MessageUpdated::dispatch($message->loadAgentTask());
 
         return $message;
     }

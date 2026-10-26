@@ -88,6 +88,11 @@ return [
         'reserved_names' => ['everyone', 'here', 'channel'],
     ],
 
+    // Handles that mean something other than a person when written as @name.
+    'users' => [
+        'reserved_usernames' => ['agent', 'everyone', 'here'],
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Conversations
@@ -861,6 +866,52 @@ return [
             'port' => (int) env('VITE_REVERB_PORT', env('REVERB_PORT', 443)),
             'scheme' => env('VITE_REVERB_SCHEME', env('REVERB_SCHEME', 'https')),
         ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Agents
+    |--------------------------------------------------------------------------
+    |
+    | The agent dispatcher that hands tickets to people's local coding agents.
+    | Snack sends it signed events — task eligibility changes, messages in
+    | project agent channels, agent settings changes — through a transactional
+    | outbox. See App\Services\Outbound\OutboundEvents.
+    |
+    | One fixed endpoint from the environment rather than anything configurable
+    | in the app: an admin-editable URL would be a way to make the server POST
+    | private channel contents anywhere.
+    |
+    | Off unless both are set. Nothing is recorded while it is off, so turning
+    | it on later does not replay history.
+    |
+    */
+
+    'agents' => [
+        // Must be https unless `allow_insecure` says otherwise; anything else
+        // leaves the feature off — see OutboundEvents::enabled().
+        'dispatcher_url' => env('SNACK_AGENT_DISPATCHER_URL'),
+        'dispatcher_secret' => env('SNACK_AGENT_DISPATCHER_SECRET'),
+
+        // Plain http, for a dispatcher on this machine during development. An
+        // explicit opt-in rather than inferred from APP_ENV, which a
+        // misconfigured server can claim to be anything.
+        'allow_insecure' => (bool) env('SNACK_AGENT_ALLOW_INSECURE', false),
+
+        /*
+         * How long a change that reports to the dispatcher waits for another
+         * one in the same workspace before giving up — see
+         * OutboundEvents::transaction(). A Postgres interval.
+         */
+        'lock_timeout' => '10s',
+
+        /*
+         * Deliveries run on their own queue so that a dispatcher outage — every
+         * event retrying, each waiting out its timeout — cannot hold the workers
+         * that broadcast messages and send notifications. A worker has to be
+         * listening on it: `queue:work --queue=default,outbound`.
+         */
+        'queue' => env('SNACK_AGENT_QUEUE', 'outbound'),
     ],
 
 ];

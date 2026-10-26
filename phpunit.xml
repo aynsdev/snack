@@ -76,10 +76,15 @@
         <env name="SPACES_SECRET" value=""/>
         <env name="SPACES_BUCKET" value=""/>
         <env name="SPACES_ENDPOINT" value=""/>
+        <!-- Blank, so no test can reach a real agent dispatcher, and the outbox
+             stays off unless a test turns it on for itself. -->
+        <env name="SNACK_AGENT_DISPATCHER_URL" value=""/>
+        <env name="SNACK_AGENT_DISPATCHER_SECRET" value=""/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="SNACK_AGENT_ALLOW_INSECURE" value="false"/>
     </php>
 </phpunit>

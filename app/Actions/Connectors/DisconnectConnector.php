@@ -4,10 +4,13 @@ namespace App\Actions\Connectors;
 
 use App\Actions\Audit\RecordAuditLog;
 use App\Enums\AuditAction;
+use App\Enums\ConnectorKind;
+use App\Enums\OutboundEventType;
 use App\Models\McpGrant;
 use App\Models\OAuthToken;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Outbound\OutboundEvents;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,11 +24,20 @@ use Illuminate\Support\Facades\DB;
  */
 class DisconnectConnector
 {
-    public function __construct(private readonly RecordAuditLog $audit) {}
+    public function __construct(
+        private readonly RecordAuditLog $audit,
+        private readonly OutboundEvents $events,
+    ) {}
 
     public function token(Workspace $workspace, OAuthToken $token, User $actor): void
     {
-        DB::transaction(function () use ($workspace, $token, $actor): void {
+        $this->events->transaction([$workspace->id], function () use ($workspace, $token, $actor): void {
+            // Read under the lock, so revoking a token twice records and
+            // reports it once.
+            if (OAuthToken::query()->lockForUpdate()->find($token->id)?->revoked !== false) {
+                return;
+            }
+
             $this->revoke($token);
 
             $this->audit->handle(
@@ -33,8 +45,17 @@ class DisconnectConnector
                 action: AuditAction::ConnectorRevoked,
                 actor: $actor,
                 // No subject row, for the reason given in CreateConnectorToken.
-                oldValues: ['name' => $token->name, 'kind' => 'token'],
+                oldValues: ['name' => $token->name, 'kind' => $token->connector_kind->value],
             );
+
+            // The dispatcher pairs an agent with its connector, and must stop
+            // routing work to one whose credential no longer opens anything.
+            if ($token->connector_kind === ConnectorKind::Agent && $token->user_id !== null) {
+                $this->events->record(OutboundEventType::AgentConnectorRevoked, $workspace, [
+                    'user_id' => $token->user_id,
+                    'connector_id' => $token->id,
+                ]);
+            }
         });
     }
 

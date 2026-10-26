@@ -151,7 +151,10 @@ class StoreUpload
     private function safeName(UploadedFile $file): string
     {
         $name = str($file->getClientOriginalName())
-            ->replaceMatches('/[\x00-\x1F\x7F]/u', '')
+            // Controls of both sets, the line and paragraph separators, and the
+            // invisible and direction-changing characters: a name is printed
+            // on one line beside a message, and must read as what it is.
+            ->replaceMatches('/[\x{0000}-\x{001F}\x{007F}-\x{009F}\x{2028}\x{2029}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}\x{FEFF}]/u', '')
             ->replace(['/', '\\'], '-')
             ->trim()
             ->limit(180, '')

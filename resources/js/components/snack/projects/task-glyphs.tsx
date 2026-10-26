@@ -1,5 +1,6 @@
 import {
     Bookmark,
+    Bot,
     Bug,
     ChevronDown,
     ChevronsDown,
@@ -10,6 +11,7 @@ import {
     SquareCheck,
     Zap,
 } from 'lucide-react';
+import type { AgentState } from '@/lib/agent-labels';
 import { cn } from '@/lib/utils';
 import type { TaskPriority, TaskType } from '@/types';
 
@@ -124,6 +126,21 @@ export function LabelChip({ name, color }: { name: string; color: string }) {
             )}
         >
             {name}
+        </span>
+    );
+}
+
+/** Stands in for the reserved `agent` / `agent-requested` labels. */
+export function AgentBadge({ state }: { state: AgentState }) {
+    return (
+        <span
+            className={cn(
+                'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[0.625rem] leading-none font-medium whitespace-nowrap',
+                state === 'active' ? LABEL_COLORS.violet : LABEL_COLORS.amber,
+            )}
+        >
+            <Bot aria-hidden="true" className="size-2.5 shrink-0" />
+            Agent · {state}
         </span>
     );
 }

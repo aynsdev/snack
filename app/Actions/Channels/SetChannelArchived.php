@@ -6,6 +6,7 @@ use App\Actions\Audit\RecordAuditLog;
 use App\Enums\AuditAction;
 use App\Models\Channel;
 use App\Models\User;
+use App\Services\Outbound\AgentSettingsEvents;
 
 /**
  * Archives or restores a channel.
@@ -28,7 +29,10 @@ use App\Models\User;
  */
 class SetChannelArchived
 {
-    public function __construct(private readonly RecordAuditLog $audit) {}
+    public function __construct(
+        private readonly RecordAuditLog $audit,
+        private readonly AgentSettingsEvents $agentSettings,
+    ) {}
 
     public function handle(Channel $channel, User $actor, bool $archived): Channel
     {
@@ -36,17 +40,20 @@ class SetChannelArchived
             return $channel;
         }
 
-        $channel->forceFill(['is_archived' => $archived])->save();
+        // A project's agents stop with their channel, and start again with it.
+        $this->agentSettings->aroundChannelChange($channel, function () use ($channel, $actor, $archived): void {
+            $channel->forceFill(['is_archived' => $archived])->save();
 
-        $this->audit->handle(
-            workspace: $channel->workspace,
-            action: $archived
-                ? AuditAction::ChannelArchived
-                : AuditAction::ChannelUnarchived,
-            actor: $actor,
-            auditable: $channel,
-            newValues: ['name' => $channel->name, 'slug' => $channel->slug],
-        );
+            $this->audit->handle(
+                workspace: $channel->workspace,
+                action: $archived
+                    ? AuditAction::ChannelArchived
+                    : AuditAction::ChannelUnarchived,
+                actor: $actor,
+                auditable: $channel,
+                newValues: ['name' => $channel->name, 'slug' => $channel->slug],
+            );
+        });
 
         return $channel;
     }

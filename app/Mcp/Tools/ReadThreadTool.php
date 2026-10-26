@@ -2,9 +2,10 @@
 
 namespace App\Mcp\Tools;
 
+use App\Mcp\Tools\Concerns\ScopesAgentReads;
 use App\Models\Message;
+use App\Support\OneLine;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Support\Facades\Gate;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -33,6 +34,8 @@ TEXT)]
 #[IsReadOnly]
 class ReadThreadTool extends SnackTool
 {
+    use ScopesAgentReads;
+
     /**
      * Replies returned at most. A thread longer than this is a meeting, and the
      * tail is the part most worth reading, so the newest are the ones kept.
@@ -41,10 +44,10 @@ class ReadThreadTool extends SnackTool
 
     public function handle(Request $request): Response
     {
-        $context = $this->context($request);
+        $context = $this->readContext($request);
 
-        if ($context === null) {
-            return $this->unauthorized();
+        if ($context instanceof Response) {
+            return $context;
         }
 
         $id = $request->get('message_id');
@@ -59,7 +62,7 @@ class ReadThreadTool extends SnackTool
             ->with(['channel.workspace', 'conversation.workspace', 'sender:id,name,username', 'attachments:id,message_id,original_name'])
             ->find($message->threadRootId());
 
-        if ($root === null || Gate::forUser($context->user)->denies('view', $root)) {
+        if ($root === null || ! $this->readableMessage($context, $root)) {
             return Response::error('There is no message with that id that this person can see.');
         }
 
@@ -71,7 +74,7 @@ class ReadThreadTool extends SnackTool
             ->get()
             ->reverse();
 
-        $where = $root->channel !== null ? '#'.$root->channel->name : 'a direct message';
+        $where = $root->channel !== null ? '#'.OneLine::clean($root->channel->name) : 'a direct message';
 
         $lines = [
             "Thread in {$where}",

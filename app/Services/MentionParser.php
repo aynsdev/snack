@@ -44,6 +44,9 @@ final readonly class MentionParser
      */
     private const HANDLE = '[A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?';
 
+    /** The reserved handle that summons an agent; never a username. */
+    public const AGENT = 'agent';
+
     /**
      * The mentions in a body, de-duplicated and lowercased.
      *
@@ -70,11 +73,11 @@ final readonly class MentionParser
             }
         }
 
-        // "@everyone" is a broadcast, not somebody's handle, so it must not also
-        // be looked up as a username.
+        // "@everyone" is a broadcast and "@agent" a summons, not somebody's
+        // handle, so neither may also be looked up as a username.
         $usernames = array_values(array_diff(
             array_unique($found),
-            [MentionType::Everyone->value, MentionType::Here->value],
+            [MentionType::Everyone->value, MentionType::Here->value, self::AGENT],
         ));
 
         return [
@@ -82,6 +85,43 @@ final readonly class MentionParser
             'broadcasts' => $broadcasts,
             'channels' => array_values(array_unique(array_map(mb_strtolower(...), $channels[1]))),
         ];
+    }
+
+    /**
+     * Whether the body summons an agent, and whose: the handle written
+     * immediately before the first `@agent` (`@renz @agent …`), or null for the
+     * author's own.
+     *
+     * @return array{summoned: bool, target: string|null}
+     */
+    public static function agentSummons(string $source): array
+    {
+        $text = self::withoutCode($source);
+
+        preg_match_all('/(?<![\w@])@('.self::HANDLE.')/', $text, $handles, PREG_OFFSET_CAPTURE);
+
+        foreach ($handles[1] as $index => [$handle, $offset]) {
+            if (mb_strtolower($handle) !== self::AGENT) {
+                continue;
+            }
+
+            $previous = $handles[0][$index - 1] ?? null;
+            $target = null;
+
+            if ($previous !== null) {
+                $end = $previous[1] + strlen($previous[0]);
+                $gap = substr($text, $end, $offset - 1 - $end);
+                $name = mb_strtolower($handles[1][$index - 1][0]);
+
+                if (trim($gap) === '' && ! in_array($name, [MentionType::Everyone->value, MentionType::Here->value, self::AGENT], true)) {
+                    $target = $name;
+                }
+            }
+
+            return ['summoned' => true, 'target' => $target];
+        }
+
+        return ['summoned' => false, 'target' => null];
     }
 
     /**

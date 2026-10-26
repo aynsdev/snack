@@ -27,12 +27,13 @@ use Illuminate\Support\Carbon;
  * @property int|null $author_id
  * @property string $body
  * @property Carbon|null $edited_at
+ * @property array{connector_id: string, name: string|null}|null $agent
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Task $task
  * @property-read User|null $author
  */
-#[Fillable(['task_id', 'author_id', 'body', 'edited_at'])]
+#[Fillable(['task_id', 'author_id', 'body', 'edited_at', 'agent'])]
 class TaskComment extends Model
 {
     /** @use HasFactory<TaskCommentFactory> */
@@ -45,6 +46,7 @@ class TaskComment extends Model
     {
         return [
             'edited_at' => 'datetime',
+            'agent' => 'array',
         ];
     }
 

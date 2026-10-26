@@ -209,6 +209,16 @@ export type ChannelGroup = {
     position: number;
 };
 
+/** The `agent` block on a message an agent sent — see `Message.agent`. */
+export type MessageAgent = {
+    /** The connector's name, as its owner called it. */
+    name: string;
+    kind?: 'root' | 'plan' | 'reply' | 'notice' | null;
+    task_id?: number | null;
+    /** On a plan only: who may approve or cancel it. */
+    task_assignee_id?: number | null;
+};
+
 /**
  * Mirrors App\Http\Resources\MessageResource.
  *
@@ -276,6 +286,12 @@ export type Message = {
      * timeline. Rewritten in place when the decision is made.
      */
     bite?: BiteCard | null;
+    /**
+     * Present when a person's agent posted this under their name — null on
+     * everything else. The header says so, so an agent's words are never
+     * mistaken for its owner's.
+     */
+    agent?: MessageAgent | null;
     /**
      * Absent on messages that arrived over the WebSocket: one broadcast reaches
      * every subscriber, so it cannot carry per-viewer permissions. The timeline
@@ -972,6 +988,10 @@ export type Project = {
     /** The prefix of every reference in this project — the "PWA" in PWA-1499. */
     key: string;
     description: string | null;
+    /** Normalised `https://github.com/<owner>/<repo>`, or null. */
+    repository_url: string | null;
+    /** The branch agents target; null means the repository's default. */
+    repository_base_branch: string | null;
     color: string;
     uses_sprints: boolean;
     is_archived: boolean;
@@ -980,6 +1000,18 @@ export type Project = {
     /** The heading this project sits under; null when it sits under none. */
     project_group_id: number | null;
     card_fields: CardFields;
+    /**
+     * Where the project's agents talk. Absent for viewers who cannot manage
+     * the project; agents are on while it is set and neither it nor the
+     * project is archived.
+     */
+    agent_channel_id?: number | null;
+    /** The column an agent moves a card into when it starts work. */
+    agent_in_progress_column_id?: number | null;
+    /** The column an agent moves a card into when its pull request is up. */
+    agent_review_column_id?: number | null;
+    /** Whether the task panel offers its agent controls. */
+    agents_enabled: boolean;
     member_count?: number;
     task_count?: number;
     is_member: boolean;
@@ -1024,6 +1056,9 @@ export type TaskLabel = {
     name: string;
     color: string;
 };
+
+/** Mirrors App\Enums\TaskAgentIntent: the `agent` field of a task update. */
+export type TaskAgentIntent = 'assign' | 'start' | 'stop';
 
 /**
  * Mirrors App\Http\Resources\SprintResource.
@@ -1161,6 +1196,8 @@ export type TaskComment = {
     edited_at: string | null;
     created_at: string | null;
     author: SnackUser | null;
+    /** Set when the author's agent wrote it. */
+    agent: { name: string } | null;
     /** The policy's answer, not the client's guess — editing and deleting
      *  have different rules. */
     can: { update: boolean; delete: boolean };
@@ -1319,10 +1356,17 @@ export type ConnectedApp = {
     connected_at: string | null;
 };
 
+/**
+ * What a personal connector is for — mirrors App\Enums\ConnectorKind. An agent
+ * has the same access as a token; its messages are labelled as an agent's.
+ */
+export type ConnectorKind = 'token' | 'agent';
+
 /** One of the current person's personal MCP tokens. Never carries the secret. */
 export type ConnectorToken = {
     id: string;
     name: string;
+    kind: ConnectorKind;
     created_at: string | null;
     expires_at: string | null;
 };
@@ -1334,6 +1378,7 @@ export type ConnectorToken = {
 export type ConnectorFlash = {
     id: string;
     name: string;
+    kind: ConnectorKind;
     token: string;
 };
 

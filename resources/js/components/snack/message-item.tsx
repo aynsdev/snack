@@ -1,6 +1,7 @@
 import {
     Bookmark,
     BookmarkCheck,
+    Bot,
     MessageSquareReply,
     Pencil,
     Pin,
@@ -11,9 +12,12 @@ import {
     X,
 } from 'lucide-react';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
+import { AgentDeleteDialog } from '@/components/snack/agent-delete-dialog';
 import { AttachmentList } from '@/components/snack/attachment-list';
 import { BiteCard } from '@/components/snack/bite-card';
 import { MessageText } from '@/components/snack/message-text';
+import { MetaBadge } from '@/components/snack/meta-badge';
 import { StandupCard } from '@/components/snack/standup-card';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { WebhookAttachments } from '@/components/snack/webhook-attachments';
@@ -68,6 +72,7 @@ export function MessageItem({
     onToggleSave,
     currentUserId = null,
     variant = 'chat',
+    footer,
 }: {
     variant?: 'chat' | 'assistant';
     message: Message;
@@ -93,8 +98,11 @@ export function MessageItem({
     onToggleSave?: (message: Message) => void;
     /** Decides which pills render as "yours"; the server re-authorizes anyway. */
     currentUserId?: number | null;
+    /** Controls drawn under the body, inside the message's own row. */
+    footer?: ReactNode;
 }) {
     const [editing, setEditing] = useState(false);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
 
     /*
      * Live-arriving messages have no `can` from the server — one broadcast
@@ -103,7 +111,8 @@ export function MessageItem({
      * the request and answers 403 if the hint was wrong.
      */
     const canEdit =
-        (variant !== 'assistant' || isOwn) && (message.can?.update ?? isOwn);
+        (variant !== 'assistant' || isOwn) &&
+        (message.can?.update ?? (isOwn && message.agent == null));
     const canDelete =
         (variant !== 'assistant' || isOwn) && (message.can?.delete ?? isOwn);
     // A live-arriving message carries no abilities; pinning is offered on the
@@ -196,6 +205,20 @@ export function MessageItem({
                             </span>
                         )}
 
+                        {message.agent != null && (
+                            /*
+                             * An agent posts under its owner's name and avatar,
+                             * so without this its plan reads as the person's
+                             * own words.
+                             */
+                            <MetaBadge
+                                icon={Bot}
+                                title={`Posted by ${message.agent.name.trim() || 'an agent'}, working for ${message.sender?.name ?? 'this person'}`}
+                            >
+                                Agent
+                            </MetaBadge>
+                        )}
+
                         <time
                             dateTime={message.created_at ?? undefined}
                             title={
@@ -243,7 +266,7 @@ export function MessageItem({
                                 <MessageText body={message.body} />
                             )}
 
-                            {message.is_edited && (
+                            {message.is_edited && message.agent == null && (
                                 <span className="ml-1 text-[0.6875rem] text-muted-foreground">
                                     (edited)
                                 </span>
@@ -320,6 +343,8 @@ export function MessageItem({
                                         onOpen={() => onOpenThread(message)}
                                     />
                                 )}
+
+                            {footer}
                         </>
                     )}
                 </div>
@@ -332,7 +357,11 @@ export function MessageItem({
                     isPinned={message.is_pinned}
                     isSaved={message.is_saved ?? false}
                     onEdit={() => setEditing(true)}
-                    onDelete={() => onDelete(message.id)}
+                    onDelete={() =>
+                        message.agent != null
+                            ? setConfirmingDelete(true)
+                            : onDelete(message.id)
+                    }
                     onReply={
                         onOpenThread === undefined || variant === 'assistant'
                             ? undefined
@@ -354,6 +383,15 @@ export function MessageItem({
                             ? undefined
                             : () => onToggleSave(message)
                     }
+                />
+            )}
+
+            {message.agent != null && (
+                <AgentDeleteDialog
+                    message={message}
+                    open={confirmingDelete}
+                    onOpenChange={setConfirmingDelete}
+                    onConfirm={() => onDelete(message.id)}
                 />
             )}
         </article>

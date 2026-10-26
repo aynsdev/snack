@@ -2,8 +2,10 @@
 
 namespace App\Mcp\Tools;
 
+use App\Ai\BiteContext;
 use App\Ai\BiteFiles;
 use App\Mcp\Content\FileResponse;
+use App\Mcp\Tools\Concerns\ScopesAgentReads;
 use App\Models\MessageAttachment;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Storage;
@@ -43,17 +45,19 @@ TEXT)]
 #[IsReadOnly]
 class ReadFileTool extends SnackTool
 {
+    use ScopesAgentReads;
+
     public function handle(Request $request, BiteFiles $files): Response|ResponseFactory
     {
-        $context = $this->context($request);
+        $context = $this->readContext($request);
 
-        if ($context === null) {
-            return $this->unauthorized();
+        if ($context instanceof Response) {
+            return $context;
         }
 
         $file = $files->resolve($context, $request->get('file_id'));
 
-        if ($file === null) {
+        if ($file === null || ! $this->withinReadScope($context, $file, $files)) {
             return Response::error('There is no file with that id that this person can read. Use `find_files` or `browse_assets` to get a valid id.');
         }
 
@@ -97,6 +101,23 @@ class ReadFileTool extends SnackTool
                 ->description('The numeric file id.')
                 ->required(),
         ];
+    }
+
+    private function withinReadScope(BiteContext $context, MessageAttachment $file, BiteFiles $files): bool
+    {
+        $scope = $context->readScope;
+
+        if ($scope === null) {
+            return true;
+        }
+
+        foreach ($scope->viewers() as $viewer) {
+            if ($files->resolve(new BiteContext(workspace: $context->workspace, user: $viewer, container: null), $file->id) === null) {
+                return false;
+            }
+        }
+
+        return $scope->allowsAttachment($file);
     }
 
     private function bytes(MessageAttachment $file): ?string

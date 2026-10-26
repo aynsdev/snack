@@ -4,6 +4,7 @@ namespace App\Actions\Connectors;
 
 use App\Actions\Audit\RecordAuditLog;
 use App\Enums\AuditAction;
+use App\Enums\ConnectorKind;
 use App\Models\OAuthToken;
 use App\Models\User;
 use App\Models\Workspace;
@@ -24,6 +25,10 @@ use Laravel\Passport\PersonalAccessTokenResult;
  *
  * Authorization is the caller's: the person must be an active member of the
  * workspace, which the `workspace` middleware has already established.
+ *
+ * An agent connector is the same token with a different label — see
+ * {@see ConnectorKind} for what that changes, which is attribution and nothing
+ * about access.
  */
 class CreateConnectorToken
 {
@@ -35,16 +40,20 @@ class CreateConnectorToken
     /**
      * @return PersonalAccessTokenResult<mixed>
      */
-    public function handle(Workspace $workspace, User $user, string $name): PersonalAccessTokenResult
-    {
+    public function handle(
+        Workspace $workspace,
+        User $user,
+        string $name,
+        ConnectorKind $kind = ConnectorKind::Token,
+    ): PersonalAccessTokenResult {
         $this->personalAccessClient->ensure();
 
-        return DB::transaction(function () use ($workspace, $user, $name): PersonalAccessTokenResult {
+        return DB::transaction(function () use ($workspace, $user, $name, $kind): PersonalAccessTokenResult {
             $issued = $user->createToken($name, [Registrar::OAUTH_SCOPE]);
 
             /** @var OAuthToken $token */
             $token = $issued->getToken();
-            $token->forceFill(['workspace_id' => $workspace->id])->save();
+            $token->forceFill(['workspace_id' => $workspace->id, 'connector_kind' => $kind])->save();
 
             $this->audit->handle(
                 workspace: $workspace,
@@ -56,7 +65,7 @@ class CreateConnectorToken
                  * is exported and read by admins, and a credential has no
                  * business being in it.
                  */
-                newValues: ['name' => $name, 'kind' => 'token'],
+                newValues: ['name' => $name, 'kind' => $kind->value],
             );
 
             return $issued;

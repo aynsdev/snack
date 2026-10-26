@@ -21,6 +21,7 @@ function makeComment(overrides: Partial<TaskComment> = {}): TaskComment {
             status_emoji: null,
             status_message: null,
         },
+        agent: null,
         can: { update: true, delete: true },
         ...overrides,
     };
@@ -129,5 +130,18 @@ describe('TaskComments', () => {
         });
 
         expect(screen.getByText('(edited)')).toBeInTheDocument();
+    });
+
+    it('marks a comment an agent wrote', () => {
+        renderComments({
+            comments: [
+                makeComment({
+                    agent: { name: 'LocalAgent' },
+                    can: { update: false, delete: true },
+                }),
+            ],
+        });
+
+        expect(screen.getByText('Agent')).toBeInTheDocument();
     });
 });

@@ -6,6 +6,7 @@ use App\Ai\BiteContext;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\AgentReadScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
 
@@ -45,7 +46,11 @@ trait ResolvesProjectWork
             $project = $partial->count() === 1 ? $partial->first() : null;
         }
 
-        return $project !== null && Gate::forUser($context->user)->allows('view', $project) ? $project : null;
+        return $project !== null
+            && Gate::forUser($context->user)->allows('view', $project)
+            && ($context->readScope?->allowsProject($project) ?? true)
+            ? $project
+            : null;
     }
 
     /**
@@ -115,6 +120,7 @@ trait ResolvesProjectWork
 
         $keys = Project::query()
             ->where('workspace_id', $context->workspace->id)
+            ->when($context->readScope, fn (Builder $query, AgentReadScope $scope) => $scope->constrainProjects($query))
             ->notArchived()
             ->orderBy('name')
             ->limit(20)

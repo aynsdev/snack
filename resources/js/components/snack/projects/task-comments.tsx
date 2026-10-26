@@ -1,5 +1,6 @@
-import { MessageSquare } from 'lucide-react';
+import { Bot, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
+import { MetaBadge } from '@/components/snack/meta-badge';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
 import type { TaskComment } from '@/types';
@@ -149,6 +150,15 @@ function CommentRow({
                         {/* A deleted account leaves its comments behind. */}
                         {comment.author?.name ?? 'Former member'}
                     </span>
+
+                    {comment.agent !== null && (
+                        <MetaBadge
+                            icon={Bot}
+                            title={`Written by ${comment.agent.name.trim() || 'an agent'}, working for ${comment.author?.name ?? 'this person'}`}
+                        >
+                            Agent
+                        </MetaBadge>
+                    )}
 
                     {comment.created_at !== null && (
                         <time dateTime={comment.created_at}>

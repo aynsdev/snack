@@ -10,6 +10,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\AgentReadScope;
 
 /**
  * Who is asking, and therefore what the answer may contain.
@@ -60,6 +61,12 @@ final readonly class BiteContext
          * future console entry point. Tools must not depend on it.
          */
         public ?Message $message = null,
+        /**
+         * A further narrowing for an agent connector answering somebody other
+         * than its owner, or answering into a shared thread. Null everywhere
+         * else — see {@see AgentReadScope}.
+         */
+        public ?AgentReadScope $readScope = null,
     ) {}
 
     /**

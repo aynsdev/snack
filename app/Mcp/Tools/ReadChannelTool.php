@@ -2,7 +2,9 @@
 
 namespace App\Mcp\Tools;
 
+use App\Mcp\Tools\Concerns\ScopesAgentReads;
 use App\Models\Message;
+use App\Support\OneLine;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -36,12 +38,14 @@ TEXT)]
 #[IsReadOnly]
 class ReadChannelTool extends SnackTool
 {
+    use ScopesAgentReads;
+
     public function handle(Request $request): Response
     {
-        $context = $this->context($request);
+        $context = $this->readContext($request);
 
-        if ($context === null) {
-            return $this->unauthorized();
+        if ($context instanceof Response) {
+            return $context;
         }
 
         $named = $request->get('channel');
@@ -71,13 +75,15 @@ class ReadChannelTool extends SnackTool
             ->values()
             ->all();
 
+        $name = OneLine::clean($channel->name);
+
         if ($messages === []) {
-            return Response::text("#{$channel->name} has no messages".($before !== null ? " before message #{$before}." : ' yet.'));
+            return Response::text("#{$name} has no messages".($before !== null ? " before message #{$before}." : ' yet.'));
         }
 
-        $topic = $channel->topic !== null && $channel->topic !== '' ? " — {$channel->topic}" : '';
+        $topic = $channel->topic !== null && $channel->topic !== '' ? ' — '.OneLine::clean($channel->topic) : '';
 
-        return Response::text("#{$channel->name}{$topic}\n\n".implode("\n\n", $messages));
+        return Response::text("#{$name}{$topic}\n\n".implode("\n\n", $messages));
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Models\Message;
 use App\Models\ThreadSubscription;
 use App\Models\User;
 use App\Models\Workspace;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -57,6 +58,9 @@ class ThreadHistory
         $replies = $rows->take($size)->values();
 
         $this->shareContainer($root, $replies);
+        (new EloquentCollection([$root, ...$replies->all()]))
+            ->filter(fn (Message $message): bool => $message->agent_task_id !== null)
+            ->load('agentTask:id,assignee_id');
 
         return [
             'root' => (new MessageResource($root))->resolve($request),

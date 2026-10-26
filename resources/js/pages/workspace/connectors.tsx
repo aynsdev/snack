@@ -3,16 +3,24 @@ import { Bot, Check, Copy, KeyRound, Plus } from 'lucide-react';
 import { useRef, useState } from 'react';
 import InputError from '@/components/input-error';
 import { EmptyState } from '@/components/snack/empty-state';
+import { MetaBadge } from '@/components/snack/meta-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { useClipboard } from '@/hooks/use-clipboard';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { cn } from '@/lib/utils';
 import { store } from '@/routes/connectors';
 import { destroy as destroyApp } from '@/routes/connectors/apps';
 import { destroy as destroyToken } from '@/routes/connectors/tokens';
-import type { ConnectedApp, ConnectorToken } from '@/types';
+import type { ConnectedApp, ConnectorKind, ConnectorToken } from '@/types';
 
 type Props = {
     /** Clients that connected by signing in through the consent screen. */
@@ -33,6 +41,11 @@ const CLIENTS: { id: ClientId; label: string }[] = [
 ];
 
 const TOKEN_PLACEHOLDER = '<your-token>';
+
+const CONNECTOR_KINDS: { value: ConnectorKind; label: string }[] = [
+    { value: 'token', label: 'Assistant' },
+    { value: 'agent', label: 'Agent' },
+];
 
 /**
  * AI connectors: every assistant working in this workspace as the person
@@ -120,7 +133,10 @@ export default function WorkspaceConnectors({
                     <h2 className="mt-8 mb-1 font-semibold">Tokens</h2>
                     <p className="mb-3 text-sm text-muted-foreground">
                         For clients that cannot sign in and need a token pasted
-                        into their settings instead.
+                        into their settings instead. Choose Agent for a
+                        connector that works tickets on your behalf, such as
+                        Kusina — it has the same access, but its messages are
+                        labelled as your agent's.
                     </p>
 
                     {issued && (
@@ -169,6 +185,28 @@ export default function WorkspaceConnectors({
                                     <InputError message={errors.name} />
                                 </div>
 
+                                <div className="w-36 space-y-2">
+                                    <Label htmlFor="kind">Kind</Label>
+                                    <Select name="kind" defaultValue="token">
+                                        <SelectTrigger id="kind">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {CONNECTOR_KINDS.map(
+                                                ({ value, label }) => (
+                                                    <SelectItem
+                                                        key={value}
+                                                        value={value}
+                                                    >
+                                                        {label}
+                                                    </SelectItem>
+                                                ),
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError message={errors.kind} />
+                                </div>
+
                                 <Button
                                     type="submit"
                                     disabled={
@@ -188,6 +226,11 @@ export default function WorkspaceConnectors({
                                 <ConnectionRow
                                     key={token.id}
                                     name={token.name}
+                                    badge={
+                                        token.kind === 'agent'
+                                            ? 'Agent'
+                                            : undefined
+                                    }
                                     detail={[
                                         token.created_at &&
                                             `Created ${new Date(token.created_at).toLocaleDateString()}`,
@@ -371,11 +414,13 @@ function CopyField({
 
 function ConnectionRow({
     name,
+    badge,
     detail,
     action,
     onRemove,
 }: {
     name: string;
+    badge?: string;
     detail: string;
     action: string;
     onRemove: () => void;
@@ -383,7 +428,10 @@ function ConnectionRow({
     return (
         <li className="flex flex-wrap items-center gap-4 px-4 py-3">
             <div className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{name}</span>
+                <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{name}</span>
+                    {badge !== undefined && <MetaBadge>{badge}</MetaBadge>}
+                </span>
                 <p className="truncate text-sm text-muted-foreground">
                     {detail}
                 </p>

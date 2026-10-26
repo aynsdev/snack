@@ -129,6 +129,38 @@ it('broadcasts an edit to the channel', function () {
     });
 });
 
+it('tells an open thread when its root is edited, as well as the channel', function () {
+    Event::fake([MessageUpdated::class]);
+
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $channel = makeChannel($workspace);
+    addToChannel($channel, $owner);
+    $root = makeMessage($channel, $owner, 'Status: queued');
+
+    $this->actingAs($owner)->patchJson(editUrl($workspace, $root), ['body' => 'Status: planning'])->assertOk();
+
+    Event::assertDispatched(MessageUpdated::class, fn (MessageUpdated $event): bool => collect($event->broadcastOn())->pluck('name')->all() === [
+        'presence-channel.'.$channel->id,
+        'private-thread.'.$root->id,
+    ]);
+});
+
+it('tells only the thread when a reply is edited', function () {
+    Event::fake([MessageUpdated::class]);
+
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $channel = makeChannel($workspace);
+    addToChannel($channel, $owner);
+    $root = makeMessage($channel, $owner, 'Status: queued');
+    $reply = Message::factory()->inChannel($channel)->from($owner)->withBody('Plan v1')->create(['parent_message_id' => $root->id]);
+
+    $this->actingAs($owner)->patchJson(editUrl($workspace, $reply), ['body' => 'Plan v2'])->assertOk();
+
+    Event::assertDispatched(MessageUpdated::class, fn (MessageUpdated $event): bool => collect($event->broadcastOn())->pluck('name')->all() === [
+        'private-thread.'.$root->id,
+    ]);
+});
+
 it('lets an author delete their own message', function () {
     [$workspace, $owner] = makeWorkspaceWithOwner();
     $channel = makeChannel($workspace);

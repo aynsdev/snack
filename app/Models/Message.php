@@ -6,6 +6,7 @@ use App\Enums\MessageType;
 use Database\Factories\MessageFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -43,6 +44,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Workspace $workspace
  * @property-read User|null $sender
+ * @property-read int|null $agent_task_id
+ * @property-read Task|null $agentTask
  */
 #[Fillable([
     'workspace_id', 'sender_id', 'channel_id', 'conversation_id', 'parent_message_id',
@@ -52,6 +55,14 @@ class Message extends Model
 {
     /** @use HasFactory<MessageFactory> */
     use HasFactory, SoftDeletes;
+
+    private const AGENT_MARKER_SUFFIX = '/\s*‹la:[a-z0-9]{8}›$/u';
+
+    /**
+     * ts_headline drops the closing `›` as punctuation, so a search snippet
+     * ends in a marker this loose.
+     */
+    private const AGENT_SNIPPET_MARKER_SUFFIX = '/\s*‹la:[a-z0-9]{0,8}›?$/u';
 
     /**
      * @return array<string, string>
@@ -69,6 +80,37 @@ class Message extends Model
     }
 
     // -- Relationships -------------------------------------------------------
+
+    /**
+     * The task an agent's plan belongs to, keyed through its metadata — see
+     * {@see agentTaskId()}. Only ever eager-loaded: by the thread view, and
+     * before a plan is broadcast.
+     *
+     * @return BelongsTo<Task, $this>
+     */
+    public function agentTask(): BelongsTo
+    {
+        return $this->belongsTo(Task::class, 'agent_task_id');
+    }
+
+    /**
+     * @return Attribute<int|null, never>
+     */
+    protected function agentTaskId(): Attribute
+    {
+        return Attribute::make(get: function (): ?int {
+            $agent = $this->metadata['agent'] ?? null;
+
+            return is_array($agent) && ($agent['kind'] ?? null) === 'plan' && is_int($agent['task_id'] ?? null)
+                ? $agent['task_id']
+                : null;
+        });
+    }
+
+    public function loadAgentTask(): static
+    {
+        return $this->agent_task_id === null ? $this : $this->load('agentTask:id,assignee_id');
+    }
 
     /**
      * @return BelongsTo<Workspace, $this>
@@ -285,6 +327,39 @@ class Message extends Model
      */
     public function preview(int $length = 120): string
     {
-        return str($this->body_plaintext)->squish()->limit($length)->toString();
+        return str($this->withoutAgentMarker($this->body_plaintext))->squish()->limit($length)->toString();
+    }
+
+    public function isAgentPost(): bool
+    {
+        return is_array($this->metadata['agent'] ?? null);
+    }
+
+    /**
+     * The body as readers see it. The stored body keeps the agent's dedupe
+     * marker because agent_find_post matches on it.
+     */
+    public function displayBody(): string
+    {
+        return $this->withoutAgentMarker($this->body);
+    }
+
+    public function withoutAgentMarker(string $text): string
+    {
+        return $this->stripAgentSuffix(self::AGENT_MARKER_SUFFIX, $text);
+    }
+
+    public function searchSnippetWithoutAgentMarker(string $snippet): string
+    {
+        return $this->stripAgentSuffix(self::AGENT_SNIPPET_MARKER_SUFFIX, $snippet);
+    }
+
+    private function stripAgentSuffix(string $pattern, string $text): string
+    {
+        if (! $this->isAgentPost()) {
+            return $text;
+        }
+
+        return preg_replace($pattern, '', $text) ?? $text;
     }
 }

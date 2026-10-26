@@ -4,10 +4,12 @@ namespace App\Actions\Projects;
 
 use App\Actions\Audit\RecordAuditLog;
 use App\Enums\AuditAction;
+use App\Enums\EligibilityReason;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
+use App\Services\Outbound\TaskEligibilityEvents;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Takes somebody off a project.
@@ -25,18 +27,30 @@ use Illuminate\Support\Facades\DB;
  */
 class RemoveProjectMember
 {
-    public function __construct(private readonly RecordAuditLog $audit) {}
+    public function __construct(
+        private readonly RecordAuditLog $audit,
+        private readonly TaskEligibilityEvents $eligibility,
+    ) {}
 
     /**
      * @return int how many open tasks were handed back
      */
     public function handle(Project $project, User $actor, User $member): int
     {
-        return DB::transaction(function () use ($project, $actor, $member): int {
-            $unassigned = Task::query()
-                ->where('project_id', $project->id)
-                ->where('assignee_id', $member->id)
-                ->whereNull('completed_at')
+        $openTasks = fn (): Builder => Task::query()
+            ->where('project_id', $project->id)
+            ->where('assignee_id', $member->id)
+            ->whereNull('completed_at');
+
+        /*
+         * One event per card handed back, rather than one for the removal: the
+         * dispatcher works task by task, and an agent halfway through one of
+         * these cards has to be told that it is no longer theirs. Only the cards
+         * locked and reported on are unassigned, so none can slip through
+         * between the two.
+         */
+        return $this->eligibility->track($project, EligibilityReason::MemberRemoved, $openTasks, function (?array $lockedIds) use ($project, $actor, $member, $openTasks): int {
+            $unassigned = ($lockedIds === null ? $openTasks() : Task::query()->whereKey($lockedIds))
                 ->update(['assignee_id' => null]);
 
             $project->members()->where('user_id', $member->id)->delete();
