@@ -44,6 +44,7 @@ import {
 import { SnackLogo, SnackLogoIcon } from '@/components/snack/snack-logo';
 import { Button } from '@/components/ui/button';
 import { dashboard, login } from '@/routes';
+import { deleteAccount, privacy, terms } from '@/routes/legal';
 
 type Feature = {
     icon: typeof Hash;
@@ -597,9 +598,29 @@ export default function Welcome() {
                     <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
                         <SnackLogo />
 
-                        <p className="text-sm text-muted-foreground">
-                            Small chats. Big work.
-                        </p>
+                        <nav
+                            aria-label="Legal"
+                            className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-muted-foreground"
+                        >
+                            <Link
+                                href={terms()}
+                                className="hover:text-foreground"
+                            >
+                                Terms
+                            </Link>
+                            <Link
+                                href={privacy()}
+                                className="hover:text-foreground"
+                            >
+                                Privacy
+                            </Link>
+                            <Link
+                                href={deleteAccount()}
+                                className="hover:text-foreground"
+                            >
+                                Delete account
+                            </Link>
+                        </nav>
                     </div>
                 </footer>
             </div>
