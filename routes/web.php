@@ -146,6 +146,15 @@ Route::inertia('/', 'welcome')
     ->name('home');
 
 /*
+ * The terms, privacy policy and account deletion instructions the App Store and
+ * Play Store listings link to. Outside EnsureInstanceIsSetUp: a store reviewer
+ * opening these must never be bounced to first-run setup.
+ */
+Route::inertia('terms', 'legal/terms')->name('legal.terms');
+Route::inertia('privacy', 'legal/privacy')->name('legal.privacy');
+Route::inertia('delete-account', 'legal/delete-account')->name('legal.delete-account');
+
+/*
 |--------------------------------------------------------------------------
 | Invitations
 |--------------------------------------------------------------------------
