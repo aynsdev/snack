@@ -114,6 +114,10 @@ class MessageHistory
 
         $relation = $isChannel ? 'channel' : 'conversation';
 
-        $messages->each(fn (Message $message) => $message->setRelation($relation, $container));
+        // The workspace too: MessagePolicy::delete reads `$message->workspace`
+        // for every message the viewer did not send.
+        $messages->each(fn (Message $message) => $message
+            ->setRelation($relation, $container)
+            ->setRelation('workspace', $container->workspace));
     }
 }

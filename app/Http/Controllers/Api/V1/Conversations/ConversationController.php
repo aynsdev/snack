@@ -127,8 +127,8 @@ class ConversationController extends Controller
                     ->all(),
 
                 // The newest page only; older pages come from the messages
-                // endpoint with `before`.
-                'history' => $this->history->page($conversation),
+                // endpoint with `before`. `history=0` skips it, as for channels.
+                'history' => $request->boolean('history', true) ? $this->history->page($conversation) : null,
             ],
         ]);
     }
