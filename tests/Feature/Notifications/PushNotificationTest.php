@@ -64,7 +64,7 @@ it('pushes a direct message to an away recipient\'s phone', function () {
         ->and($request['message']['data']['reason'])->toBe('direct_message')
         ->and($request['message']['data']['workspace'])->toBe($this->workspace->slug)
         ->and($request['message']['data']['container'])->toBe($this->conversation->public_id)
-        ->and($request['message']['apns']['payload']['aps']['sound'])->toBe('default');
+        ->and($request['message']['apns']['payload']['aps']['sound'])->toBe('snack.wav');
 });
 
 it('does not push to someone who is using Snack right now', function () {
@@ -160,7 +160,8 @@ describe('through Expo', function () {
             ->and($request['title'])->toBe($this->sender->name)
             ->and($request['body'])->toContain('Lunch?')
             ->and($request['data']['reason'])->toBe('direct_message')
-            ->and($request['sound'])->toBe('default');
+            ->and($request['sound'])->toBe('snack.wav')
+            ->and($request['channelId'])->toBe('messages');
     });
 
     it('needs no FCM credentials', function () {
