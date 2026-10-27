@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Account\AvatarController;
+use App\Http\Controllers\Api\V1\Account\BroadcastAuthController;
 use App\Http\Controllers\Api\V1\Account\PasswordController;
 use App\Http\Controllers\Api\V1\Account\ProfileController;
 use App\Http\Controllers\Api\V1\Account\PushDeviceController;
@@ -8,7 +9,6 @@ use App\Http\Controllers\Api\V1\Account\StatusController;
 use App\Http\Controllers\Api\V1\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Api\V1\InvitationController;
 use App\Http\Controllers\Presence\PresenceController;
-use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -46,5 +46,5 @@ Route::post('invitations/{token}/accept', [InvitationController::class, 'store']
  * client, with the bearer token in place of the web app's cookie. The channel
  * rules are the same ones — routes/channels.php.
  */
-Route::match(['get', 'post'], 'broadcasting/auth', [BroadcastController::class, 'authenticate'])
+Route::match(['get', 'post'], 'broadcasting/auth', BroadcastAuthController::class)
     ->name('broadcasting.auth');
