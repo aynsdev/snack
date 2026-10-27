@@ -13,6 +13,19 @@ namespace App\Notifications\Messages;
 class PushMessage
 {
     /**
+     * The arrival sound: the web app's public/snack.mp3, converted to WAV
+     * because iOS will not play MP3 as a notification sound. The mobile app
+     * bundles it under this name.
+     */
+    public const SOUND = 'snack.wav';
+
+    /**
+     * The Android channel the mobile app creates with that sound. A channel's
+     * sound is fixed once created, which is why it is not `default`.
+     */
+    public const ANDROID_CHANNEL = 'messages';
+
+    /**
      * @param  array<string, scalar|null>  $data
      */
     public function __construct(

@@ -45,7 +45,11 @@ class ExpoPush
                 'title' => $message->title,
                 'body' => $message->body,
                 'data' => $message->stringData() === [] ? null : $message->stringData(),
-                'sound' => 'default',
+                // Snack's own sound, bundled in the app (snack-app's
+                // assets/sounds/snack.wav). A build without it falls back to the
+                // system sound, and to its default channel on Android.
+                'sound' => PushMessage::SOUND,
+                'channelId' => PushMessage::ANDROID_CHANNEL,
                 'priority' => 'high',
             ], fn ($value): bool => $value !== null));
         } catch (ConnectionException $exception) {

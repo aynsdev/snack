@@ -53,6 +53,15 @@ it('shows a channel with its abilities, pins and first page of history', functio
         ->assertJsonStructure(['data' => ['canvases', 'pinned', 'huddle', 'abilities' => ['can_pin', 'can_huddle', 'can_create_canvas']]]);
 });
 
+it('leaves out the history page when asked to', function () {
+    makeMessage($this->channel, $this->owner, 'Hello');
+
+    $this->getJson(($this->url)("/{$this->channel->slug}?history=0"))
+        ->assertOk()
+        ->assertJsonPath('data.channel.slug', $this->channel->slug)
+        ->assertJsonPath('data.history', null);
+});
+
 it('hides a private channel from a non-member', function () {
     $secret = makeChannel($this->workspace, ChannelType::Private);
     $member = joinWorkspace($this->workspace);
