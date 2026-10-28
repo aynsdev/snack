@@ -69,16 +69,17 @@ class JoinHuddle
 
         /*
          * A huddle that was just started is announced as a lifecycle change —
-         * the sidebar dot appears for the whole channel — while joining an
-         * existing one only moves the roster. The starter is left out of the
-         * fan-out to their own sidebar: they are in the call, they know.
+         * the sidebar dot appears for the whole channel, and in a conversation
+         * the other participants' phones ring — while joining an existing one
+         * only moves the roster. The starter is left out of both: they are in
+         * the call, they know.
          *
          * Neither fires when somebody who was already in the huddle asks again,
          * which is what a reconnecting client does. Nothing changed, so nothing
          * is broadcast.
          */
         if ($started) {
-            $this->announce->lifecycle($huddle, except: $user);
+            $this->announce->started($huddle, $user);
         } elseif ($admitted) {
             $this->announce->roster($huddle);
         }
