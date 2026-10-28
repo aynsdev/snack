@@ -179,6 +179,35 @@ it('announces a started huddle to the container and to its members', function ()
 });
 
 /**
+ * The mobile app's incoming-call screen is driven by this event, and it has to
+ * say who is calling without a second request.
+ */
+it('names who started the huddle on the sidebar signal', function () {
+    [$workspace, $owner] = makeWorkspaceWithOwner();
+    $other = joinWorkspace($workspace);
+    $conversation = makeConversation($workspace, [$owner, $other]);
+
+    $this->actingAs($owner)
+        ->postJson(route('conversations.huddle.store', [
+            'workspace' => $workspace->slug,
+            'conversation' => $conversation->public_id,
+        ]))
+        ->assertOk();
+
+    Event::assertDispatched(
+        HuddleActivity::class,
+        fn (HuddleActivity $event): bool => $event->recipientIds === [$other->id]
+            && $event->broadcastWith()['is_live'] === true
+            && $event->broadcastWith()['container'] === ['kind' => 'conversation', 'id' => $conversation->public_id]
+            && $event->broadcastWith()['started_by'] === [
+                'id' => $owner->id,
+                'name' => $owner->name,
+                'avatar_url' => $owner->avatarUrl(),
+            ],
+    );
+});
+
+/**
  * Joining an existing huddle moves the roster, which the huddle bar renders —
  * but it is not news to anybody looking at another channel.
  */
