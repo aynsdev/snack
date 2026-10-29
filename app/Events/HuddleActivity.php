@@ -43,12 +43,15 @@ class HuddleActivity implements ShouldBroadcast
      * @param  array{kind: string, id: int|string|null}  $container  Where the
      *                                                               huddle is, in the same shape HuddleResource uses.
      * @param  array<int, int>  $recipientIds
+     * @param  array{id: int, name: string, avatar_url: string|null}|null  $startedBy  Who
+     *                                                                                 started it, while it is live; null once it has ended.
      */
     public function __construct(
         public readonly string $huddleId,
         public readonly array $container,
         public readonly bool $isLive,
         public readonly array $recipientIds,
+        public readonly ?array $startedBy = null,
     ) {}
 
     /**
@@ -74,11 +77,19 @@ class HuddleActivity implements ShouldBroadcast
          * definition not looking at that container, and a sidebar dot does not
          * need names. Anyone who navigates there gets the full state from the
          * page itself and from HuddleChanged thereafter.
+         *
+         * The one name it does carry is the caller's. The mobile app rings on a
+         * huddle starting in a conversation, and an incoming-call screen that
+         * cannot say who is calling is one nobody answers — fetching it would be
+         * a round trip between the ring and the face, on the one screen where a
+         * second matters. Null whenever `is_live` is false: an ending is not a
+         * call, and nobody "started" the silence.
          */
         return [
             'huddle_id' => $this->huddleId,
             'container' => $this->container,
             'is_live' => $this->isLive,
+            'started_by' => $this->startedBy,
         ];
     }
 }

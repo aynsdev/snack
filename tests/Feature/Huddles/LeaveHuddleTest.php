@@ -89,7 +89,8 @@ it('announces the end of a huddle to the container members', function () {
 
     Event::assertDispatched(
         HuddleActivity::class,
-        fn (HuddleActivity $event): bool => $event->isLive === false,
+        fn (HuddleActivity $event): bool => $event->isLive === false
+            && $event->broadcastWith()['started_by'] === null,
     );
 });
 

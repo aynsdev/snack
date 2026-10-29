@@ -93,7 +93,9 @@ class FirebaseMessaging
             $payload['android'] = [
                 'priority' => 'high',
                 'notification' => array_filter([
-                    'sound' => 'default',
+                    // A raw resource name: res/raw/snack.wav, without the extension.
+                    'sound' => pathinfo(PushMessage::SOUND, PATHINFO_FILENAME),
+                    'channel_id' => PushMessage::ANDROID_CHANNEL,
                     'tag' => $message->thread,
                 ]),
             ];
@@ -103,7 +105,7 @@ class FirebaseMessaging
             $payload['apns'] = [
                 'payload' => [
                     'aps' => array_filter([
-                        'sound' => 'default',
+                        'sound' => PushMessage::SOUND,
                         'thread-id' => $message->thread,
                     ]),
                 ],

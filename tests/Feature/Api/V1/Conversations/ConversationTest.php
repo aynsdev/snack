@@ -88,6 +88,17 @@ it('opens a conversation with its first page of history', function () {
         ->assertJsonPath('data.huddle', null);
 });
 
+it('leaves out the history page when asked to', function () {
+    $conversation = makeConversation($this->workspace, [$this->owner, $this->colleague]);
+    makeConversationMessage($conversation, $this->colleague, 'Hello there');
+
+    ($this->as)($this->owner)
+        ->getJson("{$this->base}/{$conversation->public_id}?history=0")
+        ->assertOk()
+        ->assertJsonPath('data.conversation.id', $conversation->public_id)
+        ->assertJsonPath('data.history', null);
+});
+
 it('hides a conversation from someone not in it', function () {
     $conversation = makeConversation($this->workspace, [$this->owner, $this->colleague]);
     $outsider = joinWorkspace($this->workspace);

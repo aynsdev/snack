@@ -108,7 +108,9 @@ class ChannelController extends Controller
                     ->all(),
 
                 // The newest page; older ones come from `channels/{channel}/messages?before=`.
-                'history' => $this->history->page($channel),
+                // `history=0` skips it for clients that fetch that page in
+                // parallel rather than waiting on this whole response for it.
+                'history' => $request->boolean('history', true) ? $this->history->page($channel) : null,
             ],
         ]);
     }
