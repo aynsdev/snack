@@ -20,6 +20,24 @@ export type MentionSource =
 const LIMIT = 8;
 
 /**
+ * `@agent` summons a Kusina into a channel thread — yours, or that of the
+ * person mentioned just before it. Not a person, so it never comes back from
+ * the roster lookup; offered in channels only, the one place it works.
+ */
+export const AGENT_MENTION: SnackUser = {
+    id: -1,
+    name: 'Agent — ask your Kusina',
+    username: 'agent',
+    initials: 'AI',
+    avatar_url: null,
+    title: null,
+    department: null,
+    presence_status: 'offline',
+    status_emoji: null,
+    status_message: null,
+};
+
+/**
  * The people matching what is being typed after the "@".
  *
  * # Why the composer owns this list and not the picker
@@ -102,11 +120,22 @@ export function useMentionCandidates(
         };
     }, [url]);
 
+    const offersAgent =
+        term !== null &&
+        source?.kind === 'remote' &&
+        AGENT_MENTION.username.startsWith(term.toLowerCase());
+
+    const remoteWithAgent = useMemo(
+        () =>
+            offersAgent ? [AGENT_MENTION, ...remote].slice(0, LIMIT) : remote,
+        [offersAgent, remote],
+    );
+
     if (term === null) {
         return [];
     }
 
-    return local ?? remote;
+    return local ?? remoteWithAgent;
 }
 
 /**

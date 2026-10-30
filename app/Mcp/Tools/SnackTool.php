@@ -9,12 +9,16 @@ use App\Models\Channel;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Services\AgentReadScope;
+use App\Support\OneLine;
+use App\Support\WriteContention;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Laravel\Ai\Tools\Request as AiRequest;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Tool;
+use PDOException;
 use ReflectionClass;
 
 /**
@@ -53,7 +57,11 @@ abstract class SnackTool extends Tool
     {
         $user = $request->user();
 
-        if (! $user instanceof User) {
+        /*
+         * A tool that does not apply an agent's read scope must not answer a
+         * call that asked for one: it would answer with the owner's full view.
+         */
+        if (! $user instanceof User || (! $this->honorsReadScope() && AgentReadScope::requested($request->all()))) {
             return null;
         }
 
@@ -62,6 +70,22 @@ abstract class SnackTool extends Tool
         return $workspace === null
             ? null
             : new BiteContext(workspace: $workspace, user: $user, container: null);
+    }
+
+    /**
+     * Whether this tool narrows its reads to an {@see AgentReadScope}.
+     */
+    protected function honorsReadScope(): bool
+    {
+        return false;
+    }
+
+    /**
+     * The context a read runs in, or the error to answer with.
+     */
+    protected function readContext(Request $request): BiteContext|Response
+    {
+        return $this->context($request) ?? $this->unauthorized();
     }
 
     /**
@@ -80,16 +104,36 @@ abstract class SnackTool extends Tool
      */
     protected function delegate(string $tool, Request $request): Response
     {
-        $context = $this->context($request);
+        $context = $this->readContext($request);
 
-        if ($context === null) {
-            return $this->unauthorized();
+        if ($context instanceof Response) {
+            return $context;
         }
 
         /** @var BiteTool&\Laravel\Ai\Contracts\Tool $instance */
         $instance = app()->make($tool, ['context' => $context]);
 
-        return Response::text((string) $instance->handle(new AiRequest($request->all())));
+        try {
+            return Response::text((string) $instance->handle(new AiRequest($request->all())));
+        } catch (PDOException $exception) {
+            return $this->busy($exception);
+        }
+    }
+
+    /**
+     * The answer to a write that gave up waiting on another: an error the
+     * client may simply retry, since nothing was changed — see
+     * WriteContention. Anything else is not this method's to answer.
+     *
+     * @throws PDOException when it was not contention
+     */
+    protected function busy(PDOException $exception): Response
+    {
+        if (! WriteContention::causedBy($exception)) {
+            throw $exception;
+        }
+
+        return Response::error('Snack is busy — please try again in a moment. Nothing was changed.');
     }
 
     /**
@@ -138,6 +182,10 @@ abstract class SnackTool extends Tool
             return null;
         }
 
+        if ($context->readScope !== null && ! $context->readScope->allowsChannel($channel)) {
+            return null;
+        }
+
         return $channel;
     }
 
@@ -153,18 +201,32 @@ abstract class SnackTool extends Tool
          * account is deleted, and the message outlives it.
          */
         $author = $message->sender_id !== null
-            ? "{$message->sender->name} (@{$message->sender->username})"
+            ? OneLine::clean("{$message->sender->name} (@{$message->sender->username})")
             : 'A deleted user';
         $when = $message->created_at?->toDayDateTimeString() ?? 'unknown time';
 
         $line = "message #{$message->id} — {$author}, {$when}";
+
+        /*
+         * Said in the header rather than left to the body, because a reader
+         * deciding whether a reply counts — an approval, say — must be able to
+         * tell that it was changed after the fact, or posted by the author's
+         * agent rather than the author.
+         */
+        if ($message->edited_at !== null) {
+            $line .= ' · edited';
+        }
+
+        if (isset($message->metadata['agent'])) {
+            $line .= ' · via agent';
+        }
 
         if ($message->reply_count > 0) {
             $line .= " · {$message->reply_count} ".str('reply')->plural($message->reply_count);
         }
 
         if ($message->relationLoaded('attachments') && $message->attachments->isNotEmpty()) {
-            $line .= ' · files: '.$message->attachments->pluck('original_name')->implode(', ');
+            $line .= ' · files: '.$message->attachments->pluck('original_name')->map(fn (string $name): string => OneLine::clean($name))->implode(', ');
         }
 
         return $line."\n  ".str($message->body)->trim()->replace("\n", "\n  ")->toString();

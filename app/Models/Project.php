@@ -28,25 +28,41 @@ use Illuminate\Support\Carbon;
  * @property string $slug
  * @property string $key
  * @property string|null $description
+ * @property string|null $repository_url
+ * @property string|null $repository_base_branch
  * @property string $color
  * @property bool $uses_sprints
  * @property bool $is_archived
  * @property int $next_task_number
  * @property array<string, mixed> $card_fields
+ * @property int|null $agent_channel_id
+ * @property int|null $agent_in_progress_column_id
+ * @property int|null $agent_review_column_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Workspace $workspace
  */
 #[Fillable([
     'workspace_id', 'created_by', 'project_group_id', 'name', 'slug', 'key',
-    'description', 'color', 'uses_sprints', 'is_archived', 'card_fields',
-    'next_task_number',
+    'description', 'repository_url', 'repository_base_branch', 'color', 'uses_sprints', 'is_archived', 'card_fields',
+    'next_task_number', 'agent_channel_id', 'agent_in_progress_column_id',
+    'agent_review_column_id',
 ])]
 #[RouteKey('slug')]
 class Project extends Model
 {
     /** @use HasFactory<ProjectFactory> */
     use HasFactory;
+
+    /**
+     * The settings that point this project's agents somewhere. Agents are on
+     * while the channel is set and usable — see {@see agentsEnabled()}.
+     *
+     * @var array<int, string>
+     */
+    public const AGENT_SETTINGS = [
+        'agent_channel_id', 'agent_in_progress_column_id', 'agent_review_column_id',
+    ];
 
     /**
      * What a card shows, when the project has not said otherwise.
@@ -78,6 +94,9 @@ class Project extends Model
             'is_archived' => 'boolean',
             'next_task_number' => 'integer',
             'card_fields' => 'array',
+            'agent_channel_id' => 'integer',
+            'agent_in_progress_column_id' => 'integer',
+            'agent_review_column_id' => 'integer',
         ];
     }
 
@@ -171,6 +190,33 @@ class Project extends Model
         return $this->hasMany(Release::class);
     }
 
+    /**
+     * Where this project's agents post their threads, and where the people
+     * working with them reply.
+     *
+     * @return BelongsTo<Channel, $this>
+     */
+    public function agentChannel(): BelongsTo
+    {
+        return $this->belongsTo(Channel::class, 'agent_channel_id');
+    }
+
+    /**
+     * @return BelongsTo<BoardColumn, $this>
+     */
+    public function agentInProgressColumn(): BelongsTo
+    {
+        return $this->belongsTo(BoardColumn::class, 'agent_in_progress_column_id');
+    }
+
+    /**
+     * @return BelongsTo<BoardColumn, $this>
+     */
+    public function agentReviewColumn(): BelongsTo
+    {
+        return $this->belongsTo(BoardColumn::class, 'agent_review_column_id');
+    }
+
     // -- Membership ----------------------------------------------------------
 
     public function membershipFor(User $user): ?ProjectMember
@@ -202,6 +248,43 @@ class Project extends Model
     public function isStarredBy(User $user): bool
     {
         return $this->membershipFor($user)?->starred_at !== null;
+    }
+
+    // -- Agents --------------------------------------------------------------
+
+    /**
+     * Whether agents work this project right now: a channel of this
+     * workspace is set, and neither the project nor that channel is archived.
+     * Archiving either is a way of switching agents off without losing which
+     * channel they used.
+     */
+    public function agentsEnabled(): bool
+    {
+        $channel = $this->agentChannel;
+
+        return $this->agent_channel_id !== null
+            && ! $this->is_archived
+            && $channel?->is_archived === false
+            && $channel->workspace_id === $this->workspace_id;
+    }
+
+    /**
+     * Whether this person may point the project's agents at the channel: a
+     * live, non-announcement channel of this workspace that they can see.
+     */
+    public function acceptsAgentChannelFrom(User $user, int $channelId): bool
+    {
+        $role = $user->roleIn($this->workspace);
+
+        if ($role === null) {
+            return false;
+        }
+
+        return Channel::query()
+            ->whereKey($channelId)
+            ->where('workspace_id', $this->workspace_id)
+            ->choosableAsAgentChannel($user, $role)
+            ->exists();
     }
 
     // -- Board ---------------------------------------------------------------
@@ -281,6 +364,18 @@ class Project extends Model
     public function scopeNotArchived(Builder $query): void
     {
         $query->where('is_archived', false);
+    }
+
+    /**
+     * The query form of {@see agentsEnabled()}.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeWithAgentsEnabled(Builder $query): void
+    {
+        $query->notArchived()->whereHas('agentChannel', fn (Builder $channel) => $channel
+            ->where('channels.is_archived', false)
+            ->whereColumn('channels.workspace_id', 'projects.workspace_id'));
     }
 
     /**

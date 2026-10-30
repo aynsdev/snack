@@ -18,6 +18,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Attributes\Title;
 use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
+use PDOException;
 
 /**
  * Change a card: move it to another column, reassign it, retitle it, and so
@@ -148,12 +149,16 @@ class UpdateTaskTool extends SnackTool
             return Response::error('Nothing to change was given.');
         }
 
-        if ($attributes !== []) {
-            $task = $saveTask->update($task, $context->user, $attributes);
-        }
+        try {
+            if ($attributes !== []) {
+                $task = $saveTask->update($task, $context->user, $attributes);
+            }
 
-        if ($this->moves($task, $placement['move'])) {
-            $task = $moveTask->handle($task, $placement['move']);
+            if ($this->moves($task, $placement['move'])) {
+                $task = $moveTask->handle($task, $placement['move']);
+            }
+        } catch (PDOException $exception) {
+            return $this->busy($exception);
         }
 
         return Response::text("Updated {$task->reference()}: ".implode(', ', $changed).'.');

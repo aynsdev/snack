@@ -1,6 +1,6 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { CalendarClock, Play, SquareCheckBig, UserPlus, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AddColumnTile } from '@/components/snack/projects/add-column-tile';
 import { BoardColumnView } from '@/components/snack/projects/board-column-view';
 import { BoardFiltersBar } from '@/components/snack/projects/board-filters';
@@ -31,6 +31,8 @@ import {
 import type { BoardFilters } from '@/hooks/use-board';
 import { useOpenTask } from '@/hooks/use-open-task';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
+import { withoutReservedLabels } from '@/lib/agent-labels';
+import { isClickLikeDrop } from '@/lib/board-drag';
 import { backlog as backlogRoute } from '@/routes/projects';
 import { store as joinProject } from '@/routes/projects/membership';
 import { edit as settingsRoute } from '@/routes/projects/settings';
@@ -83,7 +85,7 @@ export default function ProjectBoardPage({
     sprint,
     plannedSprints,
     members,
-    labels,
+    labels: projectLabels,
     releases,
     canContribute,
     canManage,
@@ -91,6 +93,10 @@ export default function ProjectBoardPage({
     openTask,
 }: Props) {
     const workspace = useWorkspace();
+    const labels = useMemo(
+        () => withoutReservedLabels(projectLabels),
+        [projectLabels],
+    );
 
     const { tasks, create, update, remove, move, error, setError } = useBoard({
         projectId: project.id,
@@ -100,6 +106,7 @@ export default function ProjectBoardPage({
     });
 
     const [dragging, setDragging] = useState<Task | null>(null);
+    const dragStartedAt = useRef<number | null>(null);
 
     /*
      * The filter bar's state, and the cards that survive it.
@@ -163,6 +170,18 @@ export default function ProjectBoardPage({
         const card = dragging;
 
         setDragging(null);
+
+        if (
+            isClickLikeDrop(
+                dragStartedAt.current,
+                performance.now(),
+                card.board_column_id === columnId,
+            )
+        ) {
+            void openPanel.open(card.id);
+
+            return;
+        }
 
         void move(card, {
             board_column_id: columnId,
@@ -275,7 +294,10 @@ export default function ProjectBoardPage({
                             projectSlug={project.slug}
                             draggingId={dragging?.id ?? null}
                             onOpenTask={(task) => void openPanel.open(task.id)}
-                            onDragStart={setDragging}
+                            onDragStart={(task) => {
+                                dragStartedAt.current = performance.now();
+                                setDragging(task);
+                            }}
                             onDragEnd={() => setDragging(null)}
                             onDrop={handleDrop}
                             onCreate={async (columnId, title) => {
@@ -312,6 +334,7 @@ export default function ProjectBoardPage({
                 columns={columns}
                 members={members}
                 labels={labels}
+                agentsEnabled={project.agents_enabled}
                 releases={releases}
                 workspaceSlug={workspace.slug}
                 canContribute={canContribute}

@@ -257,7 +257,24 @@ export function useThread({
     useEcho<MessageEvent>(
         channels.thread(resolvedRootId),
         events.messageUpdated,
-        (payload) => upsert(payload.message),
+        (payload) => {
+            if (payload.message.id !== resolvedRootId) {
+                upsert(payload.message);
+
+                return;
+            }
+
+            setRoot((current) =>
+                current === null
+                    ? current
+                    : {
+                          ...payload.message,
+                          // Viewer-specific, so never on a broadcast.
+                          can: current.can,
+                          is_saved: current.is_saved,
+                      },
+            );
+        },
         [resolvedRootId],
     );
 

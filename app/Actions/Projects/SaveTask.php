@@ -3,6 +3,7 @@
 namespace App\Actions\Projects;
 
 use App\Enums\ColumnCategory;
+use App\Enums\EligibilityReason;
 use App\Enums\TaskType;
 use App\Events\TaskChanged;
 use App\Models\BoardColumn;
@@ -10,7 +11,10 @@ use App\Models\Project;
 use App\Models\Sprint;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Outbound\TaskContentEvents;
+use App\Services\Outbound\TaskEligibilityEvents;
 use App\Support\Positions;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -37,6 +41,8 @@ class SaveTask
     public function __construct(
         private readonly AnnounceAssignment $assignments,
         private readonly AnnounceParentProgress $parents,
+        private readonly TaskEligibilityEvents $eligibility,
+        private readonly TaskContentEvents $content,
     ) {}
 
     /**
@@ -60,7 +66,8 @@ class SaveTask
 
         $attributes = $this->inheritFromParent($project, $attributes);
 
-        $task = DB::transaction(function () use ($project, $reporter, $attributes, $column): Task {
+        // Locked before `nextNumber` writes to the project — see TaskEligibilityEvents.
+        $task = $this->eligibility->transaction($project, true, function (?Project $locked) use ($project, $reporter, $attributes, $column): Task {
             $sprint = $this->sprint($project, $attributes['sprint_id'] ?? null);
             $type = $this->type($attributes);
             $parentId = $this->parentId($project, $attributes, $type);
@@ -90,6 +97,8 @@ class SaveTask
 
             $this->syncLabels($project, $task, $attributes);
 
+            $this->eligibility->created($locked, $task);
+
             return $task;
         });
 
@@ -114,7 +123,24 @@ class SaveTask
         $previousParentId = $task->parent_task_id;
         $previousType = $task->type;
 
-        DB::transaction(function () use ($project, $task, $attributes, $previousType): void {
+        $reported = array_intersect(['assignee_id', 'label_ids', ...TaskContentEvents::FIELDS], array_keys($attributes)) !== [];
+
+        $this->eligibility->transaction($project, $reported, function (?Project $locked) use ($project, $task, $attributes, $previousType): void {
+            if (array_key_exists('parent_task_id', $attributes)) {
+                $this->lockWithEpic($project, $task, $attributes['parent_task_id'], projectLocked: $locked !== null);
+            }
+
+            /*
+             * Re-read once the row is locked, so what the edit is applied to —
+             * and what the content event reports — is the committed task and
+             * not the copy this request loaded before it waited.
+             */
+            if ($locked !== null) {
+                $this->eligibility->watch($locked, EligibilityReason::Updated, fn (): Builder => Task::query()->whereKey($task->id));
+
+                $task->refresh();
+            }
+
             $changes = [];
 
             foreach (['title', 'description', 'priority', 'story_points', 'due_on'] as $field) {
@@ -145,6 +171,8 @@ class SaveTask
             }
 
             $task->fill($changes)->save();
+
+            $this->content->saved($locked, $task);
 
             /*
              * An epic is never inside another task, so a task promoted to Epic
@@ -199,6 +227,27 @@ class SaveTask
         }
 
         return $attributes;
+    }
+
+    /**
+     * The project, then the task and the epic it is being put under, in id
+     * order — before the save takes the task and checks the epic's key in
+     * whichever order it meets them, which is how an epic edit and a change
+     * reporting to the agent dispatcher could each hold what the other needs.
+     * See App\Services\Outbound\OutboundEvents for the shared order.
+     */
+    private function lockWithEpic(Project $project, Task $task, mixed $epicId, bool $projectLocked): void
+    {
+        if (! $projectLocked) {
+            Project::query()->whereKey($project->id)->lock('for no key update')->first();
+        }
+
+        Task::query()
+            ->where('project_id', $project->id)
+            ->whereKey(array_filter([$task->id, is_numeric($epicId) ? (int) $epicId : null]))
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->pluck('id');
     }
 
     /**

@@ -5,10 +5,12 @@ namespace App\Models;
 use App\Enums\MemberStatus;
 use App\Enums\PresenceStatus;
 use App\Enums\WorkspaceRole;
+use App\Support\OneLine;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -84,6 +86,16 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
             'presence_status' => PresenceStatus::class,
             'is_bot' => 'boolean',
         ];
+    }
+
+    /**
+     * Kept to one line however it arrives — see {@see OneLine}.
+     *
+     * @return Attribute<string, string|null>
+     */
+    protected function name(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value): ?string => OneLine::cleanOrNull($value));
     }
 
     /**

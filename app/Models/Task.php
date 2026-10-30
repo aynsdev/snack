@@ -4,9 +4,11 @@ namespace App\Models;
 
 use App\Enums\TaskPriority;
 use App\Enums\TaskType;
+use App\Support\OneLine;
 use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -77,6 +79,18 @@ class Task extends Model
             'due_on' => 'date',
             'completed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Kept to one line however it arrives — see {@see OneLine}. A title is
+     * printed above "Key: value" lines that agents read, and must not be able
+     * to add one of its own.
+     *
+     * @return Attribute<string, string|null>
+     */
+    protected function title(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value): ?string => OneLine::cleanOrNull($value));
     }
 
     // -- Relationships -------------------------------------------------------

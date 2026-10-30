@@ -11,7 +11,7 @@ use App\Models\Channel;
 use App\Models\User;
 use App\Models\WorkspaceInvitation;
 use App\Models\WorkspaceMember;
-use Illuminate\Support\Facades\DB;
+use App\Services\Outbound\OutboundEvents;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -27,6 +27,7 @@ class AcceptWorkspaceInvitation
     public function __construct(
         private readonly JoinChannel $joinChannel,
         private readonly RecordAuditLog $audit,
+        private readonly OutboundEvents $events,
     ) {}
 
     /**
@@ -35,7 +36,9 @@ class AcceptWorkspaceInvitation
      */
     public function handle(WorkspaceInvitation $invitation, User $user): WorkspaceMember
     {
-        $membership = DB::transaction(function () use ($invitation, $user): WorkspaceMember {
+        // An outbound transaction because joining the default channels can
+        // let somebody see an agent channel — see JoinChannel.
+        $membership = $this->events->transaction([$invitation->workspace_id], function () use ($invitation, $user): WorkspaceMember {
             // Claim the invitation first, so the concurrency guard runs before
             // any membership is written.
             $claimed = $invitation->isLink()

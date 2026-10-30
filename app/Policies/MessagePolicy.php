@@ -2,8 +2,10 @@
 
 namespace App\Policies;
 
+use App\Enums\ActorVia;
 use App\Models\Message;
 use App\Models\User;
+use App\Services\ActorContext;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Support\Facades\Gate;
 
@@ -56,6 +58,10 @@ class MessagePolicy
 
         if (! $message->wasSentBy($user)) {
             return Response::deny('You can only edit your own messages.');
+        }
+
+        if ($message->isAgentPost() && ! $this->isPostingAgent($message)) {
+            return Response::deny('Only the agent that posted this can edit it.');
         }
 
         $container = $this->containerResponse($user, $message, 'post');
@@ -137,5 +143,19 @@ class MessagePolicy
         }
 
         return Gate::forUser($user)->inspect($ability, $container);
+    }
+
+    /**
+     * An agent's post is its status report, edited only by the connector that
+     * made it — never by its owner in the composer.
+     */
+    private function isPostingAgent(Message $message): bool
+    {
+        $actor = app(ActorContext::class)->current();
+
+        return $actor->via === ActorVia::Agent
+            && $actor->userId === $message->sender_id
+            && $actor->connectorId !== null
+            && $actor->connectorId === ($message->metadata['agent']['connector_id'] ?? null);
     }
 }

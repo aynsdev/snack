@@ -70,7 +70,7 @@ class SearchController extends Controller
                      * client falls back to the message body itself.
                      */
                     'snippet' => $this->search->segments(
-                        $message->getAttribute('search_snippet'),
+                        $message->searchSnippetWithoutAgentMarker((string) $message->getAttribute('search_snippet')),
                     ),
                 ])
                 ->values()

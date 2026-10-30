@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\ResolvesProjectWork;
 use App\Models\TaskComment;
+use App\Services\ActorContext;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\Gate;
 use Laravel\Mcp\Request;
@@ -60,10 +61,16 @@ class CommentOnTaskTool extends SnackTool
             return Response::error("This person cannot comment on {$task->reference()}: {$allowed->message()}");
         }
 
+        $actor = app(ActorContext::class)->current();
+
         $comment = TaskComment::create([
             'task_id' => $task->id,
             'author_id' => $context->user->id,
             'body' => trim((string) $request->get('body')),
+            // Stamped from the token, so only an agent connector can mark a comment as its own.
+            'agent' => $actor->isAgentFor($context->user)
+                ? ['connector_id' => $actor->connectorId, 'name' => $actor->connectorName]
+                : null,
         ]);
 
         return Response::text("Commented on {$task->reference()} (comment #{$comment->id}).");

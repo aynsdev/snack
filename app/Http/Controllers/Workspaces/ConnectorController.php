@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Workspaces;
 
 use App\Actions\Connectors\CreateConnectorToken;
 use App\Actions\Connectors\DisconnectConnector;
+use App\Enums\ConnectorKind;
 use App\Http\Controllers\Controller;
 use App\Models\McpGrant;
 use App\Models\OAuthToken;
@@ -12,6 +13,7 @@ use App\Models\Workspace;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,7 +27,9 @@ use Inertia\Response;
  * - **Apps** that connected by signing in (Claude's organization connectors,
  *   anything else speaking MCP OAuth). They appear here once the person
  *   approved them on the consent screen; see App\Models\McpGrant.
- * - **Tokens** created on this page for clients configured by hand.
+ * - **Tokens** created on this page for clients configured by hand — either
+ *   for an assistant the person drives, or for an agent that works tickets on
+ *   their behalf. See App\Enums\ConnectorKind.
  *
  * Per person rather than admin-gated, unlike webhooks. A connector can do only
  * what its owner can already do by hand, so issuing one grants nothing new, and
@@ -50,6 +54,7 @@ class ConnectorController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:80'],
+            'kind' => ['sometimes', Rule::enum(ConnectorKind::class)],
         ], [
             'name.required' => 'Give the token a name, like the app you are connecting.',
         ]);
@@ -65,11 +70,14 @@ class ConnectorController extends Controller
             ]);
         }
 
-        $issued = $createToken->handle($workspace, $user, trim($validated['name']));
+        $kind = ConnectorKind::from($validated['kind'] ?? ConnectorKind::Token->value);
+
+        $issued = $createToken->handle($workspace, $user, trim($validated['name']), $kind);
 
         return $this->page($workspace, $request)->flash('connector', [
             'id' => $issued->getToken()?->getKey(),
             'name' => trim($validated['name']),
+            'kind' => $kind->value,
             'token' => $issued->accessToken,
         ]);
     }
@@ -141,6 +149,7 @@ class ConnectorController extends Controller
                 ->map(fn (OAuthToken $token): array => [
                     'id' => $token->id,
                     'name' => $token->name ?? 'Untitled token',
+                    'kind' => $token->connector_kind->value,
                     'created_at' => $token->created_at?->toIso8601String(),
                     'expires_at' => $token->expires_at?->toIso8601String(),
                 ])

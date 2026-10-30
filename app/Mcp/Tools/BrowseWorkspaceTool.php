@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Ai\Tools\BrowseWorkspace;
+use App\Mcp\Tools\Concerns\ScopesAgentReads;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -19,6 +20,8 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[IsReadOnly]
 class BrowseWorkspaceTool extends SnackTool
 {
+    use ScopesAgentReads;
+
     public function description(): string
     {
         return (string) static::describe(BrowseWorkspace::class)->description();

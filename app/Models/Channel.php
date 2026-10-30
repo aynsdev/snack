@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\ChannelType;
 use App\Enums\WorkspaceRole;
+use App\Services\Outbound\AgentSettingsEvents;
+use App\Support\OneLine;
 use Database\Factories\ChannelFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
@@ -66,6 +68,43 @@ class Channel extends Model
             'message_count' => 'integer',
             'settings' => 'array',
         ];
+    }
+
+    /**
+     * Kept to one line however it arrives — see {@see OneLine}.
+     *
+     * @return Attribute<string, string|null>
+     */
+    protected function name(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value): ?string => OneLine::cleanOrNull($value));
+    }
+
+    /**
+     * @return Attribute<string|null, string|null>
+     */
+    protected function topic(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value): ?string => OneLine::cleanOrNull($value));
+    }
+
+    /**
+     * A channel some project's agents talk in is cleared from those projects —
+     * and the agent dispatcher told so — in the same transaction as the
+     * delete. The foreign key would clear it anyway (`nullOnDelete`), but
+     * silently, and the dispatcher would keep routing threads to a channel
+     * that no longer exists.
+     *
+     * Nothing deletes a channel today. A workspace's cascade bypasses this,
+     * and takes the projects with it.
+     */
+    public function delete(): ?bool
+    {
+        return app(AgentSettingsEvents::class)->aroundChannelChange($this, function (array $projectIds): ?bool {
+            Project::query()->whereKey($projectIds)->update(['agent_channel_id' => null]);
+
+            return parent::delete();
+        });
     }
 
     /**
@@ -205,6 +244,21 @@ class Channel extends Model
             ->where('is_private', false)
             ->orWhere($memberOf),
         );
+    }
+
+    /**
+     * The channels a person may point a project's agents at: live,
+     * non-announcement channels they can see. Choosing one decides which
+     * conversations are sent to the agent dispatcher, so nobody may choose a
+     * channel they were never in — and agents need to be able to post there.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeChoosableAsAgentChannel(Builder $query, User $user, WorkspaceRole $role): void
+    {
+        $query->where('type', '!=', ChannelType::Announcement)
+            ->notArchived()
+            ->visibleTo($user, $role);
     }
 
     /**

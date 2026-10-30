@@ -5,9 +5,10 @@ namespace App\Actions\Workspaces;
 use App\Actions\Audit\RecordAuditLog;
 use App\Enums\AuditAction;
 use App\Enums\MemberStatus;
+use App\Enums\OutboundEventType;
 use App\Models\User;
 use App\Models\WorkspaceMember;
-use Illuminate\Support\Facades\DB;
+use App\Services\Outbound\OutboundEvents;
 
 /**
  * Suspends or reinstates a member.
@@ -18,13 +19,25 @@ use Illuminate\Support\Facades\DB;
  */
 class SetWorkspaceMemberStatus
 {
-    public function __construct(private readonly RecordAuditLog $audit) {}
+    public function __construct(
+        private readonly RecordAuditLog $audit,
+        private readonly OutboundEvents $events,
+    ) {}
 
     public function handle(WorkspaceMember $member, MemberStatus $status, User $actor): WorkspaceMember
     {
-        $previousStatus = $member->status;
+        $this->events->transaction([$member->workspace_id], function () use ($member, $status, $actor): void {
+            /*
+             * The status as it stands now, read under the lock: a second
+             * submission of the same change finds it already made, and records
+             * and reports nothing.
+             */
+            $previousStatus = WorkspaceMember::query()->lockForUpdate()->find($member->id)?->status;
 
-        DB::transaction(function () use ($member, $status, $actor, $previousStatus): void {
+            if ($previousStatus === null || $previousStatus === $status) {
+                return;
+            }
+
             $member->update(['status' => $status]);
 
             $this->audit->handle(
@@ -37,6 +50,15 @@ class SetWorkspaceMemberStatus
                 oldValues: ['status' => $previousStatus->value],
                 newValues: ['status' => $status->value],
             );
+
+            // Suspended is "a non-member until reinstated" to every access
+            // check, and so to the agent dispatcher too.
+            if ($status === MemberStatus::Suspended && $previousStatus !== MemberStatus::Suspended) {
+                $this->events->record(OutboundEventType::WorkspaceMemberRemoved, $member->workspace, [
+                    'user_id' => $member->user_id,
+                    'reason' => 'deactivated',
+                ]);
+            }
         });
 
         return $member->refresh();

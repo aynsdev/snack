@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Projects;
 
 use App\Actions\Projects\DeleteTask;
+use App\Actions\Projects\ResolveTaskAgentIntent;
 use App\Actions\Projects\SaveTask;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Projects\StoreTaskRequest;
@@ -73,11 +74,22 @@ class TaskController extends Controller
         Task $task,
         UpdateTaskRequest $request,
         SaveTask $saveTask,
+        ResolveTaskAgentIntent $agentIntent,
     ): JsonResponse {
+        $attributes = $request->taskAttributes();
+        $intent = $request->agentIntent();
+
+        if ($intent !== null) {
+            $attributes = [
+                ...$attributes,
+                ...$agentIntent->handle($task, $request->user(), $intent, $request->integer('assignee_id') ?: null),
+            ];
+        }
+
         $saved = $saveTask->update(
             task: $task,
             actor: $request->user(),
-            attributes: $request->taskAttributes(),
+            attributes: $attributes,
         );
 
         return response()->json([

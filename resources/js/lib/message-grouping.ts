@@ -17,6 +17,7 @@ type Groupable = Pick<Message, 'created_at'> & {
      * from a webhook, satisfies the type without carrying the field.
      */
     webhook?: { username: string } | null;
+    agent?: { name: string } | null;
 };
 
 /**
@@ -56,6 +57,15 @@ export function continuesGroup(
         (previous.webhook?.username ?? null) !==
         (current.webhook?.username ?? null)
     ) {
+        return false;
+    }
+
+    /*
+     * An agent posts as its owner, so its messages and theirs share a sender.
+     * Folding one under the other's header would hide the badge that says
+     * which of them is talking.
+     */
+    if ((previous.agent?.name ?? null) !== (current.agent?.name ?? null)) {
         return false;
     }
 

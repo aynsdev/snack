@@ -6,6 +6,7 @@ use App\Enums\TaskPriority;
 use App\Enums\TaskType;
 use App\Mcp\Tools\Concerns\PlacesTasks;
 use App\Mcp\Tools\Concerns\ResolvesProjectWork;
+use App\Mcp\Tools\Concerns\ScopesAgentReads;
 use App\Models\Task;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Database\Eloquent\Builder;
@@ -50,13 +51,14 @@ class ListTasksTool extends SnackTool
 {
     use PlacesTasks;
     use ResolvesProjectWork;
+    use ScopesAgentReads;
 
     public function handle(Request $request): Response
     {
-        $context = $this->context($request);
+        $context = $this->readContext($request);
 
-        if ($context === null) {
-            return $this->unauthorized();
+        if ($context instanceof Response) {
+            return $context;
         }
 
         $project = $this->project($context, $request->get('project'));

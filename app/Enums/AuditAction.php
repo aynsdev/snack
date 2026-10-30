@@ -33,6 +33,13 @@ enum AuditAction: string
 
     case ProjectCreated = 'project.created';
     case ProjectUpdated = 'project.updated';
+
+    /*
+     * Its own case rather than a `project.updated`, because it is the entry an
+     * incident review needs: pointing a project's agents at a channel decides
+     * which conversations leave the building for the agent dispatcher.
+     */
+    case ProjectAgentSettingsUpdated = 'project.agent_settings_updated';
     case ProjectArchived = 'project.archived';
     case ProjectUnarchived = 'project.unarchived';
     case ProjectMemberAdded = 'project.member_added';
@@ -221,6 +228,7 @@ enum AuditAction: string
             self::ChannelMemberRemoved => 'Removed from channel',
             self::ProjectCreated => 'Project created',
             self::ProjectUpdated => 'Project updated',
+            self::ProjectAgentSettingsUpdated => 'Project agent settings updated',
             self::ProjectArchived => 'Project archived',
             self::ProjectUnarchived => 'Project unarchived',
             self::ProjectMemberAdded => 'Added to project',

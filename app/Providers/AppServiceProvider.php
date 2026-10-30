@@ -10,6 +10,8 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Notifications\Channels\PushChannel;
 use App\Notifications\Channels\WorkspaceDatabaseChannel;
+use App\Services\ActorContext;
+use App\Services\Outbound\OutboundEvents;
 use App\Support\WorkspaceContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Logout;
@@ -37,6 +39,13 @@ class AppServiceProvider extends ServiceProvider
     {
         // One workspace context per request, populated by ResolveWorkspace.
         $this->app->scoped(WorkspaceContext::class);
+
+        // Who is acting and how, per request — see ActorContext.
+        $this->app->scoped(ActorContext::class);
+
+        // One outbox buffer per request or job, shared by every service that
+        // reports to the agent dispatcher — see OutboundEvents::transaction().
+        $this->app->scoped(OutboundEvents::class);
 
         // A client id that is not a UUID is "no such client", not a 500 —
         // see OAuthClientRepository.
@@ -162,6 +171,10 @@ class AppServiceProvider extends ServiceProvider
     protected function configureDevCommands(): void
     {
         DevCommands::except('server');
+
+        // The default worker plus the agent dispatcher's own queue — see
+        // `snack.agents.queue`. Without it, outbound events never leave in dev.
+        DevCommands::artisan('queue:listen --queue=default,'.config('snack.agents.queue').' --tries=1 --timeout=0', 'queue');
         DevCommands::artisan('queue:listen --tries=1 --timeout=0', 'queue-2');
     }
 

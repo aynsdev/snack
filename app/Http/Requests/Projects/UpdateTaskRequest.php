@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Projects;
 
+use App\Enums\TaskAgentIntent;
 use App\Enums\TaskPriority;
 use App\Enums\TaskType;
 use App\Models\Task;
@@ -47,6 +48,10 @@ class UpdateTaskRequest extends FormRequest
 
             'label_ids' => ['sometimes', 'array'],
             'label_ids.*' => ['integer'],
+
+            // The panel's agent controls. Resolved into an assignee and labels
+            // by ResolveTaskAgentIntent, replacing any sent alongside.
+            'agent' => ['sometimes', Rule::enum(TaskAgentIntent::class)],
         ];
     }
 
@@ -59,6 +64,11 @@ class UpdateTaskRequest extends FormRequest
             'title', 'description', 'type', 'priority', 'parent_task_id',
             'assignee_id', 'release_id', 'story_points', 'due_on', 'label_ids',
         ]);
+    }
+
+    public function agentIntent(): ?TaskAgentIntent
+    {
+        return $this->has('agent') ? $this->enum('agent', TaskAgentIntent::class) : null;
     }
 
     public function task(): Task

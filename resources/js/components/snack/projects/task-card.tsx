@@ -1,10 +1,14 @@
 import { CalendarDays, ListTree, Zap } from 'lucide-react';
+import { useRef } from 'react';
 import {
+    AgentBadge,
     LabelChip,
     TaskPriorityIcon,
     TaskTypeIcon,
 } from '@/components/snack/projects/task-glyphs';
 import { UserAvatar } from '@/components/snack/user-avatar';
+import { agentStateOf, withoutReservedLabels } from '@/lib/agent-labels';
+import { CLICK_LIKE_DRAG_MS } from '@/lib/board-drag';
 import { cn } from '@/lib/utils';
 import type { CardFields, Task } from '@/types';
 
@@ -46,12 +50,16 @@ export function TaskCard({
     onDragStart?: (task: Task) => void;
     onDragEnd?: () => void;
 }) {
-    const labels = task.labels ?? [];
+    const labels = withoutReservedLabels(task.labels ?? []);
+    const agentState = agentStateOf(task.labels);
+    const dragStartedAt = useRef<number | null>(null);
 
     return (
         <article
             draggable={draggable}
+            onClick={() => onOpen(task)}
             onDragStart={(event) => {
+                dragStartedAt.current = event.timeStamp;
                 // The id travels in the payload as well as in React state: a
                 // drop handler reading only from state would be reading whatever
                 // was last set, and drags can be started in another window.
@@ -59,24 +67,40 @@ export function TaskCard({
                 event.dataTransfer.effectAllowed = 'move';
                 onDragStart?.(task);
             }}
-            onDragEnd={onDragEnd}
+            onDragEnd={(event) => {
+                const startedAt = dragStartedAt.current;
+                dragStartedAt.current = null;
+                onDragEnd?.();
+
+                /*
+                 * Browsers start a native drag on a few pixels of pointer
+                 * movement, which swallows the click. A brief drag that landed
+                 * nowhere was meant as a click, so it opens the card.
+                 */
+                if (
+                    event.dataTransfer.dropEffect === 'none' &&
+                    startedAt !== null &&
+                    event.timeStamp - startedAt < CLICK_LIKE_DRAG_MS
+                ) {
+                    onOpen(task);
+                }
+            }}
             className={cn(
                 'group rounded-lg border border-border bg-card p-2.5 text-left shadow-sm transition-all',
                 'hover:border-brand/40 hover:shadow',
-                draggable && 'cursor-grab active:cursor-grabbing',
+                'cursor-pointer',
+                draggable && 'active:cursor-grabbing',
                 isDragging && 'opacity-40',
             )}
         >
             {/*
              * A button around the text rather than around the whole article: the
              * card is a drag handle, and a button that is also draggable
-             * swallows the keyboard activation on some browsers.
+             * swallows the keyboard activation on some browsers. It is the
+             * keyboard target only; its click bubbles to the article, which
+             * opens the card from anywhere on it.
              */}
-            <button
-                type="button"
-                onClick={() => onOpen(task)}
-                className="w-full text-left"
-            >
+            <button type="button" className="w-full text-left">
                 <p
                     className={cn(
                         'text-sm leading-snug',
@@ -95,8 +119,9 @@ export function TaskCard({
                 </p>
             )}
 
-            {fields.labels && labels.length > 0 && (
+            {fields.labels && (labels.length > 0 || agentState !== null) && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
+                    {agentState !== null && <AgentBadge state={agentState} />}
                     {labels.map((label) => (
                         <LabelChip
                             key={label.id}

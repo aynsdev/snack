@@ -222,6 +222,8 @@ class MoveTask
      */
     private function rebalance(Project $project, int $columnId, ?int $sprintId, Task $moving): void
     {
+        $this->lockList($project, $columnId, $sprintId);
+
         $tasks = $project->tasks()
             ->where('board_column_id', $columnId)
             ->where(fn ($query) => $sprintId === null
@@ -236,5 +238,25 @@ class MoveTask
         foreach ($tasks as $index => $task) {
             $task->forceFill(['position' => $positions[$index]])->save();
         }
+    }
+
+    /**
+     * The project row and then the list's cards in id order, before any of
+     * them is written: the order every change that reports to the agent
+     * dispatcher locks in (see App\Services\Outbound\OutboundEvents), so a
+     * rebalance and one of those cannot each hold what the other waits for.
+     */
+    private function lockList(Project $project, int $columnId, ?int $sprintId): void
+    {
+        Project::query()->whereKey($project->id)->lock('for no key update')->first();
+
+        $project->tasks()
+            ->where('board_column_id', $columnId)
+            ->where(fn ($query) => $sprintId === null
+                ? $query->whereNull('sprint_id')
+                : $query->where('sprint_id', $sprintId))
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->pluck('id');
     }
 }

@@ -72,6 +72,15 @@ class BiteSummons
             return null;
         }
 
+        /*
+         * Nor does an agent. It posts under its owner's name, so the bot check
+         * below cannot see it — and an agent quoting a ticket that says "ask
+         * @bite" would otherwise start two assistants answering each other.
+         */
+        if (isset($message->metadata['agent'])) {
+            return null;
+        }
+
         $sender = $message->sender;
 
         if ($sender === null || $sender->isBot()) {

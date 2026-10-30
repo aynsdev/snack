@@ -1,6 +1,7 @@
 import { Check, Trash2, X } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { DevelopmentSection } from '@/components/snack/projects/development-section';
+import { TaskAgentControls } from '@/components/snack/projects/task-agent-controls';
 import { TaskAttachments } from '@/components/snack/projects/task-attachments';
 import { TaskComments } from '@/components/snack/projects/task-comments';
 import {
@@ -67,6 +68,7 @@ export function TaskPanel({
     columns,
     members,
     labels,
+    agentsEnabled,
     releases,
     workspaceSlug,
     canContribute,
@@ -82,6 +84,7 @@ export function TaskPanel({
     columns: BoardColumn[];
     members: ProjectMembership[];
     labels: TaskLabel[];
+    agentsEnabled: boolean;
     releases: ReleaseOption[];
     workspaceSlug: string;
     canContribute: boolean;
@@ -122,6 +125,7 @@ export function TaskPanel({
                         columns={columns}
                         members={members}
                         labels={labels}
+                        agentsEnabled={agentsEnabled}
                         releases={releases}
                         workspaceSlug={workspaceSlug}
                         canContribute={canContribute}
@@ -144,6 +148,7 @@ function TaskPanelBody({
     columns,
     members,
     labels,
+    agentsEnabled,
     releases,
     workspaceSlug,
     canContribute,
@@ -159,6 +164,7 @@ function TaskPanelBody({
     columns: BoardColumn[];
     members: ProjectMembership[];
     labels: TaskLabel[];
+    agentsEnabled: boolean;
     releases: ReleaseOption[];
     workspaceSlug: string;
     canContribute: boolean;
@@ -498,6 +504,18 @@ function TaskPanelBody({
                         </SelectContent>
                     </Select>
                 </Field>
+
+                {agentsEnabled && canContribute && (
+                    <Field label="Agent">
+                        <TaskAgentControls
+                            task={task}
+                            members={members}
+                            onSave={(attributes) =>
+                                onUpdate(task.id, attributes)
+                            }
+                        />
+                    </Field>
+                )}
 
                 <Field label="Type">
                     <Select

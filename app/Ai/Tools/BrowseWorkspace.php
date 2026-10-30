@@ -5,8 +5,10 @@ namespace App\Ai\Tools;
 use App\Models\Channel;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\AgentReadScope;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Gate;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Tools\Request;
 use Stringable;
@@ -96,6 +98,7 @@ class BrowseWorkspace extends BiteTool implements Tool
         $channels = Channel::query()
             ->where('workspace_id', $this->context->workspace->id)
             ->visibleTo($this->context->user, $role)
+            ->when($this->context->readScope, fn (Builder $query, AgentReadScope $scope) => $scope->constrainChannels($query))
             ->notArchived()
             ->when($term !== '', fn (Builder $query) => $query->where('name', 'ilike', '%'.$term.'%'))
             ->orderBy('name')
@@ -116,6 +119,13 @@ class BrowseWorkspace extends BiteTool implements Tool
 
     private function people(string $term, int $limit): string
     {
+        $directory = Gate::forUser($this->context->user)->allows('viewMembers', $this->context->workspace)
+            && ($this->context->readScope?->allowsMemberDirectory() ?? true);
+
+        if (! $directory) {
+            return 'Guests cannot browse the member directory, so the people list is not available here.';
+        }
+
         /*
          * `activeUsers` rather than `users`: a suspended member is treated as a
          * non-member everywhere else in Snack, and offering one as somebody to
@@ -161,6 +171,7 @@ class BrowseWorkspace extends BiteTool implements Tool
 
         $projects = Project::query()
             ->where('workspace_id', $this->context->workspace->id)
+            ->when($this->context->readScope, fn (Builder $query, AgentReadScope $scope) => $scope->constrainProjects($query))
             ->notArchived()
             ->when($term !== '', fn (Builder $query) => $query->where(
                 fn (Builder $group) => $group

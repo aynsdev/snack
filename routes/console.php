@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\OutboundEvent;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -98,3 +99,24 @@ Schedule::command('snack:sweep-huddles')
 Schedule::command('snack:run-standups')
     ->everyMinute()
     ->withoutOverlapping(5);
+
+/*
+ * Re-queues agent dispatcher events whose delivery job never ran — see
+ * App\Console\Commands\SweepOutboundEvents.
+ *
+ * Every minute because the first retry after a failure is ten seconds out, and
+ * an assignment the dispatcher hears about a minute late is a minute an agent
+ * did not start. `withoutOverlapping` keeps two sweeps from queueing the same
+ * rows; the delivery itself would cope, but there is no reason to make it.
+ */
+Schedule::command('snack:sweep-outbound-events')
+    ->everyMinute()
+    ->withoutOverlapping(5);
+
+/*
+ * Delivered and dead outbound events, which carry copies of message bodies and
+ * task descriptions — see App\Models\OutboundEvent::prunable().
+ */
+Schedule::command('model:prune', ['--model' => [OutboundEvent::class]])
+    ->dailyAt('03:45')
+    ->withoutOverlapping();

@@ -7,6 +7,7 @@ use App\Enums\NotificationLevel;
 use App\Models\Channel;
 use App\Models\ChannelMember;
 use App\Models\User;
+use App\Services\Outbound\TaskEligibilityEvents;
 
 /**
  * Adds a user to a channel.
@@ -21,22 +22,35 @@ use App\Models\User;
  */
 class JoinChannel
 {
+    public function __construct(private readonly TaskEligibilityEvents $eligibility) {}
+
     public function handle(
         Channel $channel,
         User $user,
         ChannelRole $role = ChannelRole::Member,
         ?NotificationLevel $notificationLevel = null,
     ): ChannelMember {
-        $membership = ChannelMember::firstOrCreate(
-            [
-                'channel_id' => $channel->id,
-                'user_id' => $user->id,
-            ],
-            [
-                'role' => $role,
-                'notification_level' => $notificationLevel ?? $this->defaultNotificationLevel($channel, $user),
-                'joined_at' => now(),
-            ],
+        /*
+         * Joining a private agent channel — or any, for a guest — is how an
+         * assignee comes to see where their agent works, so the agent
+         * dispatcher is told; see TaskEligibilityEvents::aroundViewerChange().
+         */
+        $membership = $this->eligibility->aroundViewerChange(
+            $channel->workspace_id,
+            $channel->id,
+            [$user->id],
+            fn (): ChannelMember => ChannelMember::firstOrCreate(
+                [
+                    'channel_id' => $channel->id,
+                    'user_id' => $user->id,
+                ],
+                [
+                    'role' => $role,
+                    'notification_level' => $notificationLevel ?? $this->defaultNotificationLevel($channel, $user),
+                    'joined_at' => now(),
+                ],
+            ),
+            fn (int $userId): bool => $this->eligibility->membershipDecidesView($channel->id, $userId),
         );
 
         $channel->unsetRelation('members');

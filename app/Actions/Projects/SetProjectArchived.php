@@ -6,6 +6,8 @@ use App\Actions\Audit\RecordAuditLog;
 use App\Enums\AuditAction;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\Outbound\AgentSettingsEvents;
+use App\Services\Outbound\OutboundEvents;
 
 /**
  * Archives a project, or restores one.
@@ -21,7 +23,11 @@ use App\Models\User;
  */
 class SetProjectArchived
 {
-    public function __construct(private readonly RecordAuditLog $audit) {}
+    public function __construct(
+        private readonly RecordAuditLog $audit,
+        private readonly AgentSettingsEvents $agentSettings,
+        private readonly OutboundEvents $events,
+    ) {}
 
     public function handle(Project $project, User $actor, bool $archived): Project
     {
@@ -29,16 +35,30 @@ class SetProjectArchived
             return $project;
         }
 
-        $project->forceFill(['is_archived' => $archived])->save();
+        $this->events->transaction([$project->workspace_id], function () use ($project, $actor, $archived): void {
+            $locked = Project::query()->lock('for no key update')->findOrFail($project->id);
 
-        $this->audit->handle(
-            workspace: $project->workspace,
-            action: $archived ? AuditAction::ProjectArchived : AuditAction::ProjectUnarchived,
-            actor: $actor,
-            auditable: $project,
-            newValues: ['is_archived' => $archived],
-        );
+            if ($locked->is_archived === $archived) {
+                return;
+            }
 
-        return $project;
+            // Archiving switches a project's agents off, and restoring it
+            // switches them back on — so the dispatcher hears about both.
+            if ($locked->agent_channel_id !== null) {
+                $this->agentSettings->changing($locked);
+            }
+
+            $locked->forceFill(['is_archived' => $archived])->save();
+
+            $this->audit->handle(
+                workspace: $project->workspace,
+                action: $archived ? AuditAction::ProjectArchived : AuditAction::ProjectUnarchived,
+                actor: $actor,
+                auditable: $locked,
+                newValues: ['is_archived' => $archived],
+            );
+        });
+
+        return $project->refresh();
     }
 }

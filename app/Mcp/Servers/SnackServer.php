@@ -3,12 +3,20 @@
 namespace App\Mcp\Servers;
 
 use App\Mcp\Tools\AddLinkTool;
+use App\Mcp\Tools\AgentAttestationTool;
+use App\Mcp\Tools\AgentCreateTaskTool;
+use App\Mcp\Tools\AgentFindPostTool;
+use App\Mcp\Tools\AgentProjectsCatalogTool;
+use App\Mcp\Tools\AgentTaskContextTool;
+use App\Mcp\Tools\AgentThreadTool;
+use App\Mcp\Tools\AgentUpdatePostTool;
 use App\Mcp\Tools\BrowseAssetsTool;
 use App\Mcp\Tools\BrowseWorkspaceTool;
 use App\Mcp\Tools\CommentOnTaskTool;
 use App\Mcp\Tools\CreateReleaseTool;
 use App\Mcp\Tools\CreateTaskTool;
 use App\Mcp\Tools\FindFilesTool;
+use App\Mcp\Tools\GetMessageTool;
 use App\Mcp\Tools\GetProjectTool;
 use App\Mcp\Tools\GetReleaseTool;
 use App\Mcp\Tools\GetTaskTool;
@@ -52,7 +60,8 @@ one workspace, and can see only what they can see. You are not told who that
 is up front: call `whoami` whenever a request says "me", "my", or "I".
 
 - To answer a question about what was said or decided, start with
-  `search_messages`, then open context with `read_thread` or `read_channel`.
+  `search_messages`, then open context with `get_message`, `read_thread` or
+  `read_channel`.
 - Use `browse_workspace` to turn a name ("the design channel", "Ada", "the
   mobile project") into the exact channel, @username, or project key.
 - For files, `find_files` searches by name, `browse_assets` walks the asset
@@ -87,6 +96,7 @@ class SnackServer extends Server
         SearchMessagesTool::class,
         ReadChannelTool::class,
         ReadThreadTool::class,
+        GetMessageTool::class,
         BrowseWorkspaceTool::class,
         SearchTasksTool::class,
         FindFilesTool::class,
@@ -110,6 +120,13 @@ class SnackServer extends Server
         GetReleaseTool::class,
         CreateReleaseTool::class,
         UpdateReleaseTool::class,
+        AgentAttestationTool::class,
+        AgentThreadTool::class,
+        AgentTaskContextTool::class,
+        AgentFindPostTool::class,
+        AgentUpdatePostTool::class,
+        AgentProjectsCatalogTool::class,
+        AgentCreateTaskTool::class,
     ];
 
     protected array $resources = [

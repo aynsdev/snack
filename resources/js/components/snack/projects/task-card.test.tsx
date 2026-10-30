@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TaskCard } from '@/components/snack/projects/task-card';
 import type { CardFields, Task } from '@/types';
@@ -131,5 +131,61 @@ describe('TaskCard', () => {
             'draggable',
             'true',
         );
+    });
+
+    it('opens from anywhere on the card, not only the title', () => {
+        const onOpen = vi.fn();
+        render(
+            <TaskCard task={makeTask()} fields={ALL_FIELDS} onOpen={onOpen} />,
+        );
+
+        fireEvent.click(screen.getByText('needs design'));
+        fireEvent.click(screen.getByText('PWA-1499'));
+        fireEvent.click(screen.getByText('Xendit tokenization api'));
+
+        expect(onOpen).toHaveBeenCalledTimes(3);
+    });
+
+    it('treats a short drag that was not dropped as a click', () => {
+        const onOpen = vi.fn();
+        const onDragEnd = vi.fn();
+        render(
+            <TaskCard
+                task={makeTask()}
+                fields={ALL_FIELDS}
+                draggable
+                onOpen={onOpen}
+                onDragEnd={onDragEnd}
+            />,
+        );
+        const card = screen.getByRole('article');
+
+        fireEvent.dragStart(card, {
+            dataTransfer: { setData: vi.fn(), effectAllowed: '' },
+        });
+        fireEvent.dragEnd(card, { dataTransfer: { dropEffect: 'none' } });
+
+        expect(onDragEnd).toHaveBeenCalledOnce();
+        expect(onOpen).toHaveBeenCalledOnce();
+    });
+
+    it('does not open after a real drop', () => {
+        const onOpen = vi.fn();
+        render(
+            <TaskCard
+                task={makeTask()}
+                fields={ALL_FIELDS}
+                draggable
+                onOpen={onOpen}
+            />,
+        );
+        const card = screen.getByRole('article');
+
+        fireEvent.dragStart(card, {
+            dataTransfer: { setData: vi.fn(), effectAllowed: '' },
+        });
+        fireEvent.dragEnd(card, { dataTransfer: { dropEffect: 'move' } });
+
+        expect(onOpen).not.toHaveBeenCalled();
     });
 });

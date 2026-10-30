@@ -5,7 +5,9 @@ namespace App\Actions\Webhooks;
 use App\Actions\Messages\SendMessage;
 use App\Models\IncomingWebhook;
 use App\Models\Message;
+use App\Services\ActorContext;
 use App\Services\WebhookBot;
+use App\Support\Actor;
 use App\Support\WebhookPayload;
 use Illuminate\Support\Facades\DB;
 
@@ -44,6 +46,7 @@ class DeliverWebhookMessage
     public function __construct(
         private readonly WebhookBot $bot,
         private readonly SendMessage $messages,
+        private readonly ActorContext $actors,
     ) {}
 
     public function handle(IncomingWebhook $webhook, WebhookPayload $payload): Message
@@ -57,11 +60,12 @@ class DeliverWebhookMessage
          */
         $bot = $this->bot->accountFor($webhook);
 
-        $message = $this->messages->handle(
+        // A webhook request authenticates as nobody, so it says what it is.
+        $message = $this->actors->using(Actor::webhook($bot), fn (): Message => $this->messages->handle(
             container: $webhook->channel,
             sender: $bot,
             body: $payload->text,
-        );
+        ));
 
         /*
          * Written on every delivery, including the plain `{"text": "..."}` case

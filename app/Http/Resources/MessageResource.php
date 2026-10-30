@@ -6,6 +6,7 @@ use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\MessageReaction;
 use App\Services\MessageBody;
+use App\Services\ThreadHistory;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -75,7 +76,7 @@ class MessageResource extends JsonResource
             'channel_id' => $message->channel_id,
             'conversation_id' => $message->conversation?->public_id,
             'parent_message_id' => $message->parent_message_id,
-            'body' => $message->body,
+            'body' => $message->displayBody(),
             'type' => $message->type->value,
             'sender' => $message->sender !== null
                 ? (new UserResource($message->sender))->resolve()
@@ -152,6 +153,41 @@ class MessageResource extends JsonResource
             'bite' => is_array($message->metadata['bite'] ?? null)
                 ? $message->metadata['bite']
                 : null,
+
+            /*
+             * Set when a person's agent posted this under their name, so the
+             * header can say so — see SendMessage::agentMetadata(). Only the
+             * connector's name: which token it was is the owner's business and
+             * the agent dispatcher's, not every reader's.
+             */
+            'agent' => self::agent($message),
+        ];
+    }
+
+    /**
+     * The `agent` block. A plan also carries its task's current assignee, who
+     * alone is offered Approve and Cancel on it — only where `agentTask` was
+     * loaded: the thread view ({@see ThreadHistory}) and a plan's broadcast.
+     * Everywhere else lists messages, so it stays null rather than querying.
+     *
+     * @return array{name: string, kind: string|null, task_id: int|null, task_assignee_id: int|null}|null
+     */
+    private static function agent(Message $message): ?array
+    {
+        $agent = $message->metadata['agent'] ?? null;
+
+        if (! is_array($agent)) {
+            return null;
+        }
+
+        $kind = is_string($agent['kind'] ?? null) ? $agent['kind'] : null;
+        $taskId = is_int($agent['task_id'] ?? null) ? $agent['task_id'] : null;
+
+        return [
+            'name' => (string) ($agent['name'] ?? ''),
+            'kind' => $kind,
+            'task_id' => $taskId,
+            'task_assignee_id' => $message->relationLoaded('agentTask') ? $message->agentTask?->assignee_id : null,
         ];
     }
 

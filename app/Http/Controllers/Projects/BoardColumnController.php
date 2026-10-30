@@ -86,7 +86,7 @@ class BoardColumnController extends Controller
             'move_to_column_id' => ['nullable', 'integer'],
         ]);
 
-        $deleteColumn->handle($column, $validated['move_to_column_id'] ?? null);
+        $deleteColumn->handle($column, $validated['move_to_column_id'] ?? null, $request->user());
 
         return back()->with('success', 'Column removed.');
     }

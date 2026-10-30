@@ -2,10 +2,12 @@
 
 namespace App\Actions\Projects;
 
+use App\Enums\EligibilityReason;
 use App\Enums\TaskType;
 use App\Events\TaskChanged;
 use App\Models\Task;
-use Illuminate\Support\Facades\DB;
+use App\Services\Outbound\TaskEligibilityEvents;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Deletes a task.
@@ -20,7 +22,10 @@ use Illuminate\Support\Facades\DB;
  */
 class DeleteTask
 {
-    public function __construct(private readonly AnnounceParentProgress $parents) {}
+    public function __construct(
+        private readonly AnnounceParentProgress $parents,
+        private readonly TaskEligibilityEvents $eligibility,
+    ) {}
 
     public function handle(Task $task): void
     {
@@ -29,7 +34,7 @@ class DeleteTask
         $reference = $task->reference();
         $parentId = $task->parent_task_id;
 
-        DB::transaction(function () use ($task): void {
+        $this->eligibility->track($project, EligibilityReason::Deleted, fn (): Builder => Task::query()->whereKey($id), function () use ($task): void {
             // A subtask is always a piece of something, so one whose parent
             // is gone becomes an ordinary task rather than a dangling piece.
             $task->children()->where('type', TaskType::Subtask)->update(['type' => TaskType::Task]);

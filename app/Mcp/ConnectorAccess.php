@@ -45,6 +45,24 @@ class ConnectorAccess
     }
 
     /**
+     * The token row the person's current request was made with, which carries
+     * the connector's name and {@see App\Enums\ConnectorKind}. Null for a
+     * request that did not arrive with a Passport token.
+     */
+    public function token(User $user): ?OAuthToken
+    {
+        $token = $user->token();
+
+        if (! $token instanceof AccessToken) {
+            return null;
+        }
+
+        $id = $token->oauth_access_token_id ?? null;
+
+        return is_string($id) ? OAuthToken::query()->find($id) : null;
+    }
+
+    /**
      * @param  AccessToken<mixed>  $token
      */
     private function personalTokenWorkspace(AccessToken $token): ?Workspace

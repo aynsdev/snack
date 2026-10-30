@@ -3,6 +3,7 @@
 namespace App\Ai\Tools;
 
 use App\Models\Task;
+use App\Services\AgentReadScope;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Database\Eloquent\Builder;
 use Laravel\Ai\Contracts\Tool;
@@ -49,7 +50,8 @@ class SearchTasks extends BiteTool implements Tool
         $tasks = Task::query()
             ->whereHas('project', fn (Builder $project) => $project
                 ->where('workspace_id', $this->context->workspace->id)
-                ->when($key !== '', fn (Builder $query) => $query->where('key', 'ilike', $key)))
+                ->when($key !== '', fn (Builder $query) => $query->where('key', 'ilike', $key))
+                ->when($this->context->readScope, fn (Builder $query, AgentReadScope $scope) => $scope->constrainProjects($query)))
             ->when($term !== '', fn (Builder $query) => $query->where(
                 fn (Builder $group) => $group
                     ->where('title', 'ilike', '%'.$term.'%')

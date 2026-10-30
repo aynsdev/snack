@@ -56,6 +56,7 @@ class MessageSearch
         User $user,
         SearchQuery $query,
         int $page = 1,
+        ?AgentReadScope $within = null,
     ): array {
         $perPage = (int) config('snack.search.page_size', 25);
         $page = max(1, $page);
@@ -65,6 +66,10 @@ class MessageSearch
         }
 
         $base = $this->constrain(Message::query(), $workspace, $user, $query);
+
+        if ($within !== null) {
+            $within->constrainMessages($base);
+        }
 
         /*
          * Counted before the page is taken, because the result header says "48

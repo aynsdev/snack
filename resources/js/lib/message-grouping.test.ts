@@ -57,6 +57,32 @@ describe('continuesGroup', () => {
         ).toBe(true);
     });
 
+    it('does not fold an agent message under its owner', () => {
+        // The agent posts as its owner, so the sender alone cannot tell them
+        // apart — the header carrying the agent badge has to be drawn.
+        expect(
+            continuesGroup(at('2026-07-29T10:00:00Z'), {
+                ...at('2026-07-29T10:00:30Z'),
+                agent: { name: 'LocalAgent' },
+            }),
+        ).toBe(false);
+    });
+
+    it('groups an agent posting repeatedly', () => {
+        expect(
+            continuesGroup(
+                {
+                    ...at('2026-07-29T10:00:00Z'),
+                    agent: { name: 'LocalAgent' },
+                },
+                {
+                    ...at('2026-07-29T10:00:30Z'),
+                    agent: { name: 'LocalAgent' },
+                },
+            ),
+        ).toBe(true);
+    });
+
     it('breaks the group after the time window', () => {
         // An hour later is a new thought, not a continuation.
         expect(

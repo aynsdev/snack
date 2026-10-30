@@ -8,8 +8,8 @@ use App\Events\ChannelMembershipGranted;
 use App\Models\Channel;
 use App\Models\User;
 use App\Policies\ChannelPolicy;
+use App\Services\Outbound\OutboundEvents;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Adds other people to a channel, public or private.
@@ -34,6 +34,7 @@ class AddChannelMembers
     public function __construct(
         private readonly JoinChannel $joinChannel,
         private readonly PostSystemMessage $systemMessage,
+        private readonly OutboundEvents $events,
     ) {}
 
     /**
@@ -56,7 +57,9 @@ class AddChannelMembers
             return $added;
         }
 
-        DB::transaction(function () use ($channel, $added, $role): void {
+        // One outbound transaction for everybody, each join reporting the
+        // assignee it lets see the channel — see JoinChannel.
+        $this->events->transaction([$channel->workspace_id], function () use ($channel, $added, $role): void {
             foreach ($added as $user) {
                 $this->joinChannel->handle($channel, $user, $role);
             }

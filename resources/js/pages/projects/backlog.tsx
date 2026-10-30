@@ -1,8 +1,8 @@
 import { Head, router } from '@inertiajs/react';
 import { CalendarClock, ChevronDown, Play, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ProjectHeader } from '@/components/snack/projects/project-header';
-import { LabelChip } from '@/components/snack/projects/task-glyphs';
+import { AgentBadge, LabelChip } from '@/components/snack/projects/task-glyphs';
 import { TaskPanel } from '@/components/snack/projects/task-panel';
 import {
     TaskAssigneeMenu,
@@ -20,6 +20,7 @@ import {
 import { orderedTasks, useBoard } from '@/hooks/use-board';
 import { useOpenTask } from '@/hooks/use-open-task';
 import { useWorkspace } from '@/hooks/use-workspace';
+import { agentStateOf, withoutReservedLabels } from '@/lib/agent-labels';
 import { cn } from '@/lib/utils';
 import {
     destroy as destroySprint,
@@ -69,12 +70,16 @@ export default function ProjectBacklogPage({
     sprints,
     tasks: initialTasks,
     members,
-    labels,
+    labels: projectLabels,
     releases,
     canContribute,
     canManage,
 }: Props) {
     const workspace = useWorkspace();
+    const labels = useMemo(
+        () => withoutReservedLabels(projectLabels),
+        [projectLabels],
+    );
 
     const { tasks, create, update, remove, move } = useBoard({
         projectId: project.id,
@@ -247,6 +252,7 @@ export default function ProjectBacklogPage({
                 columns={columns}
                 members={members}
                 labels={labels}
+                agentsEnabled={project.agents_enabled}
                 releases={releases}
                 workspaceSlug={workspace.slug}
                 canContribute={canContribute}
@@ -505,6 +511,8 @@ function BacklogRow({
     ) => void;
     onDelete: (task: Task) => void;
 }) {
+    const agentState = agentStateOf(task.labels);
+
     return (
         <li
             draggable={draggable}
@@ -541,13 +549,17 @@ function BacklogRow({
                 {task.title}
             </button>
 
-            {(task.labels ?? []).slice(0, 2).map((label) => (
-                <LabelChip
-                    key={label.id}
-                    name={label.name}
-                    color={label.color}
-                />
-            ))}
+            {agentState !== null && <AgentBadge state={agentState} />}
+
+            {withoutReservedLabels(task.labels ?? [])
+                .slice(0, 2)
+                .map((label) => (
+                    <LabelChip
+                        key={label.id}
+                        name={label.name}
+                        color={label.color}
+                    />
+                ))}
 
             {task.story_points !== null && (
                 <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.625rem] leading-none font-semibold text-muted-foreground tabular-nums">

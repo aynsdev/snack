@@ -61,6 +61,7 @@ class SearchMessages extends BiteTool implements Tool
             workspace: $this->context->workspace,
             user: $this->context->user,
             query: $query,
+            within: $this->context->readScope,
         );
 
         $limit = $this->limit($this->arg($request, 'limit'), 10, 25);

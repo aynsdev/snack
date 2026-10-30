@@ -9,6 +9,7 @@ use App\Events\ThreadActivity;
 use App\Models\Channel;
 use App\Models\Message;
 use App\Models\User;
+use App\Services\Outbound\AgentChannelMessages;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -20,13 +21,27 @@ use Illuminate\Support\Facades\DB;
  */
 class DeleteMessage
 {
-    public function __construct(private readonly RecordAuditLog $audit) {}
+    public function __construct(
+        private readonly RecordAuditLog $audit,
+        private readonly AgentChannelMessages $agentChannels,
+    ) {}
 
     public function handle(Message $message, User $actor): void
     {
         $moderated = ! $message->wasSentBy($actor);
 
-        DB::transaction(function () use ($message, $actor, $moderated): void {
+        // Locked before the first write when the deletion may be exported —
+        // see AgentChannelMessages.
+        $deleted = $this->agentChannels->transaction($message->workspace_id, $message->channel_id, $this->agentChannels->reportable($message), function () use ($message, $actor, $moderated): bool {
+            /*
+             * Locked and read again, so a second delete of the same message —
+             * a double click, two tabs — finds it gone and does nothing: no
+             * second tally decrement, no second event, no second audit entry.
+             */
+            if (Message::query()->whereKey($message->id)->lockForUpdate()->doesntExist()) {
+                return false;
+            }
+
             $message->delete();
 
             /*
@@ -46,6 +61,8 @@ class DeleteMessage
                 $this->releaseFromThread($message);
             }
 
+            $this->agentChannels->deleted($message);
+
             /*
              * Only an admin removing someone else's message is audited. Logging
              * self-deletions too would bury the moderation decisions — the ones
@@ -64,7 +81,13 @@ class DeleteMessage
                     ],
                 );
             }
-        });
+
+            return true;
+        }, threadRootId: $message->threadRootId());
+
+        if (! $deleted) {
+            return;
+        }
 
         MessageDeleted::dispatch($message);
 

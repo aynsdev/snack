@@ -14,7 +14,7 @@ vi.mock('@/lib/api', () => ({
     ApiError: class ApiError extends Error {},
 }));
 
-const { useMentionCandidates } =
+const { AGENT_MENTION, useMentionCandidates } =
     await import('@/components/snack/mention-picker');
 
 function person(id: number, name: string, username: string): SnackUser {
@@ -126,5 +126,33 @@ describe('useMentionCandidates', () => {
         rerender({ term: 'bo' });
 
         await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+    });
+
+    it('offers @agent first in a channel, and only while it still matches', async () => {
+        const source = {
+            kind: 'remote' as const,
+            url: (term: string) => `/mentionable?q=${term}`,
+        };
+
+        const { result, rerender } = renderHook(
+            ({ term }: { term: string }) => useMentionCandidates(term, source),
+            { initialProps: { term: 'ag' } },
+        );
+
+        await waitFor(() => expect(result.current[0]).toBe(AGENT_MENTION));
+
+        rerender({ term: 'bo' });
+
+        await waitFor(() =>
+            expect(result.current).not.toContain(AGENT_MENTION),
+        );
+    });
+
+    it('never offers @agent in a conversation', () => {
+        const { result } = renderHook(() =>
+            useMentionCandidates('', { kind: 'local', people: roster }),
+        );
+
+        expect(result.current).not.toContain(AGENT_MENTION);
     });
 });

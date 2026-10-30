@@ -5,6 +5,7 @@ use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LeaveInertiaForOAuth;
 use App\Http\Middleware\PreventSharedCaching;
 use App\Http\Middleware\ResolveWorkspace;
+use App\Support\WriteContention;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -59,6 +60,25 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        /*
+         * A write that gave up waiting on another — see WriteContention. The
+         * page goes back with a flash rather than to an error screen; a
+         * program gets a 503 it knows to retry.
+         */
+        $exceptions->render(function (PDOException $exception, Request $request) {
+            if (! WriteContention::causedBy($exception)) {
+                return null;
+            }
+
+            $retryAfter = ['Retry-After' => (string) WriteContention::RETRY_AFTER_SECONDS];
+
+            if ($request->expectsJson() || $request->is('api/*', 'hooks/*', 'mcp')) {
+                return response()->json(['message' => WriteContention::MESSAGE], 503, $retryAfter);
+            }
+
+            return back()->with('error', WriteContention::MESSAGE)->withHeaders($retryAfter);
+        });
+
         $exceptions->shouldRenderJsonWhen(
             /*
              * `hooks/*` is here because its callers are machines that mostly do

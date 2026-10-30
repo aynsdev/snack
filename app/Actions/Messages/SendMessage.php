@@ -17,8 +17,11 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Services\ActorContext;
 use App\Services\BiteSummons;
 use App\Services\MessageBody;
+use App\Services\Outbound\AgentChannelMessages;
+use App\Services\Outbound\AgentSummons;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -46,9 +49,13 @@ class SendMessage
         private readonly SubscribeToThread $subscribe,
         private readonly SyncMentions $mentions,
         private readonly LinkAttachments $attachments,
+        private readonly ActorContext $actors,
+        private readonly AgentChannelMessages $agentChannels,
+        private readonly AgentSummons $summons,
     ) {}
 
     /**
+     * @param  array{kind: string, task_id: int, task_reference: string}|null  $agentContext  Merged into an agent's own `agent` block only; see SendMessageTool.
      * @param  Collection<int, MessageAttachment>|null  $attachments  Uploads to
      *                                                                claim for this message, already resolved through the workspace and
      *                                                                the uploader — see ResolvesAttachments. Never client ids.
@@ -60,6 +67,7 @@ class SendMessage
         ?Message $parent = null,
         ?Collection $attachments = null,
         ?MagnificModel $biteModel = null,
+        ?array $agentContext = null,
     ): Message {
         $content = MessageBody::fromInput($body);
 
@@ -73,7 +81,26 @@ class SendMessage
 
         $files = $attachments ?? new Collection;
 
-        $message = DB::transaction(function () use ($container, $sender, $content, $root, $files, $biteModel): Message {
+        /*
+         * Through the agent channel's lock, taken before anything is written
+         * when this message may be exported — a reply, or an agent's own
+         * post — see AgentChannelMessages.
+         */
+        $channelId = $container instanceof Channel ? $container->id : null;
+        $metadata = $this->agentMetadata($sender);
+
+        if ($agentContext !== null && isset($metadata['agent'])) {
+            $metadata['agent'] += $agentContext;
+        }
+
+        if ($biteModel !== null) {
+            $metadata['bite_model'] = $biteModel->value;
+        }
+
+        $reportable = $root !== null || isset($metadata['agent']);
+        $summoning = $container instanceof Channel && $this->summons->mayBeSummons($sender, $content->source, $metadata);
+
+        $message = $this->agentChannels->transaction($container->workspace_id, $channelId, $reportable, function () use ($container, $sender, $content, $root, $files, $metadata, $summoning): Message {
             $message = Message::create([
                 ...$content->toAttributes(),
 
@@ -94,7 +121,7 @@ class SendMessage
                 'type' => $container instanceof Channel && $container->type->requiresElevatedPostingRights()
                     ? MessageType::Announcement
                     : MessageType::Text,
-                'metadata' => $biteModel === null ? [] : ['bite_model' => $biteModel->value],
+                'metadata' => $metadata,
             ]);
 
             /*
@@ -122,8 +149,16 @@ class SendMessage
                 $this->recordConversationActivity($container, $message);
             }
 
+            if ($container instanceof Channel) {
+                if ($summoning) {
+                    $this->summons->record($container, $message, $sender);
+                }
+
+                $this->agentChannels->created($message->setRelation('sender', $sender));
+            }
+
             return $message;
-        });
+        }, threadRootId: $root, summoning: $summoning);
 
         /*
          * Mentions are materialized before the broadcast, so a recipient whose
@@ -166,7 +201,7 @@ class SendMessage
          * the difference between "instant" and "eventually" on a single worker,
          * which is what most deployments actually run.
          */
-        MessageSent::dispatch($message);
+        MessageSent::dispatch($message->loadAgentTask());
 
         /*
          * And the signal that badges the channel for everyone *not* looking at
@@ -225,6 +260,30 @@ class SendMessage
         }
 
         return $message;
+    }
+
+    /**
+     * The `agent` block, on a message an agent sent as its owner.
+     *
+     * Stamped from the authenticated token rather than from anything the caller
+     * passes, and only when the sender *is* that token's owner — so neither a
+     * person nor an integration can make a message look like an agent's, or
+     * make an agent's look like a person's.
+     *
+     * @return array<string, mixed>
+     */
+    private function agentMetadata(User $sender): array
+    {
+        $actor = $this->actors->current();
+
+        if (! $actor->isAgentFor($sender)) {
+            return [];
+        }
+
+        return ['agent' => [
+            'connector_id' => $actor->connectorId,
+            'name' => $actor->connectorName,
+        ]];
     }
 
     /**

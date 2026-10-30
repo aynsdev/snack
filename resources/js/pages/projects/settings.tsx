@@ -1,6 +1,7 @@
-import { Head, router, useForm } from '@inertiajs/react';
-import { Archive, Plus, Trash2, UserPlus } from 'lucide-react';
-import { useState } from 'react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Archive, Check, Plus, Trash2, UserPlus, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import InputError from '@/components/input-error';
 import {
     PROJECT_COLOR_NAMES,
     PROJECT_COLORS,
@@ -8,7 +9,7 @@ import {
 import { ProjectHeader } from '@/components/snack/projects/project-header';
 import {
     LABEL_COLOR_NAMES,
-    LabelChip,
+    LABEL_COLORS,
 } from '@/components/snack/projects/task-glyphs';
 import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useWorkspace } from '@/hooks/use-workspace';
+import { withoutReservedLabels } from '@/lib/agent-labels';
 import { cn } from '@/lib/utils';
 import { update as updateProject } from '@/routes/projects';
 import { store as archiveProject } from '@/routes/projects/archive';
@@ -38,7 +40,9 @@ import {
     update as updateMember,
 } from '@/routes/projects/members';
 import type {
+    BoardColumn,
     CardFields,
+    Channel,
     Project,
     ProjectGroup,
     ProjectMembership,
@@ -54,6 +58,16 @@ import type {
  */
 const UNGROUPED = 'none';
 
+/** The value the agent pickers use for "not set", for the reason above. */
+const UNSET = 'none';
+
+type AgentSetting =
+    | 'agent_channel_id'
+    | 'agent_in_progress_column_id'
+    | 'agent_review_column_id';
+
+type Option = { id: number; name: string };
+
 type Props = {
     project: Project;
     /** Every group in the workspace, so the picker can name this one's. */
@@ -61,6 +75,10 @@ type Props = {
     members: ProjectMembership[];
     labels: TaskLabel[];
     canManage: boolean;
+    /** Channels this viewer could point the project's agents at. */
+    agentChannels: Pick<Channel, 'id' | 'name'>[];
+    /** The project's columns, for the agents' two column pickers. */
+    columns: Pick<BoardColumn, 'id' | 'name'>[];
     /** Deferred: everyone in the workspace not already on the project. */
     addable?: SnackUser[];
 };
@@ -83,6 +101,8 @@ export default function ProjectSettingsPage({
     members,
     labels,
     canManage,
+    agentChannels,
+    columns,
     addable,
 }: Props) {
     const workspace = useWorkspace();
@@ -127,6 +147,15 @@ export default function ProjectSettingsPage({
                         workspaceSlug={workspace.slug}
                         canManage={canManage}
                     />
+
+                    {canManage && (
+                        <AgentsSection
+                            project={project}
+                            channels={agentChannels}
+                            columns={columns}
+                            workspaceSlug={workspace.slug}
+                        />
+                    )}
                 </div>
             </div>
         </div>
@@ -148,6 +177,8 @@ function DetailsSection({
         name: project.name,
         key: project.key,
         description: project.description ?? '',
+        repository_url: project.repository_url ?? '',
+        repository_base_branch: project.repository_base_branch ?? '',
         color: project.color,
         uses_sprints: project.uses_sprints,
         next_task_number: String(project.next_task_number),
@@ -169,6 +200,10 @@ function DetailsSection({
                     form.transform((data) => ({
                         ...data,
                         next_task_number: Number(data.next_task_number),
+                        repository_base_branch:
+                            data.repository_url.trim() === ''
+                                ? ''
+                                : data.repository_base_branch,
                     }));
 
                     form.patch(
@@ -230,6 +265,47 @@ function DetailsSection({
                             form.setData('description', event.target.value)
                         }
                     />
+                </div>
+
+                <div className="space-y-1.5">
+                    <Label htmlFor="repository-url">GitHub repository</Label>
+                    <Input
+                        id="repository-url"
+                        value={form.data.repository_url}
+                        disabled={!canManage}
+                        placeholder="https://github.com/owner/repo"
+                        aria-describedby="repository-url-hint"
+                        onChange={(event) =>
+                            form.setData('repository_url', event.target.value)
+                        }
+                    />
+                    <p
+                        id="repository-url-hint"
+                        className="text-xs text-muted-foreground"
+                    >
+                        Where agents find this project's code. github.com only,
+                        over https or ssh.
+                    </p>
+                    <InputError message={form.errors.repository_url} />
+                </div>
+
+                <div className="max-w-xs space-y-1.5">
+                    <Label htmlFor="repository-base-branch">Base branch</Label>
+                    <Input
+                        id="repository-base-branch"
+                        value={form.data.repository_base_branch}
+                        disabled={
+                            !canManage || form.data.repository_url.trim() === ''
+                        }
+                        placeholder="default branch"
+                        onChange={(event) =>
+                            form.setData(
+                                'repository_base_branch',
+                                event.target.value,
+                            )
+                        }
+                    />
+                    <InputError message={form.errors.repository_base_branch} />
                 </div>
 
                 {/*
@@ -503,25 +579,35 @@ function LabelsSection({
 
     const projectArgs = { workspace: workspaceSlug, project: project.slug };
 
+    const visibleLabels = useMemo(
+        () => withoutReservedLabels(labels),
+        [labels],
+    );
+
     return (
         <Section
             title="Labels"
             description="Your own vocabulary — “needs design”, “customer-reported”. Removing one takes it off every card that wore it."
         >
-            {labels.length === 0 ? (
+            {visibleLabels.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No labels yet.</p>
             ) : (
                 <ul className="flex flex-wrap gap-2">
-                    {labels.map((label) => (
+                    {visibleLabels.map((label) => (
                         <li
                             key={label.id}
-                            className="flex items-center gap-1 rounded-lg border border-border px-2 py-1"
+                            className={cn(
+                                'inline-flex h-7 max-w-full items-center gap-1 rounded-md pl-2.5 text-xs font-medium',
+                                canManage ? 'pr-1' : 'pr-2.5',
+                                LABEL_COLORS[label.color] ?? LABEL_COLORS.slate,
+                            )}
                         >
-                            <LabelChip name={label.name} color={label.color} />
+                            <span className="truncate">{label.name}</span>
 
                             {canManage && (
                                 <button
                                     type="button"
+                                    aria-label={`Remove ${label.name}`}
                                     onClick={() =>
                                         router.delete(
                                             destroyLabel.url({
@@ -531,15 +617,9 @@ function LabelsSection({
                                             { preserveScroll: true },
                                         )
                                     }
-                                    className="text-muted-foreground transition-colors hover:text-destructive"
+                                    className="inline-flex size-5 shrink-0 items-center justify-center rounded opacity-60 transition hover:bg-foreground/10 hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                 >
-                                    <Trash2
-                                        aria-hidden="true"
-                                        className="size-3.5"
-                                    />
-                                    <span className="sr-only">
-                                        Remove {label.name}
-                                    </span>
+                                    <X aria-hidden="true" className="size-3" />
                                 </button>
                             )}
                         </li>
@@ -549,7 +629,7 @@ function LabelsSection({
 
             {canManage && (
                 <form
-                    className="mt-3 flex flex-wrap items-center gap-2"
+                    className="mt-4 flex flex-wrap items-center gap-3"
                     onSubmit={(event) => {
                         event.preventDefault();
 
@@ -571,10 +651,15 @@ function LabelsSection({
                         value={name}
                         onChange={(event) => setName(event.target.value)}
                         placeholder="needs design"
-                        className="w-48"
+                        aria-label="Label name"
+                        className="w-full sm:w-48"
                     />
 
-                    <div className="flex flex-wrap gap-1.5">
+                    <div
+                        role="group"
+                        aria-label="Label colour"
+                        className="flex flex-wrap items-center gap-2"
+                    >
                         {LABEL_COLOR_NAMES.map((candidate) => (
                             <button
                                 key={candidate}
@@ -583,12 +668,18 @@ function LabelsSection({
                                 aria-pressed={color === candidate}
                                 onClick={() => setColor(candidate)}
                                 className={cn(
-                                    'rounded',
+                                    'inline-flex size-6 items-center justify-center rounded-full text-white transition-transform hover:scale-110',
+                                    PROJECT_COLORS[candidate],
                                     color === candidate &&
-                                        'ring-2 ring-foreground ring-offset-1 ring-offset-background',
+                                        'ring-2 ring-foreground ring-offset-2 ring-offset-background',
                                 )}
                             >
-                                <LabelChip name="Aa" color={candidate} />
+                                {color === candidate && (
+                                    <Check
+                                        aria-hidden="true"
+                                        className="size-3.5"
+                                    />
+                                )}
                             </button>
                         ))}
                     </div>
@@ -751,6 +842,150 @@ function MembersSection({
                     </Button>
                 ))}
         </Section>
+    );
+}
+
+/**
+ * Where the project's agents talk, and which columns they move cards into.
+ *
+ * Each picker saves the moment it changes, like the group picker: they are
+ * independent settings, and the channel alone is what switches agents on or
+ * off. Choosing a channel decides which conversations are sent to the agent
+ * dispatcher, which is why only channels this viewer can see are offered — and
+ * why the section is shown only to someone who can change it.
+ */
+function AgentsSection({
+    project,
+    channels,
+    columns,
+    workspaceSlug,
+}: {
+    project: Project;
+    channels: Option[];
+    columns: Option[];
+    workspaceSlug: string;
+}) {
+    const { errors } = usePage().props;
+    const channelId = project.agent_channel_id ?? null;
+
+    /*
+     * The channel already set may not be on offer — archived since, or a
+     * private channel another lead chose. It stays selectable under a neutral
+     * name, so the picker shows that something is set without naming it.
+     */
+    const channelOptions = useMemo(() => {
+        const named = channels.map(({ id, name }) => ({
+            id,
+            name: `#${name}`,
+        }));
+
+        if (channelId === null || channels.some(({ id }) => id === channelId)) {
+            return named;
+        }
+
+        return [
+            { id: channelId, name: 'Current channel (unavailable)' },
+            ...named,
+        ];
+    }, [channels, channelId]);
+
+    const save = (setting: AgentSetting, value: string) =>
+        router.patch(
+            updateProject.url({
+                workspace: workspaceSlug,
+                project: project.slug,
+            }),
+            { [setting]: value === UNSET ? null : Number(value) },
+            { preserveScroll: true },
+        );
+
+    return (
+        <Section
+            title="Agents"
+            description="Pick a channel to let agents work this project's tickets. Each ticket gets a thread there; clearing the channel turns agents off."
+        >
+            <div className="grid gap-4 sm:grid-cols-3">
+                <AgentPicker
+                    id="agent-channel"
+                    label="Agent channel"
+                    unsetLabel="Off"
+                    value={channelId}
+                    options={channelOptions}
+                    error={errors.agent_channel_id}
+                    onChange={(value) => save('agent_channel_id', value)}
+                />
+
+                <AgentPicker
+                    id="agent-in-progress-column"
+                    label="In progress column"
+                    unsetLabel="Leave the card"
+                    value={project.agent_in_progress_column_id ?? null}
+                    options={columns}
+                    error={errors.agent_in_progress_column_id}
+                    onChange={(value) =>
+                        save('agent_in_progress_column_id', value)
+                    }
+                />
+
+                <AgentPicker
+                    id="agent-review-column"
+                    label="Review column"
+                    unsetLabel="Leave the card"
+                    value={project.agent_review_column_id ?? null}
+                    options={columns}
+                    error={errors.agent_review_column_id}
+                    onChange={(value) => save('agent_review_column_id', value)}
+                />
+            </div>
+        </Section>
+    );
+}
+
+function AgentPicker({
+    id,
+    label,
+    unsetLabel,
+    value,
+    options,
+    error,
+    onChange,
+}: {
+    id: string;
+    label: string;
+    unsetLabel: string;
+    value: number | null;
+    options: Option[];
+    error?: string;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <div className="space-y-1.5">
+            <Label htmlFor={id}>{label}</Label>
+
+            <Select
+                value={value === null ? UNSET : String(value)}
+                onValueChange={onChange}
+            >
+                <SelectTrigger id={id}>
+                    <SelectValue />
+                </SelectTrigger>
+
+                <SelectContent
+                    avoidCollisions
+                    className="max-h-[min(18rem,var(--radix-select-content-available-height))]"
+                >
+                    <SelectItem value={UNSET}>{unsetLabel}</SelectItem>
+
+                    {options.map((option) => (
+                        <SelectItem key={option.id} value={String(option.id)}>
+                            {option.name}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+
+            <InputError message={error} className="text-xs" />
+        </div>
     );
 }
 
