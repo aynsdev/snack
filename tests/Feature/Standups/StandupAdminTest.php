@@ -160,6 +160,82 @@ it('updates a standup and puts the bot in its new channel', function () {
     expect($moved->fresh()->hasMember($bot))->toBeTrue();
 });
 
+it('narrows a standup to selected people', function () {
+    $other = joinWorkspace($this->workspace, null, WorkspaceRole::Member);
+
+    $this->actingAs($this->owner)
+        ->post("/w/{$this->workspace->slug}/standups", standupPayload($this->channel, [
+            'participant_ids' => [$this->member->id, $other->id],
+        ]))
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect(Standup::query()->firstOrFail()->selectedParticipantIds())
+        ->toEqualCanonicalizing([$this->member->id, $other->id]);
+});
+
+it('goes back to asking the whole channel when the selection is cleared', function () {
+    $standup = Standup::factory()->forChannel($this->channel)->create([
+        'participant_ids' => [$this->member->id],
+    ]);
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/standups/{$standup->id}", standupPayload($this->channel, [
+            'participant_ids' => null,
+        ]))
+        ->assertRedirect();
+
+    expect($standup->fresh()->restrictsParticipants())->toBeFalse();
+});
+
+it('keeps the selection when an edit does not mention it', function () {
+    $standup = Standup::factory()->forChannel($this->channel)->create([
+        'participant_ids' => [$this->member->id],
+    ]);
+
+    $this->actingAs($this->owner)
+        ->patch("/w/{$this->workspace->slug}/standups/{$standup->id}", standupPayload($this->channel));
+
+    expect($standup->fresh()->selectedParticipantIds())->toBe([$this->member->id]);
+});
+
+it('refuses selecting somebody from another workspace', function () {
+    [, $stranger] = makeWorkspaceWithOwner();
+
+    $this->actingAs($this->owner)
+        ->post("/w/{$this->workspace->slug}/standups", standupPayload($this->channel, [
+            'participant_ids' => [$stranger->id],
+        ]))
+        ->assertSessionHasErrors('participant_ids.0');
+
+    expect(Standup::query()->exists())->toBeFalse();
+});
+
+it('refuses an empty selection', function () {
+    $this->actingAs($this->owner)
+        ->post("/w/{$this->workspace->slug}/standups", standupPayload($this->channel, [
+            'participant_ids' => [],
+        ]))
+        ->assertSessionHasErrors('participant_ids');
+});
+
+it('counts only the selected people who are in the channel', function () {
+    $other = joinWorkspace($this->workspace, null, WorkspaceRole::Member);
+    addToChannel($this->channel, $this->member);
+    addToChannel($this->channel, $other);
+
+    Standup::factory()->forChannel($this->channel)->create([
+        'participant_ids' => [$this->member->id],
+    ]);
+
+    $this->actingAs($this->owner)
+        ->get("/w/{$this->workspace->slug}/standups")
+        ->assertInertia(fn ($page) => $page
+            ->where('standups.0.participant_count', 1)
+            ->where('standups.0.participant_ids', [$this->member->id])
+            ->has('people'));
+});
+
 it('pauses a standup without losing its questions', function () {
     $standup = Standup::factory()->forChannel($this->channel)->create();
 

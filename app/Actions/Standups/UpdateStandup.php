@@ -45,6 +45,7 @@ class UpdateStandup
      *     reminder_after_minutes?: int|null,
      *     closes_after_minutes?: int,
      *     is_active?: bool,
+     *     participant_ids?: array<int, int>|null,
      * }  $attributes
      * @param  Channel|null  $channel  A resolved channel to move the standup to,
      *                                 or null to leave it where it is.
@@ -61,6 +62,7 @@ class UpdateStandup
             'schedule' => $standup->scheduleSummary(),
             'questions' => $standup->questionList(),
             'is_active' => $standup->is_active,
+            'participant_ids' => $standup->participant_ids,
         ];
 
         DB::transaction(function () use ($standup, $actor, $attributes, $channel, $before): void {
@@ -94,6 +96,13 @@ class UpdateStandup
                 $standup->is_active = $attributes['is_active'];
             }
 
+            // Null is "everyone in the channel" — a value, not "unchanged".
+            if (array_key_exists('participant_ids', $attributes)) {
+                $standup->participant_ids = $attributes['participant_ids'] === null
+                    ? null
+                    : array_values($attributes['participant_ids']);
+            }
+
             if ($channel !== null) {
                 $standup->channel_id = $channel->id;
                 $standup->setRelation('channel', $channel);
@@ -113,6 +122,7 @@ class UpdateStandup
                     'schedule' => $standup->scheduleSummary(),
                     'questions' => $standup->questionList(),
                     'is_active' => $standup->is_active,
+                    'participant_ids' => $standup->participant_ids,
                 ],
             );
         });

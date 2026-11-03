@@ -38,6 +38,7 @@ class CreateStandup
      *     reminder_after_minutes?: int|null,
      *     closes_after_minutes?: int,
      *     is_active?: bool,
+     *     participant_ids?: array<int, int>|null,
      * }  $attributes
      */
     public function handle(
@@ -62,6 +63,9 @@ class CreateStandup
                 'closes_after_minutes' => $attributes['closes_after_minutes']
                     ?? (int) config('snack.standups.closes_after_minutes', 240),
                 'is_active' => $attributes['is_active'] ?? true,
+                'participant_ids' => isset($attributes['participant_ids'])
+                    ? array_values($attributes['participant_ids'])
+                    : null,
             ]);
 
             $this->audit->handle(
@@ -74,6 +78,7 @@ class CreateStandup
                     'channel' => $channel->slug,
                     'schedule' => $standup->scheduleSummary(),
                     'questions' => $standup->questionList(),
+                    'participant_ids' => $standup->participant_ids,
                 ],
             );
 

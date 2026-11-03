@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Standups;
 
+use Illuminate\Validation\Rule;
+
 /**
  * The rules a standup's questions and schedule share between creating one and
  * editing one.
@@ -65,6 +67,56 @@ trait ValidatesStandupSchedule
     }
 
     /**
+     * Who is asked. Absent or null means the whole channel; a list narrows the
+     * roster to those people. Each id must be a member of this workspace — the
+     * list is still intersected with the channel at ask time, so a chosen
+     * person outside the channel is simply not asked rather than refused here,
+     * which keeps "move to another channel" from failing on a stale pick.
+     *
+     * @return array<string, mixed>
+     */
+    protected function participantRules(int $workspaceId): array
+    {
+        return [
+            'participant_ids' => ['nullable', 'array', 'min:1'],
+            'participant_ids.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('workspace_members', 'user_id')->where('workspace_id', $workspaceId),
+            ],
+        ];
+    }
+
+    /**
+     * Whether the request said anything about the roster. An API client that
+     * predates the field must not have its selection wiped by an edit that
+     * never mentioned it.
+     */
+    public function mentionsParticipants(): bool
+    {
+        return $this->exists('participant_ids');
+    }
+
+    /**
+     * The chosen people, or null for the whole channel.
+     *
+     * @return array<int, int>|null
+     */
+    public function participantIds(): ?array
+    {
+        $ids = $this->validated('participant_ids');
+
+        if (! is_array($ids)) {
+            return null;
+        }
+
+        return array_values(array_unique(array_map(
+            fn (mixed $id): int => (int) $id,
+            $ids,
+        )));
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function scheduleMessages(): array
@@ -75,6 +127,8 @@ trait ValidatesStandupSchedule
             'days_of_week.required' => 'Pick at least one day for the standup to run.',
             'ask_at.regex' => 'Give the time as HH:MM, for example 09:30.',
             'timezone.timezone' => 'That is not a timezone this server recognises.',
+            'participant_ids.min' => 'Pick at least one person, or ask the whole channel.',
+            'participant_ids.*.exists' => 'Everyone picked has to be a member of this workspace.',
         ];
     }
 
