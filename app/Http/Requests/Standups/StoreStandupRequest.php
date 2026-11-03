@@ -56,6 +56,7 @@ class StoreStandupRequest extends FormRequest
             ],
 
             ...$this->scheduleRules(),
+            ...$this->participantRules($context->workspace()->id),
         ];
     }
 

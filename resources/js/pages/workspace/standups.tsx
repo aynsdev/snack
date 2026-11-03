@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
+import { UserAvatar } from '@/components/snack/user-avatar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -54,6 +55,16 @@ type ChannelOption = {
     name: string;
     slug: string;
     type: string;
+    /** The live human members a standup in this channel could ask. */
+    member_ids: number[];
+};
+
+type Person = {
+    id: number;
+    name: string;
+    username: string;
+    initials: string;
+    avatar_url: string | null;
 };
 
 type Defaults = {
@@ -68,6 +79,7 @@ type Defaults = {
 type Props = {
     standups: Standup[];
     channels: ChannelOption[];
+    people: Person[];
     timezones: string[];
     defaults: Defaults;
     bot: { name: string; username: string; exists: boolean };
@@ -81,17 +93,17 @@ type Props = {
  * everybody in a channel — the one thing an ordinary member could otherwise set
  * up that lands in other people's inboxes without their asking.
  *
- * # Why the roster is not on this page
+ * # The roster
  *
- * There is no participant picker, and that is the design rather than an
- * omission. The roster *is* the channel's membership, so the way to add
- * somebody to the standup is to add them to the team's channel — one list, one
- * place, and no daily opportunity for the two to disagree about who is on the
- * team.
+ * The channel's membership is the upper bound of who is asked. A standup can
+ * ask all of it, or be narrowed to chosen people within it — the selection
+ * only ever filters the channel, so somebody who leaves it stops being asked
+ * without the standup being edited.
  */
 export default function StandupsPage({
     standups,
     channels,
+    people,
     timezones,
     defaults,
     bot,
@@ -157,6 +169,7 @@ export default function StandupsPage({
                     key={editing === 'new' ? 'new' : editing.id}
                     standup={editing === 'new' ? null : editing}
                     channels={channels}
+                    people={people}
                     timezones={timezones}
                     defaults={defaults}
                     maxQuestions={max_questions}
@@ -342,6 +355,7 @@ function StandupRow({
 function StandupDialog({
     standup,
     channels,
+    people,
     timezones,
     defaults,
     maxQuestions,
@@ -350,6 +364,7 @@ function StandupDialog({
 }: {
     standup: Standup | null;
     channels: ChannelOption[];
+    people: Person[];
     timezones: string[];
     defaults: Defaults;
     maxQuestions: number;
@@ -377,7 +392,16 @@ function StandupDialog({
             standup?.closes_after_minutes ?? defaults.closes_after_minutes,
         ),
         is_active: standup?.is_active ?? true,
+        // `null` is "everyone in the channel", a list is "only these people".
+        participant_ids: standup?.participant_ids ?? (null as number[] | null),
     });
+
+    const channelMemberIds =
+        channels.find((channel) => channel.id === form.data.channel_id)
+            ?.member_ids ?? [];
+    const channelMembers = people.filter((person) =>
+        channelMemberIds.includes(person.id),
+    );
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -434,8 +458,8 @@ function StandupDialog({
                         {standup === null ? 'New standup' : 'Edit standup'}
                     </DialogTitle>
                     <DialogDescription>
-                        Everyone in the channel is asked privately, and the
-                        answers are posted there as one message.
+                        Each person is asked privately, and the answers are
+                        posted to the channel as one message.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -483,12 +507,24 @@ function StandupDialog({
                         </Select>
 
                         <p className="text-xs text-muted-foreground">
-                            Its members are who gets asked. Adding somebody to
-                            the standup means adding them to this channel.
+                            The write-up is posted here, and only its members
+                            can be asked.
                         </p>
 
                         <InputError message={form.errors.channel_id} />
                     </div>
+
+                    <ParticipantPicker
+                        members={channelMembers}
+                        selected={form.data.participant_ids}
+                        onChange={(ids) => form.setData('participant_ids', ids)}
+                        error={
+                            form.errors.participant_ids ??
+                            Object.entries(form.errors).find(([key]) =>
+                                key.startsWith('participant_ids.'),
+                            )?.[1]
+                        }
+                    />
 
                     <fieldset className="space-y-2">
                         <legend className="text-sm font-medium">
@@ -757,6 +793,120 @@ function StandupDialog({
                 </form>
             </DialogContent>
         </Dialog>
+    );
+}
+
+/**
+ * Who is asked: everyone in the channel, or only the people ticked here.
+ *
+ * Only the channel's current members are listed. A previously chosen person
+ * who has since left is kept in the selection (harmless — the server
+ * intersects with the channel on every run) but not shown, so the count below
+ * is the number actually asked.
+ */
+function ParticipantPicker({
+    members,
+    selected,
+    onChange,
+    error,
+}: {
+    members: Person[];
+    selected: number[] | null;
+    onChange: (ids: number[] | null) => void;
+    error?: string;
+}) {
+    const everyone = selected === null;
+    const chosenCount = everyone
+        ? members.length
+        : members.filter((member) => selected.includes(member.id)).length;
+
+    const toggle = (id: number, on: boolean) => {
+        const current = selected ?? [];
+
+        onChange(
+            on
+                ? [...current, id]
+                : current.filter((selectedId) => selectedId !== id),
+        );
+    };
+
+    return (
+        <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Who to ask</legend>
+
+            <div className="flex flex-wrap gap-1.5">
+                {[
+                    { value: true, label: 'Everyone in the channel' },
+                    { value: false, label: 'Only selected people' },
+                ].map((option) => (
+                    <button
+                        key={option.label}
+                        type="button"
+                        aria-pressed={everyone === option.value}
+                        onClick={() =>
+                            onChange(
+                                option.value
+                                    ? null
+                                    : members.map((member) => member.id),
+                            )
+                        }
+                        disabled={everyone === option.value}
+                        className={cn(
+                            'rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors',
+                            everyone === option.value
+                                ? 'border-transparent bg-primary text-primary-foreground'
+                                : 'border-border text-muted-foreground hover:bg-accent',
+                        )}
+                    >
+                        {option.label}
+                    </button>
+                ))}
+            </div>
+
+            {!everyone && (
+                <div className="max-h-48 space-y-0.5 overflow-y-auto rounded-lg border border-border p-1.5">
+                    {members.length === 0 ? (
+                        <p className="px-1.5 py-2 text-xs text-muted-foreground">
+                            Nobody is in this channel yet.
+                        </p>
+                    ) : (
+                        members.map((member) => (
+                            <label
+                                key={member.id}
+                                className="flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1 hover:bg-accent"
+                            >
+                                <Checkbox
+                                    checked={selected.includes(member.id)}
+                                    onCheckedChange={(checked) =>
+                                        toggle(member.id, checked === true)
+                                    }
+                                />
+                                <UserAvatar
+                                    user={{
+                                        ...member,
+                                        presence_status: 'offline',
+                                    }}
+                                    size="sm"
+                                />
+                                <span className="min-w-0 truncate text-sm">
+                                    {member.name}
+                                    <span className="ml-1.5 text-xs text-muted-foreground">
+                                        @{member.username}
+                                    </span>
+                                </span>
+                            </label>
+                        ))
+                    )}
+                </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+                {chosenCount} of {members.length}{' '}
+                {members.length === 1 ? 'member' : 'members'} will be asked.
+            </p>
+
+            <InputError message={error} />
+        </fieldset>
     );
 }
 

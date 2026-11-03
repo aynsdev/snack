@@ -90,6 +90,24 @@ it('does not ask people who are not in the channel', function () {
     expect(StandupResponse::query()->where('user_id', $outsider->id)->exists())->toBeFalse();
 });
 
+it('asks only the selected people when the standup is narrowed', function () {
+    $this->standup->update(['participant_ids' => [$this->ada->id]]);
+
+    runStandupsAt('2026-08-10 09:30:00');
+
+    expect(StandupResponse::query()->where('user_id', $this->ada->id)->exists())->toBeTrue()
+        ->and(StandupResponse::query()->where('user_id', $this->bo->id)->exists())->toBeFalse();
+});
+
+it('does not ask a selected person who has left the channel', function () {
+    $outsider = joinWorkspace($this->workspace, null, WorkspaceRole::Member);
+    $this->standup->update(['participant_ids' => [$this->ada->id, $outsider->id]]);
+
+    runStandupsAt('2026-08-10 09:30:00');
+
+    expect(StandupResponse::query()->pluck('user_id')->all())->toBe([$this->ada->id]);
+});
+
 it('does not ask a suspended member', function () {
     $suspended = joinWorkspace(
         $this->workspace,

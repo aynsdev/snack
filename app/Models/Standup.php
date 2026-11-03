@@ -17,8 +17,8 @@ use Illuminate\Support\Collection;
 /**
  * A recurring set of questions the standup bot asks a channel's members.
  *
- * Its roster is the channel's membership — see the table migration for why
- * there is no second list of people — and its schedule is a set of weekdays, a
+ * Its roster is the channel's membership, optionally narrowed to a chosen few
+ * by `participant_ids` — see {@see participants()} — and its schedule is a set of weekdays, a
  * local time, and the timezone that time is read in.
  *
  * @property int $id
@@ -33,6 +33,9 @@ use Illuminate\Support\Collection;
  * @property int|null $reminder_after_minutes
  * @property int $closes_after_minutes
  * @property bool $is_active
+ * @property array<int, int>|null $participant_ids Null asks the whole channel;
+ *                                                 a list asks only those people
+ *                                                 who are also still in it.
  * @property int|null $participant_count Attached by the admin screen — the
  *                                       channel's live human members, counted once for the whole page
  *                                       rather than per row. Null anywhere it was not asked for.
@@ -44,6 +47,7 @@ use Illuminate\Support\Collection;
 #[Fillable([
     'workspace_id', 'channel_id', 'created_by', 'name', 'questions', 'days_of_week',
     'ask_at', 'timezone', 'reminder_after_minutes', 'closes_after_minutes', 'is_active',
+    'participant_ids',
 ])]
 class Standup extends Model
 {
@@ -77,6 +81,7 @@ class Standup extends Model
             'reminder_after_minutes' => 'integer',
             'closes_after_minutes' => 'integer',
             'is_active' => 'boolean',
+            'participant_ids' => 'array',
             /*
              * `ask_at` is deliberately uncast. It is a bare TIME — 09:30 with no
              * date — and casting it to a datetime would attach today's date and
@@ -136,7 +141,12 @@ class Standup extends Model
 
     /**
      * Who gets asked: the channel's members, minus bots, minus anyone whose
-     * workspace membership is no longer active.
+     * workspace membership is no longer active — and, when the standup has
+     * been narrowed to a chosen few, minus everyone not on that list.
+     *
+     * The selection only ever filters the channel; it never adds to it. So a
+     * chosen person who leaves the channel stops being asked without anybody
+     * having to edit the standup.
      *
      * The suspension check is not belt and braces. A suspended account is
      * treated as a non-member everywhere else in Snack, and DMing one every
@@ -162,8 +172,90 @@ class Standup extends Model
                     ->active()
                     ->select('user_id'),
             )
+            ->when(
+                $this->restrictsParticipants(),
+                fn (Builder $query) => $query->whereIn('id', $this->selectedParticipantIds()),
+            )
             ->orderBy('name')
             ->get();
+    }
+
+    /**
+     * Whether this standup asks a chosen few rather than the whole channel.
+     */
+    public function restrictsParticipants(): bool
+    {
+        return $this->participant_ids !== null;
+    }
+
+    /**
+     * The chosen user ids, as clean integers. Empty when the whole channel is
+     * asked — check {@see restrictsParticipants()} to tell that apart from a
+     * selection of nobody.
+     *
+     * @return array<int, int>
+     */
+    public function selectedParticipantIds(): array
+    {
+        return collect($this->participant_ids ?? [])
+            ->map(fn (mixed $id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Attach `participant_count` to each standup with one query for the whole
+     * collection: the live human members of every channel involved, filtered
+     * per standup by its selection exactly as {@see participants()} filters.
+     *
+     * @param  Collection<int, self>  $standups
+     */
+    public static function attachParticipantCounts(int $workspaceId, Collection $standups): void
+    {
+        $channelIds = $standups->pluck('channel_id')->unique()->values();
+
+        if ($channelIds->isEmpty()) {
+            return;
+        }
+
+        $membersByChannel = self::liveMemberIdsByChannel($workspaceId, $channelIds->all());
+
+        $standups->each(function (self $standup) use ($membersByChannel): void {
+            $members = $membersByChannel[$standup->channel_id] ?? [];
+
+            $standup->participant_count = $standup->restrictsParticipants()
+                ? count(array_intersect($members, $standup->selectedParticipantIds()))
+                : count($members);
+        });
+    }
+
+    /**
+     * The live, human member ids of each channel — the same exclusions the
+     * roster makes — keyed by channel id.
+     *
+     * @param  array<int, int>  $channelIds
+     * @return array<int, array<int, int>>
+     */
+    public static function liveMemberIdsByChannel(int $workspaceId, array $channelIds): array
+    {
+        if ($channelIds === []) {
+            return [];
+        }
+
+        return ChannelMember::query()
+            ->join('users', 'users.id', '=', 'channel_members.user_id')
+            ->join('workspace_members', function ($join) use ($workspaceId): void {
+                $join->on('workspace_members.user_id', '=', 'channel_members.user_id')
+                    ->where('workspace_members.workspace_id', '=', $workspaceId);
+            })
+            ->whereIn('channel_members.channel_id', $channelIds)
+            ->where('users.is_bot', false)
+            ->where('workspace_members.status', 'active')
+            ->get(['channel_members.channel_id', 'channel_members.user_id'])
+            ->groupBy('channel_id')
+            ->map(fn ($rows): array => $rows->pluck('user_id')->map(fn (mixed $id): int => (int) $id)->values()->all())
+            ->all();
     }
 
     // -- The schedule --------------------------------------------------------

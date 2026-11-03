@@ -1673,8 +1673,10 @@ export type Standup = {
     reminder_after_minutes: number | null;
     closes_after_minutes: number;
     is_active: boolean;
+    /** Null asks the whole channel; a list asks only those people still in it. */
+    participant_ids: number[] | null;
     schedule_summary: string;
-    /** The channel's live human members — who this actually messages. */
+    /** Who this actually messages — the channel, narrowed by `participant_ids`. */
     participant_count?: number;
     last_run: StandupLastRun | null;
     created_at: string | null;

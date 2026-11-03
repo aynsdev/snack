@@ -53,6 +53,11 @@ class StandupResource extends JsonResource
             'closes_after_minutes' => $this->closes_after_minutes,
             'is_active' => $this->is_active,
 
+            // Null asks the whole channel; a list asks only those people.
+            'participant_ids' => $this->resource->restrictsParticipants()
+                ? $this->resource->selectedParticipantIds()
+                : null,
+
             'schedule_summary' => $this->resource->scheduleSummary(),
 
             /*

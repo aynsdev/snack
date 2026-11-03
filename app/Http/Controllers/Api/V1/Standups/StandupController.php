@@ -13,11 +13,10 @@ use App\Models\Channel;
 use App\Models\Standup;
 use App\Models\Workspace;
 use App\Services\StandupBot;
+use App\Support\StandupRosterOptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 /**
  * The standups a workspace runs — the mirror of
@@ -52,24 +51,15 @@ class StandupController extends Controller
             ->orderBy('name')
             ->get();
 
-        $this->attachParticipantCounts($workspace, $standups);
+        Standup::attachParticipantCounts($workspace->id, $standups);
 
         $bot = $this->bot->existingAccountFor($workspace);
 
         return response()->json([
             'data' => [
                 'standups' => StandupResource::collection($standups)->resolve($request),
-                'channels' => $workspace->channels()
-                    ->notArchived()
-                    ->orderBy('name')
-                    ->get(['id', 'name', 'slug', 'type'])
-                    ->map(fn (Channel $channel): array => [
-                        'id' => $channel->id,
-                        'name' => $channel->name,
-                        'slug' => $channel->slug,
-                        'type' => $channel->type->value,
-                    ])
-                    ->all(),
+                'channels' => StandupRosterOptions::channels($workspace),
+                'people' => StandupRosterOptions::people($workspace),
                 'timezones' => timezone_identifiers_list(),
                 'defaults' => [
                     'questions' => Standup::DEFAULT_QUESTIONS,
@@ -132,7 +122,7 @@ class StandupController extends Controller
     }
 
     /**
-     * @return array{name: string, questions: array<int, string>, days_of_week: array<int, int>, ask_at: string, timezone: string, reminder_after_minutes: int|null, closes_after_minutes: int, is_active: bool}
+     * @return array{name: string, questions: array<int, string>, days_of_week: array<int, int>, ask_at: string, timezone: string, reminder_after_minutes: int|null, closes_after_minutes: int, is_active: bool, participant_ids?: array<int, int>|null}
      */
     private function attributes(StoreStandupRequest|UpdateStandupRequest $request): array
     {
@@ -145,43 +135,13 @@ class StandupController extends Controller
             'reminder_after_minutes' => $request->reminderAfterMinutes(),
             'closes_after_minutes' => $request->integer('closes_after_minutes'),
             'is_active' => $request->boolean('is_active', true),
-        ];
+        ] + ($request->mentionsParticipants()
+            ? ['participant_ids' => $request->participantIds()]
+            : []);
     }
 
     private function channel(Workspace $workspace, int $channelId): Channel
     {
         return $workspace->channels()->whereKey($channelId)->firstOrFail();
-    }
-
-    /**
-     * How many live, human channel members each standup asks — one query for
-     * the page, excluding bots and the suspended as Standup::participants() does.
-     *
-     * @param  Collection<int, Standup>  $standups
-     */
-    private function attachParticipantCounts(Workspace $workspace, Collection $standups): void
-    {
-        $channelIds = $standups->pluck('channel_id')->unique()->values();
-
-        if ($channelIds->isEmpty()) {
-            return;
-        }
-
-        $counts = DB::table('channel_members')
-            ->join('users', 'users.id', '=', 'channel_members.user_id')
-            ->join('workspace_members', function ($join) use ($workspace): void {
-                $join->on('workspace_members.user_id', '=', 'channel_members.user_id')
-                    ->where('workspace_members.workspace_id', '=', $workspace->id);
-            })
-            ->whereIn('channel_members.channel_id', $channelIds)
-            ->where('users.is_bot', false)
-            ->where('workspace_members.status', 'active')
-            ->groupBy('channel_members.channel_id')
-            ->selectRaw('channel_members.channel_id as channel_id, count(*) as total')
-            ->pluck('total', 'channel_id');
-
-        $standups->each(function (Standup $standup) use ($counts): void {
-            $standup->participant_count = (int) ($counts[$standup->channel_id] ?? 0);
-        });
     }
 }
