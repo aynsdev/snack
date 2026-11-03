@@ -1,7 +1,9 @@
 import { router, useForm } from '@inertiajs/react';
-import { CalendarDays, Pencil, Plus, Repeat } from 'lucide-react';
+import { CalendarDays, Megaphone, Pencil, Plus, Repeat } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
+import { AnnouncementDialog } from '@/components/hr/announcement-dialog';
+import type { PostableChannel } from '@/components/hr/announcement-dialog';
 import { DeleteButton, FormDialog } from '@/components/hr/hr-dialogs';
 import {
     EmptyNote,
@@ -25,14 +27,39 @@ import type { Holiday } from '@/types/hr';
 type Props = {
     holidays: Holiday[];
     can_manage: boolean;
+    can_announce: boolean;
+    channels: PostableChannel[];
 };
+
+/**
+ * What an announcement about a holiday says, ready for HR to adjust.
+ */
+function holidayDraft(holiday: Holiday): { title: string; body: string } {
+    const day = formatDate(holiday.next_on ?? holiday.date, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+    });
+
+    return {
+        title: `Holiday: ${holiday.name}`,
+        body: `${holiday.name} falls on ${day}. The office is closed that day, and it is not deducted from anybody's leave.\n\nEnjoy the day off!`,
+    };
+}
 
 /**
  * The company's days off. Leave requests skip these automatically.
  */
-export default function HolidaysPage({ holidays, can_manage }: Props) {
+export default function HolidaysPage({
+    holidays,
+    can_manage,
+    can_announce,
+    channels,
+}: Props) {
     const workspace = useWorkspace();
     const [editing, setEditing] = useState<Holiday | 'new' | null>(null);
+    const [announcing, setAnnouncing] = useState<Holiday | null>(null);
 
     const upcoming = holidays.filter((holiday) => holiday.next_on !== null);
     const past = holidays.filter((holiday) => holiday.next_on === null);
@@ -59,6 +86,7 @@ export default function HolidaysPage({ holidays, can_manage }: Props) {
                         holidays={upcoming}
                         canManage={can_manage}
                         onEdit={setEditing}
+                        onAnnounce={can_announce ? setAnnouncing : undefined}
                         workspaceSlug={workspace.slug}
                     />
                 )}
@@ -82,6 +110,16 @@ export default function HolidaysPage({ holidays, can_manage }: Props) {
                     onClose={() => setEditing(null)}
                 />
             )}
+
+            {announcing !== null && (
+                <AnnouncementDialog
+                    key={announcing.id}
+                    announcement={null}
+                    channels={channels}
+                    draft={holidayDraft(announcing)}
+                    onClose={() => setAnnouncing(null)}
+                />
+            )}
         </HrPage>
     );
 }
@@ -90,11 +128,14 @@ function HolidayList({
     holidays,
     canManage,
     onEdit,
+    onAnnounce,
     workspaceSlug,
 }: {
     holidays: Holiday[];
     canManage: boolean;
     onEdit: (holiday: Holiday) => void;
+    /** Offered only on upcoming holidays, to whoever may post announcements. */
+    onAnnounce?: (holiday: Holiday) => void;
     workspaceSlug: string;
 }) {
     return (
@@ -145,6 +186,17 @@ function HolidayList({
                             )}
                         </p>
                     </div>
+                    {onAnnounce && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onAnnounce(holiday)}
+                            aria-label={`Announce ${holiday.name}`}
+                        >
+                            <Megaphone aria-hidden="true" />
+                            <span className="hidden sm:inline">Announce</span>
+                        </Button>
+                    )}
                     {canManage && (
                         <div className="flex">
                             <Button

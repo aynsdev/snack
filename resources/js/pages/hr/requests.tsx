@@ -2,19 +2,18 @@ import { router, useForm } from '@inertiajs/react';
 import { CalendarClock, Check, ClipboardPen, House, X } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
+import { AttendanceRequestDialog } from '@/components/hr/attendance-request-dialog';
 import { FormDialog } from '@/components/hr/hr-dialogs';
 import {
     EmptyNote,
     Field,
     formatDate,
-    formatTime,
     HrPage,
     PersonAvatar,
     Section,
     SelectField,
     StatusPill,
     todayString,
-    toLocalInput,
 } from '@/components/hr/hr-ui';
 import { formatWeekdays } from '@/components/hr/shifts-section';
 import { Button } from '@/components/ui/button';
@@ -315,7 +314,10 @@ export default function RequestsPage({
                 />
             )}
             {dialog?.kind === 'attendance' && (
-                <AttendanceDialog entries={recent_entries} onClose={close} />
+                <AttendanceRequestDialog
+                    entries={recent_entries}
+                    onClose={close}
+                />
             )}
             {dialog?.kind === 'review' && (
                 <ReviewDialog
@@ -457,128 +459,6 @@ function ScheduleDialog({
                         form.setData('reason', event.target.value)
                     }
                     placeholder="Optional"
-                />
-            </Field>
-        </FormDialog>
-    );
-}
-
-/**
- * Correct one of your recent shifts, or add one you never clocked.
- */
-function AttendanceDialog({
-    entries,
-    onClose,
-}: {
-    entries: TimeEntry[];
-    onClose: () => void;
-}) {
-    const workspace = useWorkspace();
-    const form = useForm({
-        time_entry_id: '',
-        clock_in_at: '',
-        clock_out_at: '',
-        reason: '',
-    });
-
-    function pickEntry(value: string) {
-        const entry = entries.find(
-            (candidate) => String(candidate.id) === value,
-        );
-
-        form.setData({
-            ...form.data,
-            time_entry_id: value,
-            clock_in_at: entry ? toLocalInput(entry.clock_in_at) : '',
-            clock_out_at: entry?.clock_out_at
-                ? toLocalInput(entry.clock_out_at)
-                : '',
-        });
-    }
-
-    function submit(event: FormEvent) {
-        event.preventDefault();
-        form.transform((data) => ({
-            time_entry_id:
-                data.time_entry_id === '' ? null : Number(data.time_entry_id),
-            clock_in_at: new Date(data.clock_in_at).toISOString(),
-            clock_out_at: new Date(data.clock_out_at).toISOString(),
-            reason: data.reason,
-        }));
-        form.post(attendanceRoutes.store(workspace.slug).url, {
-            preserveScroll: true,
-            onSuccess: onClose,
-        });
-    }
-
-    return (
-        <FormDialog
-            title="Fix attendance"
-            description="Correct a shift you clocked wrong, or add one you forgot to clock."
-            onClose={onClose}
-            onSubmit={submit}
-            processing={form.processing}
-            submitLabel="Send request"
-        >
-            <SelectField
-                id="attendance-entry"
-                label="Shift"
-                value={form.data.time_entry_id}
-                onChange={pickEntry}
-                options={entries.map((entry) => ({
-                    value: String(entry.id),
-                    label: `${formatDate(entry.clock_in_at.slice(0, 10), { weekday: 'short', month: 'short', day: 'numeric' })}, ${formatTime(entry.clock_in_at)} – ${formatTime(entry.clock_out_at)}`,
-                }))}
-                error={form.errors.time_entry_id}
-                allowEmpty
-                emptyLabel="Add a missing shift"
-            />
-            <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                    label="Clocked in"
-                    htmlFor="attendance-in"
-                    error={form.errors.clock_in_at}
-                >
-                    <Input
-                        id="attendance-in"
-                        type="datetime-local"
-                        value={form.data.clock_in_at}
-                        onChange={(event) =>
-                            form.setData('clock_in_at', event.target.value)
-                        }
-                        required
-                    />
-                </Field>
-                <Field
-                    label="Clocked out"
-                    htmlFor="attendance-out"
-                    error={form.errors.clock_out_at}
-                >
-                    <Input
-                        id="attendance-out"
-                        type="datetime-local"
-                        value={form.data.clock_out_at}
-                        onChange={(event) =>
-                            form.setData('clock_out_at', event.target.value)
-                        }
-                        required
-                    />
-                </Field>
-            </div>
-            <Field
-                label="Reason"
-                htmlFor="attendance-reason"
-                error={form.errors.reason}
-            >
-                <Textarea
-                    id="attendance-reason"
-                    rows={3}
-                    value={form.data.reason}
-                    onChange={(event) =>
-                        form.setData('reason', event.target.value)
-                    }
-                    placeholder="What happened?"
-                    required
                 />
             </Field>
         </FormDialog>

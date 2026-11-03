@@ -3,12 +3,10 @@
 namespace App\Http\Controllers\Api\V1\Hr;
 
 use App\Actions\Hr\PublishAnnouncement;
-use App\Enums\ChannelType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Hr\AnnouncementRequest;
 use App\Http\Resources\Hr\AnnouncementResource;
 use App\Models\Announcement;
-use App\Models\Channel;
 use App\Models\Workspace;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,7 +25,7 @@ class AnnouncementController extends Controller
      * Pinned first, then newest, 20 a page (`?page=`). `meta.can_manage` and
      * `meta.channels` — where an admin may post — ride alongside.
      */
-    public function index(Workspace $workspace, Request $request): JsonResponse
+    public function index(Workspace $workspace, Request $request, PublishAnnouncement $publish): JsonResponse
     {
         $this->authorize('viewAny', [Announcement::class, $workspace]);
 
@@ -43,7 +41,7 @@ class AnnouncementController extends Controller
         return AnnouncementResource::collection($announcements)
             ->additional(['meta' => [
                 'can_manage' => $canManage,
-                'channels' => $canManage ? $this->postableChannels($workspace, $request) : [],
+                'channels' => $canManage ? $publish->postableChannels($workspace, $request->user()) : [],
             ]])
             ->response();
     }
@@ -83,33 +81,5 @@ class AnnouncementController extends Controller
         $publish->withdraw($announcement, $request->user());
 
         return response()->noContent();
-    }
-
-    /**
-     * The live channels the admin is in, announcement channels first, then
-     * the default ones everybody joins — the same order the web picker uses.
-     *
-     * @return array<int, array{id: int, name: string, type: string, is_default: bool}>
-     */
-    private function postableChannels(Workspace $workspace, Request $request): array
-    {
-        return $workspace->channels()
-            ->notArchived()
-            ->whereHas('members', fn ($query) => $query->where('user_id', $request->user()->id))
-            ->get(['id', 'name', 'is_default', 'type'])
-            ->sortBy(fn (Channel $channel): string => sprintf(
-                '%d-%d-%s',
-                $channel->type === ChannelType::Announcement ? 0 : 1,
-                $channel->is_default ? 0 : 1,
-                $channel->name,
-            ))
-            ->map(fn (Channel $channel): array => [
-                'id' => $channel->id,
-                'name' => $channel->name,
-                'type' => $channel->type->value,
-                'is_default' => $channel->is_default,
-            ])
-            ->values()
-            ->all();
     }
 }

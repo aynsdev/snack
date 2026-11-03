@@ -32,6 +32,8 @@ class OrgChartController extends Controller
                     'avatar_url' => $employee->user->avatarUrl(),
                     'job_title' => $employee->job_title,
                     'department' => $employee->department,
+                    'status' => $employee->status->value,
+                    'status_label' => $employee->status->label(),
                 ])
                 ->sortBy('name')
                 ->values()

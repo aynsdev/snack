@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ChannelType;
 use App\Enums\WorkspaceRole;
 use App\Models\Announcement;
 use App\Models\Holiday;
@@ -28,6 +29,23 @@ it('lets admins add holidays and everyone read them', function () {
             ->where('holidays.0.name', 'Christmas')
             ->where('holidays.0.next_on', '2026-12-25')
             ->where('can_manage', false));
+});
+
+it('lets admins announce a holiday, to the channels they can post in', function () {
+    $channel = makeChannel($this->workspace, ChannelType::Announcement, ['name' => 'announcements']);
+    addToChannel($channel, $this->owner);
+
+    $this->actingAs($this->owner)
+        ->get("{$this->base}/holidays")
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('can_announce', true)
+            ->where('channels.0.name', 'announcements'));
+
+    $this->actingAs($this->member)
+        ->get("{$this->base}/holidays")
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('can_announce', false)
+            ->where('channels', []));
 });
 
 it('refuses members adding holidays', function () {
