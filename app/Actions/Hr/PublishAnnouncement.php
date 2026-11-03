@@ -5,6 +5,7 @@ namespace App\Actions\Hr;
 use App\Actions\Messages\DeleteMessage;
 use App\Actions\Messages\SendMessage;
 use App\Actions\Messages\UpdateMessage;
+use App\Enums\ChannelType;
 use App\Models\Announcement;
 use App\Models\Channel;
 use App\Models\User;
@@ -113,6 +114,37 @@ class PublishAnnouncement
         }
 
         $announcement->delete();
+    }
+
+    /**
+     * The channels an author may post an announcement to: live ones they are in.
+     *
+     * Announcement-type channels lead — they exist for exactly this, and only
+     * admins can post in them — then the workspace's default channels, which
+     * everybody joins, so a notice there reaches the whole company.
+     *
+     * @return array<int, array{id: int, name: string, type: string, is_default: bool}>
+     */
+    public function postableChannels(Workspace $workspace, User $author): array
+    {
+        return $workspace->channels()
+            ->notArchived()
+            ->whereHas('members', fn ($query) => $query->where('user_id', $author->id))
+            ->get(['id', 'name', 'is_default', 'type'])
+            ->sortBy(fn (Channel $channel): string => sprintf(
+                '%d-%d-%s',
+                $channel->type === ChannelType::Announcement ? 0 : 1,
+                $channel->is_default ? 0 : 1,
+                $channel->name,
+            ))
+            ->map(fn (Channel $channel): array => [
+                'id' => $channel->id,
+                'name' => $channel->name,
+                'type' => $channel->type->value,
+                'is_default' => $channel->is_default,
+            ])
+            ->values()
+            ->all();
     }
 
     /**
