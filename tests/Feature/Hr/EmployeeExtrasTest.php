@@ -293,7 +293,11 @@ describe('org chart', function () {
             ->assertInertia(fn (Assert $page) => $page
                 ->component('hr/org-chart')
                 ->has('people', 4)
-                ->where('own_employee_id', $this->employee->id));
+                ->where('own_employee_id', $this->employee->id)
+                ->where('people', fn ($people) => collect($people)->contains(fn (array $person): bool => $person['id'] === $this->employee->id
+                    && $person['manager_id'] === $adminFile->id
+                    && $person['job_title'] === 'Engineer'
+                    && $person['status'] === 'active')));
     });
 });
 
