@@ -7,6 +7,7 @@ use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Hr\UpdateTimeEntryRequest;
 use App\Http\Resources\Hr\TimeEntryResource;
+use App\Models\AttendanceRequest;
 use App\Models\Employee;
 use App\Models\TimeEntry;
 use App\Models\Workspace;
@@ -21,7 +22,7 @@ use Inertia\Response;
 
 /**
  * Timesheets: yours, or — for HR — everybody's, with where each shift was
- * clocked from.
+ * clocked from. Whoever cannot correct a shift themselves asks HR to.
  */
 class TimeEntryController extends Controller
 {
@@ -82,6 +83,12 @@ class TimeEntryController extends Controller
                 ->values()
                 ->all() : [],
             'can_manage' => $canManage,
+            'can_request' => $user->can('create', [AttendanceRequest::class, $workspace]),
+            'pending_request_entry_ids' => $employee === null ? [] : $employee->attendanceRequests()
+                ->pending()
+                ->whereNotNull('time_entry_id')
+                ->pluck('time_entry_id')
+                ->all(),
         ]);
     }
 

@@ -1,7 +1,8 @@
 import { router, useForm } from '@inertiajs/react';
-import { Pencil } from 'lucide-react';
+import { ClipboardPen, MessageSquarePlus, Pencil } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
+import { AttendanceRequestDialog } from '@/components/hr/attendance-request-dialog';
 import { ClockCard } from '@/components/hr/clock-card';
 import {
     DeleteButton,
@@ -17,6 +18,7 @@ import {
     PersonAvatar,
     Section,
     SelectField,
+    StatusPill,
     toLocalInput,
 } from '@/components/hr/hr-ui';
 import { Button } from '@/components/ui/button';
@@ -48,7 +50,12 @@ type Props = {
     filters: Filters;
     employees: { id: number; name: string }[];
     can_manage: boolean;
+    can_request: boolean;
+    pending_request_entry_ids: number[];
 };
+
+/** The request dialog: about one shift, or (null) a shift never clocked. */
+type Requesting = { entry: TimeEntry | null };
 
 /**
  * The time clock and the timesheet it fills. Each shift shows where it was
@@ -64,9 +71,12 @@ export default function TimePage({
     filters,
     employees,
     can_manage,
+    can_request,
+    pending_request_entry_ids,
 }: Props) {
     const workspace = useWorkspace();
     const [editing, setEditing] = useState<TimeEntry | null>(null);
+    const [requesting, setRequesting] = useState<Requesting | null>(null);
     const [range, setRange] = useState({ from: filters.from, to: filters.to });
 
     function apply(next: Partial<Filters>) {
@@ -84,6 +94,9 @@ export default function TimePage({
     }
 
     const team = filters.scope === 'team';
+    // HR corrects shifts directly; everybody else asks HR to.
+    const asksForChanges = !can_manage && can_request;
+    const hasActions = can_manage || asksForChanges;
 
     return (
         <HrPage
@@ -101,8 +114,20 @@ export default function TimePage({
             <Section
                 title={team ? 'Team timesheet' : 'My timesheet'}
                 action={
-                    <span className="text-sm font-semibold tabular-nums">
-                        {formatMinutes(total_minutes)} total
+                    <span className="flex items-center gap-3">
+                        <span className="text-sm font-semibold tabular-nums">
+                            {formatMinutes(total_minutes)} total
+                        </span>
+                        {asksForChanges && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setRequesting({ entry: null })}
+                            >
+                                <ClipboardPen aria-hidden="true" />
+                                Request missing shift
+                            </Button>
+                        )}
                     </span>
                 }
             >
@@ -245,7 +270,7 @@ export default function TimePage({
                                     >
                                         Hours
                                     </th>
-                                    {can_manage && (
+                                    {hasActions && (
                                         <th scope="col" className="py-2">
                                             <span className="sr-only">
                                                 Actions
@@ -385,6 +410,31 @@ export default function TimePage({
                                                 />
                                             </td>
                                         )}
+                                        {asksForChanges && (
+                                            <td className="py-2 text-right whitespace-nowrap">
+                                                {pending_request_entry_ids.includes(
+                                                    entry.id,
+                                                ) ? (
+                                                    <StatusPill
+                                                        status="pending"
+                                                        label="Change requested"
+                                                    />
+                                                ) : (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() =>
+                                                            setRequesting({
+                                                                entry,
+                                                            })
+                                                        }
+                                                    >
+                                                        <MessageSquarePlus aria-hidden="true" />
+                                                        Request change
+                                                    </Button>
+                                                )}
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
@@ -398,6 +448,18 @@ export default function TimePage({
                     key={editing.id}
                     entry={editing}
                     onClose={() => setEditing(null)}
+                />
+            )}
+
+            {requesting && (
+                <AttendanceRequestDialog
+                    key={requesting.entry?.id ?? 'missing'}
+                    entries={entries.filter(
+                        (entry) =>
+                            !pending_request_entry_ids.includes(entry.id),
+                    )}
+                    entry={requesting.entry}
+                    onClose={() => setRequesting(null)}
                 />
             )}
         </HrPage>

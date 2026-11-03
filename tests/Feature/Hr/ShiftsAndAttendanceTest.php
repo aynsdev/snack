@@ -313,6 +313,72 @@ describe('attendance requests', function () {
             ->and($this->employee->timeEntries()->count())->toBe(1);
     });
 
+    it('closes a shift you forgot to clock out of on approval', function () {
+        $entry = $this->employee->timeEntries()->create([
+            'workspace_id' => $this->workspace->id,
+            'clock_in_at' => '2026-09-28 09:00:00',
+        ]);
+
+        $this->actingAs($this->member)
+            ->post("{$this->base}/requests/attendance", [
+                'time_entry_id' => $entry->id,
+                'clock_in_at' => '2026-09-28T01:00:00Z', 'clock_out_at' => '2026-09-28T10:00:00Z', 'reason' => 'Forgot to clock out',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $request = AttendanceRequest::query()->sole();
+        $this->actingAs($this->admin)->post("{$this->base}/requests/attendance/{$request->id}/approve");
+
+        expect($entry->fresh()->isOpen())->toBeFalse()
+            ->and($entry->fresh()->clock_out_at->format('Y-m-d H:i'))->toBe('2026-09-28 18:00');
+    });
+
+    it('refuses a second pending request for the same shift', function () {
+        $entry = $this->employee->timeEntries()->create([
+            'workspace_id' => $this->workspace->id,
+            'clock_in_at' => '2026-09-28 10:00:00',
+            'clock_out_at' => '2026-09-28 18:00:00',
+        ]);
+        $payload = [
+            'time_entry_id' => $entry->id,
+            'clock_in_at' => '2026-09-28T01:00:00Z', 'clock_out_at' => '2026-09-28T10:00:00Z', 'reason' => 'I was on time',
+        ];
+
+        $this->actingAs($this->member)->post("{$this->base}/requests/attendance", $payload)->assertSessionHasNoErrors();
+        $this->actingAs($this->member)->post("{$this->base}/requests/attendance", $payload)->assertSessionHasErrors('time_entry_id');
+
+        AttendanceRequest::query()->sole()->update(['status' => RequestStatus::Cancelled]);
+
+        $this->actingAs($this->member)->post("{$this->base}/requests/attendance", $payload)->assertSessionHasNoErrors();
+    });
+
+    it('lets members request changes from their timesheet, and HR edit instead', function () {
+        $entry = $this->employee->timeEntries()->create([
+            'workspace_id' => $this->workspace->id,
+            'clock_in_at' => '2026-09-28 10:00:00',
+            'clock_out_at' => '2026-09-28 18:00:00',
+        ]);
+        $this->employee->attendanceRequests()->create([
+            'workspace_id' => $this->workspace->id, 'time_entry_id' => $entry->id,
+            'clock_in_at' => '2026-09-28 09:00:00', 'clock_out_at' => '2026-09-28 18:00:00',
+            'reason' => 'Please', 'status' => RequestStatus::Pending,
+        ]);
+
+        $this->actingAs($this->member)
+            ->get("{$this->base}/time")
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('hr/time')
+                ->where('can_manage', false)
+                ->where('can_request', true)
+                ->where('pending_request_entry_ids', [$entry->id]));
+
+        $this->actingAs($this->admin)
+            ->get("{$this->base}/time")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('can_manage', true)
+                ->where('pending_request_entry_ids', []));
+    });
+
     it('changes nothing on rejection', function () {
         $request = $this->employee->attendanceRequests()->create([
             'workspace_id' => $this->workspace->id,
