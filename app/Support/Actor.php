@@ -25,6 +25,15 @@ final readonly class Actor
         return new self(ActorVia::Web, $user->id, isBot: $user->isBot());
     }
 
+    /**
+     * The person in the mobile app. No connector id: the app's token is the
+     * person signing in, not an assistant acting for them.
+     */
+    public static function mobile(User $user): self
+    {
+        return new self(ActorVia::Mobile, $user->id, isBot: $user->isBot());
+    }
+
     public static function mcp(User $user, string $connectorId): self
     {
         return new self(ActorVia::Mcp, $user->id, $connectorId, isBot: $user->isBot());
@@ -43,6 +52,14 @@ final readonly class Actor
     public static function system(): self
     {
         return new self(ActorVia::System);
+    }
+
+    /**
+     * Whether a person acted themselves, in the browser or the mobile app.
+     */
+    public function isPerson(): bool
+    {
+        return $this->via->isPerson();
     }
 
     public function isAgentFor(User $user): bool

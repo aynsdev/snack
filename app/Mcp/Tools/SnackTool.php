@@ -226,7 +226,13 @@ abstract class SnackTool extends Tool
         }
 
         if ($message->relationLoaded('attachments') && $message->attachments->isNotEmpty()) {
-            $line .= ' · files: '.$message->attachments->pluck('original_name')->map(fn (string $name): string => OneLine::clean($name))->implode(', ');
+            /*
+             * With the id, which is what `read_file` takes: a name alone leaves
+             * the reader no way to open the file it was just told about.
+             */
+            $line .= ' · files: '.$message->attachments
+                ->map(fn (MessageAttachment $file): string => OneLine::clean($file->original_name)." (file {$file->id})")
+                ->implode(', ');
         }
 
         return $line."\n  ".str($message->body)->trim()->replace("\n", "\n  ")->toString();

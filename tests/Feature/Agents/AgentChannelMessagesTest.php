@@ -8,6 +8,7 @@ use App\Enums\ConnectorKind;
 use App\Enums\OutboundEventType;
 use App\Models\IncomingWebhook;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\OAuthToken;
 use App\Models\OutboundEvent;
 use App\Services\ActorContext;
@@ -81,6 +82,7 @@ it('exports a thread reply in an agent channel', function () {
             'body' => '/approve looks **good**',
             'body_plaintext' => $message->body_plaintext,
             'agent' => null,
+            'attachments' => [],
             'created_at' => $message->created_at->copy()->utc()->format('Y-m-d\TH:i:s.u\Z'),
             'edited_at' => null,
         ])
@@ -90,6 +92,52 @@ it('exports a thread reply in an agent channel', function () {
             'connector_id' => null,
             'is_bot' => false,
         ]);
+});
+
+/**
+ * The files go by the id `read_file` takes, so the receiver can open the
+ * screenshot a reply is about without searching for it.
+ */
+it('lists a reply\'s files in the exported message', function () {
+    $root = postIn($this, 'pca-agent', 'Plan for PCA-497');
+
+    $files = MessageAttachment::factory()->orphaned()->count(2)->sequence(
+        ['original_name' => 'IMG_2289.png', 'mime_type' => 'image/png', 'size' => 2048],
+        ['original_name' => 'notes.pdf', 'mime_type' => 'application/pdf', 'size' => 512],
+    )->create(['workspace_id' => $this->workspace->id, 'uploaded_by' => $this->dev->id]);
+
+    $this->postJson(route('channels.messages.store', [$this->workspace->slug, 'pca-agent']), [
+        'body' => 'This is what I see',
+        'parent_message_id' => $root->id,
+        'attachment_ids' => $files->pluck('id')->all(),
+    ])->assertCreated();
+
+    expect(messageEventData(OutboundEventType::MessageCreated)['message']['attachments'])->toEqual([
+        ['id' => $files[0]->id, 'name' => 'IMG_2289.png', 'mime_type' => 'image/png', 'size' => 2048],
+        ['id' => $files[1]->id, 'name' => 'notes.pdf', 'mime_type' => 'application/pdf', 'size' => 512],
+    ]);
+});
+
+/**
+ * The phone is the person, not an assistant: a `/approve` typed in the mobile
+ * app has to reach the dispatcher as theirs.
+ */
+it('reports a reply from the mobile app as the person, via mobile', function () {
+    $root = postIn($this, 'pca-agent', 'Plan for PCA-497');
+
+    $this->withToken(mobileToken($this->dev))
+        ->postJson("/api/v1/w/{$this->workspace->slug}/channels/pca-agent/messages", [
+            'body' => '/approve',
+            'parent_message_id' => $root->id,
+        ])
+        ->assertCreated();
+
+    expect(outboundEvents(OutboundEventType::MessageCreated)->sole()->payload['actor'])->toEqual([
+        'user_id' => $this->dev->id,
+        'via' => 'mobile',
+        'connector_id' => null,
+        'is_bot' => false,
+    ]);
 });
 
 it('does not export a new top-level message, even in an agent channel', function () {

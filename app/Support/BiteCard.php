@@ -32,9 +32,12 @@ final readonly class BiteCard
      * Build the card for a response that paused.
      *
      * @param  Collection<int, PendingApproval>|array<int, PendingApproval>  $approvals
+     * @param  int|null  $requestMessageId  The message that asked, so the resume
+     *                                      can hand it back to the tool — a task
+     *                                      filed from it takes its files along.
      * @return array<string, mixed>
      */
-    public static function forApprovals(?string $conversationId, Collection|array $approvals): array
+    public static function forApprovals(?string $conversationId, Collection|array $approvals, ?int $requestMessageId = null): array
     {
         $approvals = Collection::make($approvals);
 
@@ -50,6 +53,7 @@ final readonly class BiteCard
         return [
             'bite' => [
                 'conversation_id' => $conversationId,
+                'request_message_id' => $requestMessageId,
                 'state' => 'pending',
                 'approvals' => $approvals->map(fn (PendingApproval $approval): array => [
                     'id' => $approval->id,

@@ -1,9 +1,12 @@
 <?php
 
+use App\Actions\Messages\SendMessage;
 use App\Enums\ChannelType;
+use App\Enums\ConnectorKind;
 use App\Enums\OutboundEventType;
 use App\Models\AgentSummon;
 use App\Models\Message;
+use App\Services\ActorContext;
 use App\Services\BiteSummons;
 use App\Services\MentionParser;
 use App\Services\SlugGenerator;
@@ -111,6 +114,40 @@ describe('summoning', function () {
 
         expect(outboundEvents())->toBeEmpty();
     });
+
+    /**
+     * The phone is the person typing, the same as the browser — so `@agent`
+     * from the mobile app summons, and says it came from the app.
+     */
+    it('summons from the mobile app, as the person via mobile', function () {
+        $this->withToken(mobileToken($this->dev))
+            ->postJson("/api/v1/w/{$this->workspace->slug}/channels/general/messages", ['body' => '@agent what does checkout do?'])
+            ->assertCreated();
+
+        $event = outboundEvents(OutboundEventType::AgentSummoned)->sole();
+
+        expect($event->payload['actor'])->toMatchArray(['user_id' => $this->dev->id, 'via' => 'mobile', 'connector_id' => null])
+            ->and($event->payload['data']['target_user_id'])->toBe($this->dev->id);
+    });
+
+    /**
+     * An assistant writing `@agent` through the MCP server is not the person
+     * asking, whichever token it holds.
+     */
+    it('never summons from an MCP connector or an agent', function (ConnectorKind $kind) {
+        [$user] = connectAs($this->dev, $this->workspace, $kind);
+        $this->app['auth']->guard('api')->setUser($user);
+        $this->app['auth']->shouldUse('api');
+
+        app(SendMessage::class)->handle(container: $this->general, sender: $user, body: '@agent hello');
+
+        expect(app(ActorContext::class)->current()->via->isPerson())->toBeFalse()
+            ->and(outboundEvents(OutboundEventType::AgentSummoned))->toBeEmpty()
+            ->and(AgentSummon::query()->count())->toBe(0);
+    })->with([
+        'mcp token' => ConnectorKind::Token,
+        'agent' => ConnectorKind::Agent,
+    ]);
 
     it('sends nothing when no dispatcher is configured', function () {
         config(['snack.agents.dispatcher_url' => null]);

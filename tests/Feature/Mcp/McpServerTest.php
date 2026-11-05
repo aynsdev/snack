@@ -11,6 +11,7 @@ use App\Mcp\Tools\ReadChannelTool;
 use App\Mcp\Tools\ReadThreadTool;
 use App\Mcp\Tools\SendMessageTool;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\Task;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
@@ -88,6 +89,26 @@ describe('reading', function () {
             ->tool(ReadChannelTool::class, ['channel' => '#general'])
             ->assertOk()
             ->assertSee('Ship it on Friday');
+    });
+
+    /**
+     * By id as well as name: `read_file` takes the id, and a client told only
+     * the name has no way to open the file.
+     */
+    it('names a message\'s files with the id read_file takes', function () {
+        $message = makeMessage($this->channel, $this->owner, 'Here is the bug');
+        $file = MessageAttachment::factory()->image()->create([
+            'workspace_id' => $this->workspace->id,
+            'message_id' => $message->id,
+            'uploaded_by' => $this->owner->id,
+            'original_name' => 'IMG_2289.png',
+        ]);
+        [$user] = connectAs($this->member, $this->workspace);
+
+        SnackServer::actingAs($user)
+            ->tool(ReadChannelTool::class, ['channel' => '#general'])
+            ->assertOk()
+            ->assertSee("files: IMG_2289.png (file {$file->id})");
     });
 
     it('treats a private channel the person is not in as missing', function () {

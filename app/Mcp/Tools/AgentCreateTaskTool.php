@@ -4,6 +4,8 @@ namespace App\Mcp\Tools;
 
 use App\Actions\Projects\ResolveTaskAgentIntent;
 use App\Actions\Projects\SaveTask;
+use App\Enums\TaskPriority;
+use App\Enums\TaskType;
 use App\Mcp\Tools\Concerns\ServesAgents;
 use App\Models\Project;
 use App\Models\Task;
@@ -33,7 +35,9 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 For agent connectors only: files a task as this person, as
 {"task_id", "reference", "url"}. `assignee` is "owner" or a project member's
 user id; `intent` is "agent" (start the owner's agent), "agent-requested"
-(ask the assignee to start theirs) or "none".
+(ask the assignee to start theirs) or "none". Optional `type` (story, task,
+bug, epic; default story) and `priority` (highest, high, medium, low, lowest;
+default medium).
 TEXT)]
 #[IsReadOnly(false)]
 #[IsDestructive(false)]
@@ -42,6 +46,19 @@ class AgentCreateTaskTool extends SnackTool
     use ServesAgents;
 
     private const INTENTS = ['agent', 'agent-requested', 'none'];
+
+    /**
+     * Every type but a subtask, which needs a parent this tool does not take.
+     *
+     * @return array<int, string>
+     */
+    private static function types(): array
+    {
+        return array_values(array_map(
+            fn (TaskType $type): string => $type->value,
+            array_filter(TaskType::cases(), fn (TaskType $type): bool => ! $type->isSubtask()),
+        ));
+    }
 
     public function handle(Request $request, SaveTask $saveTask, ResolveTaskAgentIntent $agentIntent, OutboundPayloads $payloads): Response
     {
@@ -57,6 +74,8 @@ class AgentCreateTaskTool extends SnackTool
             'description' => ['nullable', 'string', 'max:10000'],
             'assignee' => ['required'],
             'intent' => ['required', Rule::in(self::INTENTS)],
+            'type' => ['nullable', 'string', Rule::in(self::types())],
+            'priority' => ['nullable', 'string', Rule::in(TaskPriority::values())],
         ]);
 
         $owner = $context->user;
@@ -101,12 +120,25 @@ class AgentCreateTaskTool extends SnackTool
             $labelIds[] = $agentIntent->reservedLabel($project, $name)->id;
         }
 
-        $task = $saveTask->create($project, $owner, [
+        $attributes = [
             'title' => trim((string) $request->get('title')),
             'description' => $request->get('description'),
             'assignee_id' => $assigneeId,
             'label_ids' => $labelIds,
-        ]);
+        ];
+
+        /*
+         * Left out when not given, so an omitted type or priority is whatever
+         * SaveTask files any new card as, rather than a second copy of that
+         * default here.
+         */
+        foreach (['type', 'priority'] as $key) {
+            if (is_string($request->get($key))) {
+                $attributes[$key] = $request->get($key);
+            }
+        }
+
+        $task = $saveTask->create($project, $owner, $attributes);
 
         $reference = $project->reference($task->number);
 
@@ -128,6 +160,8 @@ class AgentCreateTaskTool extends SnackTool
             'description' => $schema->string()->description('The ticket description.'),
             'assignee' => $schema->string()->description('"owner", or a project member\'s user id (as a number or digits).')->required(),
             'intent' => $schema->string()->enum(self::INTENTS)->description('Which agent label to put on.')->required(),
+            'type' => $schema->string()->enum(self::types())->description('What kind of work this is. Defaults to story.'),
+            'priority' => $schema->string()->enum(TaskPriority::values())->description('How urgent it is. Defaults to medium.'),
         ];
     }
 }
