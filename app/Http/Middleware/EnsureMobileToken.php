@@ -31,19 +31,31 @@ class EnsureMobileToken
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
-        $token = $user instanceof User ? $user->token() : null;
 
-        if (
-            ! $token instanceof AccessToken
-            || $user->isBot()
-            || ! $token->can(self::SCOPE)
-            || ! $this->personalAccessClient->issued($token->oauth_client_id ?? null)
-        ) {
+        if (! $user instanceof User || ! $this->admits($user)) {
             return response()->json([
                 'message' => 'This token cannot be used with the Snack API.',
             ], 403);
         }
 
         return $next($request);
+    }
+
+    /**
+     * Whether the person's current bearer token is one the mobile app signed in
+     * for.
+     *
+     * Public because {@see App\Services\ActorContext} asks the same question to
+     * attribute a change to the phone rather than to an MCP connector: the two
+     * must never disagree about which tokens are the app's.
+     */
+    public function admits(User $user): bool
+    {
+        $token = $user->token();
+
+        return $token instanceof AccessToken
+            && ! $user->isBot()
+            && $token->can(self::SCOPE)
+            && $this->personalAccessClient->issued($token->oauth_client_id ?? null);
     }
 }

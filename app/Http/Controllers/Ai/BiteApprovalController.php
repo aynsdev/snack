@@ -89,13 +89,13 @@ class BiteApprovalController extends Controller
             user: $user,
             container: $container,
             /*
-             * Deliberately null. `message` is what the agent reads for the
-             * surrounding conversation, and passing Bite's own card message
-             * would make the transcript start from the pause rather than from
-             * what was being discussed. The stored agent conversation already
-             * carries the part that matters.
+             * The person's message that asked — never Bite's own card message,
+             * which would make the transcript start from the pause. A resume
+             * replays the stored agent conversation rather than the room, so
+             * this does not change what the model reads; it is what lets the
+             * tool that now runs take that message's files onto the task.
              */
-            message: null,
+            message: $this->requestMessage($card, $message, $user),
         );
 
         // Built before anything is written, so a card with nothing pending on
@@ -198,6 +198,34 @@ class BiteApprovalController extends Controller
         return $approved
             ? Decisions::from($decisions)->approveRemaining()
             : Decisions::from($decisions)->rejectRemaining('The person declined.');
+    }
+
+    /**
+     * The message the card was answering, if it is still there and was written
+     * by the person deciding, in the card's own channel or chat.
+     *
+     * The id comes from the card, which Snack wrote; it is re-checked anyway,
+     * because what the tool does with it — copy its files onto a card — must
+     * only ever reach the decider's own words.
+     *
+     * @param  array<string, mixed>  $card
+     */
+    private function requestMessage(array $card, Message $cardMessage, User $user): ?Message
+    {
+        $id = $card['request_message_id'] ?? null;
+
+        if (! is_int($id)) {
+            return null;
+        }
+
+        return Message::query()
+            ->with('attachments')
+            ->whereKey($id)
+            ->where('workspace_id', $cardMessage->workspace_id)
+            ->where('sender_id', $user->id)
+            ->where('channel_id', $cardMessage->channel_id)
+            ->where('conversation_id', $cardMessage->conversation_id)
+            ->first();
     }
 
     /**

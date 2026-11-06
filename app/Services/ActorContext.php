@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\ConnectorKind;
+use App\Http\Middleware\EnsureMobileToken;
 use App\Mcp\ConnectorAccess;
 use App\Models\OAuthToken;
 use App\Models\User;
@@ -19,8 +20,11 @@ use Laravel\Passport\AccessToken;
  * composer, the MCP server, and webhooks, and threading "how did this arrive"
  * through each of them would be a parameter every future caller could forget.
  *
- * - A Passport bearer token is an MCP connector; when the token row's kind is
- *   `agent` it is that person's agent rather than the person.
+ * - A Passport bearer token the mobile app signed in for — the `mobile` scope,
+ *   issued by Snack's personal access client, as {@see EnsureMobileToken}
+ *   decides — is the person themselves: `mobile`.
+ * - Any other Passport bearer token is an MCP connector; when the token row's
+ *   kind is `agent` it is that person's agent rather than the person.
  * - Any other authenticated user arrived through a session: `web`.
  * - Nobody authenticated — a queued job, a console command — is `system`.
  *
@@ -37,9 +41,13 @@ class ActorContext
     /** @var array<string, OAuthToken|null> */
     private array $connectors = [];
 
+    /** @var array<string, bool> */
+    private array $mobileTokens = [];
+
     public function __construct(
         private readonly AuthFactory $auth,
         private readonly ConnectorAccess $access,
+        private readonly EnsureMobileToken $mobile,
     ) {}
 
     public function current(): Actor
@@ -72,6 +80,10 @@ class ActorContext
             return Actor::web($user);
         }
 
+        if ($this->isMobile($user, $token)) {
+            return Actor::mobile($user);
+        }
+
         $connector = $this->connector($user, $token);
 
         if ($connector?->connector_kind === ConnectorKind::Agent) {
@@ -99,6 +111,19 @@ class ActorContext
         } finally {
             $this->override = $previous;
         }
+    }
+
+    /**
+     * Remembered per token: deciding reads the issuing client, and one request
+     * can ask who is acting many times over.
+     *
+     * @param  AccessToken<mixed>  $token
+     */
+    private function isMobile(User $user, AccessToken $token): bool
+    {
+        $id = (string) $token->oauth_access_token_id;
+
+        return $this->mobileTokens[$id] ??= $this->mobile->admits($user);
     }
 
     /**

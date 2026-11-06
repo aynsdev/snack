@@ -2,11 +2,18 @@
 
 namespace App\Ai\Tools;
 
+use App\Actions\Attachments\CopyAttachmentsToTask;
+use App\Actions\Projects\ResolveTaskAgentIntent;
 use App\Actions\Projects\SaveTask;
+use App\Enums\ConnectorKind;
 use App\Enums\TaskPriority;
 use App\Enums\TaskType;
+use App\Models\Channel;
+use App\Models\Message;
+use App\Models\OAuthToken;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskLabel;
 use App\Models\User;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Database\Eloquent\Builder;
@@ -41,6 +48,20 @@ use Stringable;
  * knows who wanted the thing, and the audit trail for "who filed this" has to
  * point at a person. Bite is the instrument, not the author — the same reason
  * every read here happens as the asker too.
+ *
+ * # What comes along from the message that asked
+ *
+ * The files on it, copied onto the card, and a line linking back to it — a
+ * bug filed from a message carrying the screenshot must carry the screenshot.
+ * Only the asker's own message, so nothing reaches the card that its reporter
+ * could not already read.
+ *
+ * # The agent label
+ *
+ * When agents are on for the project and the assignee has a live agent
+ * connector, the card is labelled for it the way the task panel would: `agent`
+ * when the asker files it for themselves, `agent-requested` for anybody else —
+ * who then presses Start. Never `agent` on somebody else's card.
  */
 class CreateTask extends BiteTool implements Approvable, Tool
 {
@@ -96,26 +117,38 @@ class CreateTask extends BiteTool implements Approvable, Tool
         }
 
         $assignment = $this->resolveAssignee($project, $this->arg($request, 'assignee'));
+        $source = $this->sourceMessage();
+        $agentLabel = $this->agentLabelName($project, $assignment['id']);
+
+        $attributes = [
+            'title' => $this->term($this->arg($request, 'title'), 200) ?: 'Untitled',
+            'description' => $this->withSourceLink($this->description_($this->arg($request, 'description')), $source),
+            'type' => $this->type($this->arg($request, 'type')),
+            'priority' => $this->priority($this->arg($request, 'priority')),
+            'assignee_id' => $assignment['id'],
+        ];
+
+        if ($agentLabel !== null) {
+            $attributes['label_ids'] = [app(ResolveTaskAgentIntent::class)->reservedLabel($project, $agentLabel)->id];
+        }
 
         $task = app(SaveTask::class)->create(
             project: $project,
             reporter: $this->context->user,
-            attributes: [
-                'title' => $this->term($this->arg($request, 'title'), 200) ?: 'Untitled',
-                'description' => $this->description_($this->arg($request, 'description')),
-                'type' => $this->type($this->arg($request, 'type')),
-                'priority' => $this->priority($this->arg($request, 'priority')),
-                'assignee_id' => $assignment['id'],
-            ],
+            attributes: $attributes,
         );
 
-        return trim(sprintf(
-            'Created %s — %s on %s. %s Tell the person it is filed, using that reference.',
-            $task->reference(),
-            $task->title,
-            $project->name,
+        $copied = $source === null
+            ? 0
+            : app(CopyAttachmentsToTask::class)->handle($task, $this->context->user->id, $source->attachments)->count();
+
+        return trim(implode(' ', array_filter([
+            sprintf('Created %s — %s on %s.', $task->reference(), $task->title, $project->name),
             $assignment['note'],
-        ));
+            $this->agentNote($agentLabel),
+            $copied > 0 ? sprintf('Attached %d %s from their message.', $copied, str('file')->plural($copied)) : '',
+            'Tell the person it is filed, using that reference.',
+        ])));
     }
 
     public function schema(JsonSchema $schema): array
@@ -167,12 +200,125 @@ class CreateTask extends BiteTool implements Approvable, Tool
 
         $assignee = $this->assigneeName($project, $this->arg($request, 'assignee'));
 
+        /*
+         * Previewed from the same rule {@see self::handle()} applies, so the
+         * person agrees to the label as well as the card — an agent starting
+         * work is not something to discover afterwards.
+         */
+        $member = $project === null ? null : $this->resolveAssignee($project, $this->arg($request, 'assignee'))['id'];
+        $agentLabel = $project === null ? null : $this->agentLabelName($project, $member);
+
         return Approval::required(sprintf(
-            'Create “%s” on %s%s.',
+            'Create “%s” on %s%s%s.',
             $title,
             $where,
             $assignee === null ? '' : ", assigned to {$assignee}",
+            match ($agentLabel) {
+                TaskLabel::AGENT => ', with your agent starting on it',
+                TaskLabel::AGENT_REQUESTED => ', with their agent requested',
+                default => '',
+            },
         ));
+    }
+
+    /**
+     * The message that asked Bite for this, when it is the asker's own.
+     *
+     * {@see App\Jobs\AnswerWithBite} and the approval resume both put it on
+     * the context. Checked again here rather than trusted: its files are about
+     * to be copied onto a card the asker reports, so it must be something they
+     * wrote, in this workspace.
+     */
+    private function sourceMessage(): ?Message
+    {
+        $message = $this->context->message;
+
+        if ($message === null
+            || $message->sender_id !== $this->context->user->id
+            || $message->workspace_id !== $this->context->workspace->id) {
+            return null;
+        }
+
+        return $message;
+    }
+
+    /**
+     * The description with a line pointing back at where it was asked for.
+     *
+     * The message id rides along because there is no link straight to one
+     * message: the link opens its channel or chat, and the id is what
+     * Snack's `get_message` tool takes.
+     */
+    private function withSourceLink(?string $description, ?Message $source): ?string
+    {
+        if ($source === null) {
+            return $description;
+        }
+
+        $container = $source->container();
+
+        if ($container === null) {
+            return $description;
+        }
+
+        $base = rtrim((string) config('app.url'), '/');
+        $workspace = $this->context->workspace->slug;
+
+        [$where, $url] = match (true) {
+            $container instanceof Channel => ['#'.$container->name, route('channels.show', [
+                'workspace' => $workspace,
+                'channel' => $container->slug,
+            ], absolute: false)],
+            $container->type->isBite() => ['a chat with Bite', route('bite.chats.show', [
+                'workspace' => $workspace,
+                'conversation' => $container->public_id,
+            ], absolute: false)],
+            default => ['a direct message', route('conversations.show', [
+                'workspace' => $workspace,
+                'conversation' => $container->public_id,
+            ], absolute: false)],
+        };
+
+        $line = sprintf('Requested in %s (message #%d): %s%s', $where, $source->id, $base, $url);
+
+        return $description === null ? $line : $description."\n\n".$line;
+    }
+
+    /**
+     * Which reserved label the new card gets, if any.
+     *
+     * Only when agents are on for the project and the assignee has an agent
+     * connector that still opens something in this workspace — a label asking
+     * for an agent nobody has is a card that waits forever.
+     */
+    private function agentLabelName(Project $project, ?int $assigneeId): ?string
+    {
+        if ($assigneeId === null || ! $project->agentsEnabled()) {
+            return null;
+        }
+
+        $hasAgent = OAuthToken::query()
+            ->where('user_id', $assigneeId)
+            ->where('workspace_id', $project->workspace_id)
+            ->where('connector_kind', ConnectorKind::Agent)
+            ->where('revoked', false)
+            ->where(fn (Builder $query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->exists();
+
+        if (! $hasAgent) {
+            return null;
+        }
+
+        return $assigneeId === $this->context->user->id ? TaskLabel::AGENT : TaskLabel::AGENT_REQUESTED;
+    }
+
+    private function agentNote(?string $label): string
+    {
+        return match ($label) {
+            TaskLabel::AGENT => 'Labelled agent: their agent will start on it.',
+            TaskLabel::AGENT_REQUESTED => 'Labelled agent-requested: the assignee can press Start to hand it to their agent.',
+            default => '',
+        };
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Enums\ProjectRole;
 use App\Models\BoardColumn;
 use App\Models\Channel;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\Project;
 use App\Models\ProjectMember;
 use App\Models\Task;
@@ -235,6 +236,13 @@ class OutboundPayloads
     }
 
     /**
+     * A message as it stands. Load `sender` and `attachments` with it — a batch
+     * of these must not query per message.
+     *
+     * `attachments` lists the files by the id Snack's `read_file` tool takes,
+     * so the receiver can open one without searching for it first; never the
+     * storage key or a download link, which are Snack's to hand out.
+     *
      * @return array<string, mixed>
      */
     public function message(Message $message): array
@@ -251,6 +259,16 @@ class OutboundPayloads
             'body' => $message->body,
             'body_plaintext' => $message->body_plaintext,
             'agent' => is_array($agent) ? $agent : null,
+            'attachments' => $message->attachments
+                ->sortBy('id')
+                ->values()
+                ->map(fn (MessageAttachment $file): array => [
+                    'id' => $file->id,
+                    'name' => OneLine::clean($file->original_name),
+                    'mime_type' => $file->mime_type,
+                    'size' => $file->size,
+                ])
+                ->all(),
             'created_at' => OutboundEvents::timestamp($message->created_at),
             'edited_at' => OutboundEvents::timestamp($message->edited_at),
         ];

@@ -110,7 +110,7 @@ class AgentChannelMessages
      */
     private function live(Message $message): ?array
     {
-        $current = Message::query()->with('sender')->find($message->id);
+        $current = Message::query()->with(['sender', 'attachments'])->find($message->id);
 
         return $current === null ? null : ['message' => $this->payloads->message($current)];
     }

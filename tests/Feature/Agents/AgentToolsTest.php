@@ -4,6 +4,7 @@ use App\Enums\ChannelType;
 use App\Enums\ColumnCategory;
 use App\Enums\ConnectorKind;
 use App\Enums\OutboundEventType;
+use App\Enums\TaskPriority;
 use App\Enums\TaskType;
 use App\Enums\WorkspaceRole;
 use App\Events\MessageSent;
@@ -438,6 +439,43 @@ describe('agent_create_task', function () {
 
         expect(Task::query()->findOrFail($json['task_id'])->labels)->toBeEmpty();
     });
+
+    it('files with the type and priority it is given', function () {
+        $json = agentToolJson(callAgentTool($this, 'agent_create_task', [
+            'project_key' => 'PCA', 'title' => 'Login 500s', 'assignee' => 'owner', 'intent' => 'none', 'type' => 'bug', 'priority' => 'highest',
+        ]));
+
+        $task = Task::query()->findOrFail($json['task_id']);
+
+        expect($task->type)->toBe(TaskType::Bug)
+            ->and($task->priority)->toBe(TaskPriority::Highest);
+    });
+
+    it('keeps the usual defaults when no type or priority is given', function () {
+        $json = agentToolJson(callAgentTool($this, 'agent_create_task', [
+            'project_key' => 'PCA', 'title' => 'Defaults', 'assignee' => 'owner', 'intent' => 'none',
+        ]));
+
+        $task = Task::query()->findOrFail($json['task_id']);
+
+        expect($task->type)->toBe(TaskType::Story)
+            ->and($task->priority)->toBe(TaskPriority::Medium);
+    });
+
+    /**
+     * A subtask needs a parent this tool does not take, so it is not on offer.
+     */
+    it('refuses a subtask or an invented type or priority', function (array $arguments) {
+        callAgentTool($this, 'agent_create_task', [
+            'project_key' => 'PCA', 'title' => 'x', 'assignee' => 'owner', 'intent' => 'none', ...$arguments,
+        ])->assertJsonPath('result.isError', true);
+
+        expect(Task::query()->count())->toBe(0);
+    })->with([
+        'subtask' => [['type' => 'subtask']],
+        'invented type' => [['type' => 'chore']],
+        'invented priority' => [['priority' => 'urgent']],
+    ]);
 
     it('refuses an unknown project, a non-member assignee, and a project without agents', function () {
         $outsider = joinWorkspace($this->workspace);

@@ -230,7 +230,7 @@ class AnswerWithBite implements ShouldQueue
         $text = trim((string) $response);
 
         $card = $response->hasPendingApprovals()
-            ? BiteCard::forApprovals($response->conversationId, $response->pendingApprovals)
+            ? BiteCard::forApprovals($response->conversationId, $response->pendingApprovals, $message->id)
             : [];
 
         /*

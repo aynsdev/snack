@@ -7,11 +7,13 @@ use App\Ai\BiteContext;
 use App\Enums\ChannelType;
 use App\Enums\WorkspaceRole;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\BiteBot;
 use App\Support\BiteCard;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
@@ -359,4 +361,61 @@ it('resumes an approval that followed another tool call in the same turn', funct
     expect($toolResults->diff($toolUses))->toBeEmpty()
         ->and(Task::query()->where('title', 'Fix emergency contact creation')->exists())->toBeTrue()
         ->and(Message::query()->where('sender_id', $this->bot->id)->latest('id')->value('body'))->toBe('Filed PWA-1.');
+});
+
+/**
+ * PCA-575, end to end: the card remembers which message asked, and the resume
+ * hands it back to the tool, so the screenshot on that message reaches the
+ * card the person approved.
+ */
+it('takes the asking message\'s files onto the task it approves', function () {
+    config()->set('ai.conversations.generate_title', false);
+    Storage::fake('local');
+
+    makeProject($this->workspace, $this->ada, ['name' => 'Client App', 'key' => 'PCA']);
+
+    $step = fn (string $stopReason, array $content): array => [
+        'id' => 'msg_'.Str::random(8),
+        'type' => 'message',
+        'role' => 'assistant',
+        'model' => 'claude-haiku-4-5',
+        'stop_reason' => $stopReason,
+        'content' => $content,
+        'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
+    ];
+
+    Http::fake(['api.anthropic.com/*' => Http::sequence()
+        ->push($step('tool_use', [['type' => 'tool_use', 'id' => 'toolu_create', 'name' => 'CreateTask', 'input' => ['project' => 'PCA', 'title' => 'Checkout button overlaps the total']]]))
+        ->push($step('end_turn', [['type' => 'text', 'text' => 'Filed PCA-1.']])),
+    ]);
+
+    $upload = MessageAttachment::factory()->orphaned()->image()->create([
+        'workspace_id' => $this->workspace->id,
+        'uploaded_by' => $this->ada->id,
+        'original_name' => 'IMG_2289.png',
+    ]);
+    Storage::disk('local')->put($upload->path, 'png bytes');
+    Storage::disk('local')->put((string) $upload->thumbnail_path, 'thumb bytes');
+
+    $asking = app(SendMessage::class)->handle(
+        container: $this->channel,
+        sender: $this->ada,
+        body: '@bite file this',
+        attachments: collect([$upload]),
+    );
+
+    $card = Message::query()->where('sender_id', $this->bot->id)->latest('id')->firstOrFail();
+
+    expect($card->metadata['bite']['request_message_id'])->toBe($asking->id);
+
+    $this->actingAs($this->ada)
+        ->postJson(route('bite.approvals.store', [$this->workspace, $card]), ['decision' => 'approve'])
+        ->assertOk();
+
+    $task = Task::query()->where('title', 'Checkout button overlaps the total')->sole();
+    $copy = MessageAttachment::query()->where('task_id', $task->id)->sole();
+
+    expect($copy->original_name)->toBe('IMG_2289.png')
+        ->and(Storage::disk('local')->get($copy->path))->toBe('png bytes')
+        ->and($task->description)->toContain("Requested in #{$this->channel->name} (message #{$asking->id})");
 });

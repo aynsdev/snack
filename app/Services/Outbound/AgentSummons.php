@@ -2,7 +2,6 @@
 
 namespace App\Services\Outbound;
 
-use App\Enums\ActorVia;
 use App\Enums\OutboundEventType;
 use App\Models\AgentSummon;
 use App\Models\Channel;
@@ -15,10 +14,10 @@ use Illuminate\Support\Facades\Gate;
 /**
  * `@agent` in a channel: asks somebody's Kusina into the thread.
  *
- * Only a person typing in the web UI can summon, in a channel and never a
- * DM. `@renz @agent` asks Renz's agent; `@agent` alone asks the author's own.
- * Whoever is asked has to be an active member who can read the channel, or
- * nothing happens. The dispatcher hears `agent.summoned` once per thread and
+ * Only a person typing in the web UI or the mobile app can summon, in a
+ * channel and never a DM. `@renz @agent` asks Renz's agent; `@agent` alone
+ * asks the author's own. Whoever is asked has to be an active member who can
+ * read the channel, or nothing happens. The dispatcher hears `agent.summoned` once per thread and
  * person; from then on {@see AgentChannelMessages} exports the thread until
  * its root is deleted.
  */
@@ -40,7 +39,7 @@ class AgentSummons
     {
         return ! isset($metadata['agent'])
             && ! $sender->isBot()
-            && $this->actors->current()->via === ActorVia::Web
+            && $this->actors->current()->isPerson()
             && $this->events->enabled()
             && MentionParser::agentSummons($source)['summoned'];
     }
@@ -88,7 +87,7 @@ class AgentSummons
         }
 
         $this->events->defer(OutboundEventType::AgentSummoned, $message->workspace_id, function () use ($message, $channel, $rootId, $sender, $target): array {
-            $current = Message::query()->with('sender')->find($message->id);
+            $current = Message::query()->with(['sender', 'attachments'])->find($message->id);
             $live = Channel::query()->find($channel->id);
 
             if ($current === null || $live === null || $live->is_archived) {
