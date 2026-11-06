@@ -3,6 +3,7 @@
 use App\Actions\Messages\SendMessage;
 use App\Ai\Agents\Bite;
 use App\Ai\BiteAttachments;
+use App\Ai\BiteContext;
 use App\Ai\BiteUploads;
 use App\Enums\BiteCapability;
 use App\Enums\MagnificModel;
@@ -452,4 +453,50 @@ it('ignores an attached file when the workspace switched file reading off', func
         (string) $prompt->prompt,
         'Do not read me.',
     ));
+});
+
+it('answers a reply under its own message inside that thread', function () {
+    Bite::fake(['Assigned to Renz.']);
+
+    $answer = makeMessage($this->channel, $this->bot, 'I filed PCA-578.');
+
+    askBite('assign this to renz', $answer);
+
+    expect(biteSaid()?->body)->toBe('Assigned to Renz.')
+        ->and(biteSaid()?->parent_message_id)->toBe($answer->id);
+});
+
+/**
+ * The root is what a thread is about, so it stays in the transcript however
+ * many replies come after it.
+ */
+it('keeps the thread root in its context when the thread is longer than the limit', function () {
+    config()->set('snack.bite.context_messages', 3);
+
+    $root = makeMessage($this->channel, $this->bot, 'I filed PCA-578.');
+
+    foreach (range(1, 5) as $number) {
+        makeMessage($this->channel, $this->ada, "reply {$number}")->update(['parent_message_id' => $root->id]);
+    }
+
+    $question = makeMessage($this->channel, $this->ada, 'assign this to renz');
+    $question->update(['parent_message_id' => $root->id]);
+
+    $agent = new Bite(
+        new BiteContext(
+            workspace: $this->workspace,
+            user: $this->ada,
+            container: $this->channel,
+            message: $question->fresh(),
+        ),
+        $this->bot,
+        app(BiteAttachments::class),
+    );
+
+    $transcript = collect($agent->messages());
+
+    expect($transcript)->toHaveCount(4)
+        ->and($transcript->first()->role->value)->toBe('assistant')
+        ->and((string) $transcript->first()->content)->toBe('I filed PCA-578.')
+        ->and((string) $transcript->last()->content)->toContain('assign this to renz');
 });

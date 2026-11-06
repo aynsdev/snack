@@ -25,8 +25,8 @@ use Throwable;
 /**
  * The button on Bite's "shall I create this?" card.
  *
- * Bite pauses before the one tool that writes anything — see
- * {@see App\Ai\Tools\CreateTask} — and the paused call sits in the SDK's
+ * Bite pauses before the tools that change a board — see
+ * {@see App\Ai\Tools\CreateTask} and {@see App\Ai\Tools\UpdateTask} — and the paused call sits in the SDK's
  * `agent_conversations` tables until somebody decides. This resumes it.
  *
  * # Three separate checks, none of which replaces another

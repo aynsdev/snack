@@ -115,17 +115,19 @@ class BiteSummons
     }
 
     /**
-     * Bite answers in a channel only when named.
+     * Bite answers in a channel only when named, or when replied to in a
+     * thread it started.
      *
      * A channel has an audience, and an assistant that replied to everything
-     * said in one would be unusable within a day. Being named is the whole
-     * consent mechanism.
+     * said in one would be unusable within a day. Being named is the consent
+     * mechanism; a reply under Bite's own message is the same consent given by
+     * where it was typed. See {@see self::repliesToBite()}.
      */
     private function summonedInChannel(Message $message, Channel $channel, BiteSetting $settings): ?User
     {
         $handles = MentionParser::extract($message->body)['usernames'];
 
-        if (! $this->namesBite($handles, $channel->workspace_id)) {
+        if (! $this->namesBite($handles, $channel->workspace_id) && ! $this->repliesToBite($message, $channel)) {
             return null;
         }
 
@@ -181,6 +183,41 @@ class BiteSummons
             ->exists()
             ? $bot
             : null;
+    }
+
+    /**
+     * Whether a message is a reply in a thread that Bite started.
+     *
+     * Replying under one of Bite's answers is how people follow up on it, such as
+     * "assign this to renz" under "I filed PCA-578", and nobody retypes the
+     * handle for that. The thread hangs off Bite's own message, so it is a
+     * conversation with Bite in the way a DM is, and the reply is answered with
+     * the thread, root included, as context.
+     *
+     * Only a thread Bite *started*. A thread where Bite was asked one question
+     * among people talking to each other still needs the name, or Bite would
+     * answer every later message in it.
+     *
+     * Checked after the name so the common case, a top-level message, costs no
+     * query, and with {@see BiteBot::existingAccountFor()} so a workspace that
+     * never summoned Bite does not get an account created here.
+     */
+    private function repliesToBite(Message $message, Channel $channel): bool
+    {
+        if ($message->parent_message_id === null) {
+            return false;
+        }
+
+        $bot = $this->bot->existingAccountFor($channel->workspace);
+
+        if ($bot === null) {
+            return false;
+        }
+
+        return Message::query()
+            ->whereKey($message->parent_message_id)
+            ->where('sender_id', $bot->id)
+            ->exists();
     }
 
     /**

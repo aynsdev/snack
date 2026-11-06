@@ -31,8 +31,8 @@ use Laravel\Ai\Storage\DatabaseConversationStore;
  *
  * Bite is addressed the way a colleague is — `@bite` in a channel, or a direct
  * message — and answers out of the workspace's own data: what was said, what
- * files exist, what is on the boards, who is here. It can also file a task,
- * which is the only thing it can change and the only thing it asks before doing.
+ * files exist, what is on the boards, who is here. It can also file and update
+ * tasks, which it always asks before doing.
  *
  * # What it is allowed to know
  *
@@ -111,7 +111,7 @@ class Bite implements Agent, Conversational, HasTools
 
         Answering questions about this workspace using its own data — what people
         said, what files exist, what is on the project boards, who works here —
-        and filing tasks when asked. If you have the `generate_image` or
+        and filing or updating tasks when asked. If you have the `generate_image` or
         `generate_video` tools, you can also make images and videos when someone
         asks for one. You are not a general-purpose chatbot. If
         someone asks you something that has nothing to do with this workspace,
@@ -297,20 +297,32 @@ class Bite implements Agent, Conversational, HasTools
         }
 
         $query = $root !== null
-            ? Message::query()->where(fn ($group) => $group
-                ->where('parent_message_id', $root)
-                ->orWhere('id', $root))
+            ? Message::query()->where('parent_message_id', $root)
             : $this->context->container->messages()->getQuery()->whereNull('parent_message_id');
 
-        return $query
-            ->with(['sender:id,name,username', 'attachments:id,message_id,original_name'])
+        $relations = ['sender:id,name,username', 'attachments:id,message_id,original_name'];
+
+        $transcript = $query
+            ->with($relations)
             ->orderByDesc('id')
             ->limit($limit)
             ->get()
             // Queried newest-first to walk the index, then flipped: a
             // transcript reads forwards.
             ->reverse()
-            ->values()
+            ->values();
+
+        /*
+         * The root goes first and is never cut by the limit. It is what the
+         * thread is about: "assign this to renz" means nothing without the
+         * message that filed the task, and in a long thread the newest replies
+         * would otherwise push it out.
+         */
+        if ($root !== null) {
+            $transcript = Message::query()->with($relations)->whereKey($root)->get()->concat($transcript);
+        }
+
+        return $transcript
             ->map(fn (Message $message): \Laravel\Ai\Messages\Message => new \Laravel\Ai\Messages\Message(
                 /*
                  * Bite's own past messages are the assistant's turns; everything
@@ -357,6 +369,7 @@ class Bite implements Agent, Conversational, HasTools
                 BiteCapability::AttachFile => new Tools\AttachFile($this->context, $files, $this->attachments, $this->bot),
                 BiteCapability::SearchTasks => new Tools\SearchTasks($this->context),
                 BiteCapability::CreateTask => new Tools\CreateTask($this->context),
+                BiteCapability::UpdateTask => new Tools\UpdateTask($this->context),
                 /*
                  * Withheld unless the asker runs HR and the reply stays in a
                  * DM with Bite. Building it and refusing inside would still

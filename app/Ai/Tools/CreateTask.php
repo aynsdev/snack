@@ -29,10 +29,10 @@ use Stringable;
 /**
  * Files an issue on a project board.
  *
- * # The only thing Bite can change
+ * # It asks first
  *
- * Every other tool reads. This one writes, and it writes something that shows
- * up on a board other people work from — so it is the one that asks first. The
+ * It writes something that shows up on a board other people work from, so it
+ * asks first, as {@see UpdateTask} does. The
  * tool pauses before executing and the person who summoned Bite gets a card
  * with the exact title, project, and assignee it is about to use, and a button.
  * See {@see App\Http\Controllers\Ai\BiteApprovalController} for the resume.

@@ -298,3 +298,48 @@ it('answers in a private channel it was named in', function () {
 
     expect(app(BiteSummons::class)->summonedBy($message))->not->toBeNull();
 });
+
+/**
+ * A reply under Bite's own answer is a follow-up to Bite, such as "assign this to
+ * renz" under the task it just filed, and nobody retypes the handle for that.
+ */
+it('is summoned by a reply in a thread it started', function () {
+    Queue::fake();
+
+    $bot = app(BiteBot::class)->accountFor($this->workspace);
+    $answer = makeMessage($this->channel, $bot, 'I filed PCA-578.');
+
+    $reply = app(SendMessage::class)->handle(
+        container: $this->channel,
+        sender: $this->ada,
+        body: 'assign this to renz',
+        parent: $answer,
+    );
+
+    expect(app(BiteSummons::class)->summonedBy($reply)?->id)->toBe($bot->id);
+
+    Queue::assertPushed(AnswerWithBite::class);
+});
+
+/**
+ * A thread someone else started still needs the name, even when Bite has
+ * answered in it: the people there may be talking to each other.
+ */
+it('is not summoned by an unnamed reply in a thread someone else started', function () {
+    Queue::fake();
+
+    $bot = app(BiteBot::class)->accountFor($this->workspace);
+    $root = makeMessage($this->channel, $this->ada, 'about the migration');
+    makeMessage($this->channel, $bot, 'It ships Friday.')->update(['parent_message_id' => $root->id]);
+
+    $reply = app(SendMessage::class)->handle(
+        container: $this->channel,
+        sender: $this->ada,
+        body: 'thanks, I will tell the team',
+        parent: $root,
+    );
+
+    expect(app(BiteSummons::class)->summonedBy($reply))->toBeNull();
+
+    Queue::assertNotPushed(AnswerWithBite::class);
+});

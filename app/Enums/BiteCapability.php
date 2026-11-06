@@ -32,6 +32,7 @@ enum BiteCapability: string
     case AttachFile = 'attach_file';
     case SearchTasks = 'search_tasks';
     case CreateTask = 'create_task';
+    case UpdateTask = 'update_task';
     case PeopleReport = 'people_report';
     case GenerateImage = 'generate_image';
     case GenerateVideo = 'generate_video';
@@ -46,6 +47,7 @@ enum BiteCapability: string
             self::AttachFile => 'Send files into the chat',
             self::SearchTasks => 'Search tasks',
             self::CreateTask => 'Create tasks',
+            self::UpdateTask => 'Update tasks',
             self::PeopleReport => 'HR reports',
             self::GenerateImage => 'Generate images',
             self::GenerateVideo => 'Generate videos',
@@ -62,6 +64,7 @@ enum BiteCapability: string
             self::AttachFile => 'Attach a file it found to its reply, so nobody has to go and fetch it.',
             self::SearchTasks => 'Look through the project boards for existing work.',
             self::CreateTask => 'File a task on a board. Always asks the person for approval first.',
+            self::UpdateTask => 'Reassign a task, move it to another column, or change its priority, title, or due date. Always asks the person for approval first.',
             self::PeopleReport => 'Report attendance and task output per employee — lateness, undertime, absences. Only for admins, and only in a private DM with Bite.',
             self::GenerateImage => 'Make images from a description with Magnific and post them in the chat. Each one is a paid generation, and only works when the server has a Magnific API key.',
             self::GenerateVideo => 'Make short videos from a description or an image with Magnific. Paid per generation and slower than images; needs a Magnific API key on the server.',
@@ -78,7 +81,7 @@ enum BiteCapability: string
     public function writes(): bool
     {
         return match ($this) {
-            self::CreateTask, self::AttachFile, self::GenerateImage, self::GenerateVideo => true,
+            self::CreateTask, self::UpdateTask, self::AttachFile, self::GenerateImage, self::GenerateVideo => true,
             default => false,
         };
     }
@@ -98,6 +101,7 @@ enum BiteCapability: string
             self::AttachFile => Tools\AttachFile::class,
             self::SearchTasks => Tools\SearchTasks::class,
             self::CreateTask => Tools\CreateTask::class,
+            self::UpdateTask => Tools\UpdateTask::class,
             self::PeopleReport => Tools\PeopleReport::class,
             self::GenerateImage => Tools\GenerateImage::class,
             self::GenerateVideo => Tools\GenerateVideo::class,
