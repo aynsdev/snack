@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
+import { WebhookDocs } from '@/components/snack/webhook-docs';
+import type { WebhookLimits } from '@/components/snack/webhook-docs';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -49,17 +51,10 @@ type ChannelOption = {
     type: string;
 };
 
-type Limits = {
-    max_text_length: number;
-    max_attachments: number;
-    max_fields: number;
-    rate_limit_per_minute: number;
-};
-
 type Props = {
     webhooks: IncomingWebhook[];
     channels: ChannelOption[];
-    limits: Limits;
+    limits: WebhookLimits;
 };
 
 const RELATIVE = new Intl.DateTimeFormat(undefined, {
@@ -161,7 +156,7 @@ export default function WebhooksPage({ webhooks, channels, limits }: Props) {
                         </ul>
                     )}
 
-                    <UsagePanel limits={limits} />
+                    <WebhookDocs limits={limits} />
                 </div>
             </div>
 
@@ -682,85 +677,6 @@ Http::withHeaders([
                 captured request cannot be replayed later.
             </p>
         </div>
-    );
-}
-
-/**
- * What to send, quoting this installation's own limits.
- *
- * On the page rather than in a docs site because the person configuring a hook
- * is looking at this screen with a terminal open beside it, and the numbers come
- * from the server so they cannot drift from what it actually enforces.
- */
-function UsagePanel({ limits }: { limits: Limits }) {
-    return (
-        <section className="rounded-xl border border-border bg-card px-4 py-3">
-            <h2 className="text-sm font-semibold">Sending to a webhook</h2>
-
-            <p className="mt-1 text-sm text-pretty text-muted-foreground">
-                POST JSON with a <code className="text-xs">text</code> field.
-                Slack-shaped payloads work as they are, so an existing
-                integration usually just needs its URL changed.
-            </p>
-
-            <pre className="snack-scroll mt-2.5 overflow-x-auto rounded bg-muted px-3 py-2 font-mono text-xs">
-                {`curl -X POST -H 'Content-Type: application/json' \\
-  -d '{"text": "Deploy #482 shipped"}' \\
-  <the URL above>`}
-            </pre>
-
-            <p className="mt-2.5 text-sm text-pretty text-muted-foreground">
-                In a Laravel app:
-            </p>
-
-            <pre className="snack-scroll mt-1 overflow-x-auto rounded bg-muted px-3 py-2 font-mono text-xs">
-                {`Http::post(config('services.snack.webhook'), [
-    'text' => "Deploy {$build} shipped",
-    'attachments' => [[
-        'color' => 'good',
-        'title' => "Build {$build}",
-        'title_link' => $url,
-        'fields' => [
-            ['title' => 'Branch', 'value' => $branch, 'short' => true],
-        ],
-    ]],
-]);`}
-            </pre>
-
-            <p className="mt-2.5 text-sm text-pretty text-muted-foreground">
-                To group updates in a thread, send your own id as{' '}
-                <code className="text-xs">thread_key</code>. The first delivery
-                with a key starts the thread; every later one with the same key
-                replies in it.
-            </p>
-
-            <pre className="snack-scroll mt-1 overflow-x-auto rounded bg-muted px-3 py-2 font-mono text-xs">
-                {`{"text": "Transaction TXN-1042 started", "thread_key": "TXN-1042"}
-{"text": "TXN-1042 paid",                "thread_key": "TXN-1042"}`}
-            </pre>
-
-            <ul className="mt-2.5 space-y-1 text-xs text-muted-foreground tabular-nums">
-                <li>
-                    Up to {limits.max_text_length.toLocaleString()} characters
-                    of text, {limits.max_attachments} attachments,{' '}
-                    {limits.max_fields} fields each.
-                </li>
-                <li>
-                    {limits.rate_limit_per_minute} deliveries a minute per
-                    webhook.
-                </li>
-                <li>
-                    Optional <code>username</code> and <code>icon_emoji</code>{' '}
-                    change what one message is attributed to. The channel is
-                    fixed and cannot be set by the payload.
-                </li>
-                <li>
-                    Or reply by <code>thread_id</code>: the{' '}
-                    <code>message_id</code> an earlier delivery from this
-                    webhook returned.
-                </li>
-            </ul>
-        </section>
     );
 }
 
