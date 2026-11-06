@@ -164,3 +164,24 @@ it('throttles one hook without silencing another', function () {
     // two jobs on one CI runner would.
     $this->postJson("/hooks/{$quiet}", ['text' => 'still fine'])->assertCreated();
 });
+
+it('answers a browser\'s CORS preflight', function () {
+    [$webhook, $token] = makeWebhook($this->channel);
+
+    $this->options("/hooks/{$token}", [], [
+        'Origin' => 'https://dashboard.example.com',
+        'Access-Control-Request-Method' => 'POST',
+        'Access-Control-Request-Headers' => 'content-type',
+    ])
+        ->assertNoContent()
+        ->assertHeader('Access-Control-Allow-Origin', '*')
+        ->assertHeader('Access-Control-Allow-Methods', 'POST');
+});
+
+it('sends CORS headers on a cross-origin delivery', function () {
+    [$webhook, $token] = makeWebhook($this->channel);
+
+    $this->postJson("/hooks/{$token}", ['text' => 'from a browser'], ['Origin' => 'https://dashboard.example.com'])
+        ->assertCreated()
+        ->assertHeader('Access-Control-Allow-Origin', '*');
+});
