@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 /**
@@ -159,6 +160,37 @@ class IncomingWebhook extends Model
     public function bot(): BelongsTo
     {
         return $this->belongsTo(User::class, 'bot_user_id');
+    }
+
+    /**
+     * The `thread_key`s this hook's callers have started threads under.
+     *
+     * @return HasMany<WebhookThread, $this>
+     */
+    public function threads(): HasMany
+    {
+        return $this->hasMany(WebhookThread::class);
+    }
+
+    /**
+     * A message this hook posted, which a delivery's `thread_id` may reply to.
+     *
+     * Only the hook's own messages, in its own channel. The token authorizes
+     * posting as this bot into this room; replying under a person's message
+     * would subscribe-notify everyone following that thread, which is more
+     * than a leaked URL should be able to reach.
+     */
+    public function ownMessage(int $messageId): ?Message
+    {
+        if ($this->bot_user_id === null) {
+            return null;
+        }
+
+        return Message::query()
+            ->whereKey($messageId)
+            ->where('channel_id', $this->channel_id)
+            ->where('sender_id', $this->bot_user_id)
+            ->first();
     }
 
     // -- Scopes --------------------------------------------------------------

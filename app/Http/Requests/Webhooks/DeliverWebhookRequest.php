@@ -80,6 +80,16 @@ class DeliverWebhookRequest extends FormRequest
             // With or without Slack's colons; the parser strips them either way.
             'icon_emoji' => ['sometimes', 'nullable', 'string', 'max:66'],
 
+            /*
+             * Threading, two ways. `thread_key` is the caller's own id for the
+             * thing it is narrating — the first delivery with a key starts the
+             * thread, later ones reply in it. `thread_id` is a `message_id` an
+             * earlier delivery returned. One or the other: both at once would
+             * name two threads and leave Snack to guess.
+             */
+            'thread_key' => ['sometimes', 'nullable', 'string', 'max:255', 'prohibits:thread_id'],
+            'thread_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+
             'attachments' => ['sometimes', 'array', 'max:'.config('snack.webhooks.max_attachments')],
 
             /*
@@ -109,7 +119,26 @@ class DeliverWebhookRequest extends FormRequest
             'text.required_without' => 'A delivery needs "text", or at least one attachment.',
             'text.max' => 'That text is longer than a webhook message may be.',
             'attachments.max' => 'That is more attachments than one delivery may carry.',
+            'thread_key.prohibits' => 'Send "thread_key" or "thread_id", not both.',
         ];
+    }
+
+    /**
+     * The caller's own name for the thread this delivery belongs to.
+     */
+    public function threadKey(): ?string
+    {
+        $key = $this->input('thread_key');
+
+        return is_string($key) && trim($key) !== '' ? trim($key) : null;
+    }
+
+    /**
+     * The message this delivery replies under, as an earlier delivery's `message_id`.
+     */
+    public function threadId(): ?int
+    {
+        return $this->filled('thread_id') ? $this->integer('thread_id') : null;
     }
 
     /**

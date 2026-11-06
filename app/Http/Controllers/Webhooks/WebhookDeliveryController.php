@@ -114,16 +114,36 @@ class WebhookDeliveryController extends Controller
             return $this->failure('That payload had nothing to post.', 422);
         }
 
-        $message = $deliver->handle($webhook, $payload);
+        /*
+         * Resolved here, like the archived check, because a bad id is a fact
+         * about this request and the caller should hear it rather than have the
+         * update posted at the top level where nobody expects it.
+         */
+        $replyTo = null;
+
+        if ($request->threadId() !== null) {
+            $replyTo = $webhook->ownMessage($request->threadId());
+
+            if ($replyTo === null) {
+                return $this->failure('No message from this webhook with that thread_id.', 422);
+            }
+        }
+
+        $message = $deliver->handle($webhook, $payload, $replyTo, $request->threadKey());
 
         /*
-         * The message id is returned because it is the one piece of state the
-         * caller might legitimately want, and it is not sensitive to anyone
+         * The message and thread ids are returned because they are the state the
+         * caller might legitimately want, and they are not sensitive to anyone
          * already holding the token. Nothing else about the workspace is
          * disclosed — not the channel name, not the bot, not the hook's own name
          * — because a stolen URL must stay as uninformative as it is limited.
          */
-        return response()->json(['ok' => true, 'message_id' => $message->id], 201);
+        return response()->json([
+            'ok' => true,
+            'message_id' => $message->id,
+            // The root, so a caller can send it back as `thread_id`.
+            'thread_id' => $message->threadRootId(),
+        ], 201);
     }
 
     private function failure(string $error, int $status): JsonResponse

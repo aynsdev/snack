@@ -727,6 +727,18 @@ function UsagePanel({ limits }: { limits: Limits }) {
 ]);`}
             </pre>
 
+            <p className="mt-2.5 text-sm text-pretty text-muted-foreground">
+                To group updates in a thread, send your own id as{' '}
+                <code className="text-xs">thread_key</code>. The first delivery
+                with a key starts the thread; every later one with the same key
+                replies in it.
+            </p>
+
+            <pre className="snack-scroll mt-1 overflow-x-auto rounded bg-muted px-3 py-2 font-mono text-xs">
+                {`{"text": "Transaction TXN-1042 started", "thread_key": "TXN-1042"}
+{"text": "TXN-1042 paid",                "thread_key": "TXN-1042"}`}
+            </pre>
+
             <ul className="mt-2.5 space-y-1 text-xs text-muted-foreground tabular-nums">
                 <li>
                     Up to {limits.max_text_length.toLocaleString()} characters
@@ -741,6 +753,11 @@ function UsagePanel({ limits }: { limits: Limits }) {
                     Optional <code>username</code> and <code>icon_emoji</code>{' '}
                     change what one message is attributed to. The channel is
                     fixed and cannot be set by the payload.
+                </li>
+                <li>
+                    Or reply by <code>thread_id</code>: the{' '}
+                    <code>message_id</code> an earlier delivery from this
+                    webhook returned.
                 </li>
             </ul>
         </section>

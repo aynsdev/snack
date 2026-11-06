@@ -5,10 +5,13 @@ namespace App\Actions\Webhooks;
 use App\Actions\Messages\SendMessage;
 use App\Models\IncomingWebhook;
 use App\Models\Message;
+use App\Models\User;
+use App\Models\WebhookThread;
 use App\Services\ActorContext;
 use App\Services\WebhookBot;
 use App\Support\Actor;
 use App\Support\WebhookPayload;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -40,6 +43,13 @@ use Illuminate\Support\Facades\DB;
  * appeared after a refresh would look broken to the person watching for it. So
  * the metadata is written inside the same transaction, and the send is what
  * broadcasts — see the note on the ordering below.
+ *
+ * # Threads
+ *
+ * A delivery may reply under an earlier one: `$replyTo` when the caller named a
+ * message by `thread_id` (the controller has already checked the hook owns it),
+ * or `$threadKey` when it named the thread by its own id — see the
+ * webhook_threads migration.
  */
 class DeliverWebhookMessage
 {
@@ -49,8 +59,12 @@ class DeliverWebhookMessage
         private readonly ActorContext $actors,
     ) {}
 
-    public function handle(IncomingWebhook $webhook, WebhookPayload $payload): Message
-    {
+    public function handle(
+        IncomingWebhook $webhook,
+        WebhookPayload $payload,
+        ?Message $replyTo = null,
+        ?string $threadKey = null,
+    ): Message {
         /*
          * Outside the transaction, and before the send. Creating the account
          * seats it in the workspace and the channel, which the message pipeline
@@ -60,11 +74,63 @@ class DeliverWebhookMessage
          */
         $bot = $this->bot->accountFor($webhook);
 
+        $message = $threadKey === null
+            ? $this->post($webhook, $bot, $payload, $replyTo)
+            : $this->postUnderKey($webhook, $bot, $payload, $threadKey);
+
+        $this->recordDelivery($webhook);
+
+        return $message;
+    }
+
+    /**
+     * Post under the thread `$threadKey` names, starting it if this is the first
+     * delivery to use the key.
+     *
+     * Under a lock, because "transaction started" and "transaction updated" are
+     * routinely sent milliseconds apart: without it both would find no thread,
+     * both would start one, and the update would land as a second top-level
+     * message instead of a reply.
+     */
+    private function postUnderKey(IncomingWebhook $webhook, User $bot, WebhookPayload $payload, string $threadKey): Message
+    {
+        $lock = Cache::lock("webhook-thread:{$webhook->id}:".sha1($threadKey), 10);
+
+        return $lock->block(10, function () use ($webhook, $bot, $payload, $threadKey): Message {
+            $thread = WebhookThread::query()
+                ->with('message')
+                ->where('incoming_webhook_id', $webhook->id)
+                ->where('key', $threadKey)
+                ->first();
+
+            /*
+             * A root that has since been deleted starts a fresh thread rather
+             * than failing: the caller is mid-way through narrating something
+             * and has no way to know a person tidied the channel.
+             */
+            $root = $thread?->message;
+
+            $message = $this->post($webhook, $bot, $payload, $root);
+
+            if ($root === null) {
+                WebhookThread::query()->updateOrCreate(
+                    ['incoming_webhook_id' => $webhook->id, 'key' => $threadKey],
+                    ['message_id' => $message->id],
+                );
+            }
+
+            return $message;
+        });
+    }
+
+    private function post(IncomingWebhook $webhook, User $bot, WebhookPayload $payload, ?Message $parent): Message
+    {
         // A webhook request authenticates as nobody, so it says what it is.
         $message = $this->actors->using(Actor::webhook($bot), fn (): Message => $this->messages->handle(
             container: $webhook->channel,
             sender: $bot,
             body: $payload->text,
+            parent: $parent,
         ));
 
         /*
@@ -93,8 +159,6 @@ class DeliverWebhookMessage
         ];
 
         $message->saveQuietly();
-
-        $this->recordDelivery($webhook);
 
         return $message;
     }
