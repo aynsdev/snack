@@ -226,3 +226,46 @@ it('exposes the card to the client through the message resource', function () {
         ->assertOk()
         ->assertJsonPath('messages.0.webhook.attachments.0.title', 'Build 482');
 });
+
+it('accepts a lone card sent as an object with values wrapped in lists', function () {
+    // The shape an automation tool builds from a form: one card as an object,
+    // every value as a one-element list.
+    $webhook = deliver($this->token, [
+        'text' => 'Automation Parent',
+        'attachments' => [
+            'color' => ['danger'],
+            'title' => ['Card declined'],
+            'fields' => [
+                ['title' => ['Reason'], 'value' => ['Insufficient funds']],
+            ],
+        ],
+    ]);
+
+    expect($webhook['attachments'])->toEqual([[
+        'color' => 'danger',
+        'title' => 'Card declined',
+        'fields' => [
+            ['title' => 'Reason', 'value' => 'Insufficient funds', 'short' => false],
+        ],
+    ]]);
+});
+
+it('accepts a lone field sent as an object', function () {
+    $webhook = deliver($this->token, [
+        'text' => 'x',
+        'attachments' => [['title' => 'Card', 'fields' => ['title' => 'Reason', 'value' => 'Late']]],
+    ]);
+
+    expect($webhook['attachments'][0]['fields'])->toEqual([
+        ['title' => 'Reason', 'value' => 'Late', 'short' => false],
+    ]);
+});
+
+it('still drops a value that is a list of several', function () {
+    $webhook = deliver($this->token, [
+        'text' => 'x',
+        'attachments' => [['title' => 'Card', 'color' => ['danger', 'good']]],
+    ]);
+
+    expect($webhook['attachments'][0])->not->toHaveKey('color');
+});

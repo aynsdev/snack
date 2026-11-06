@@ -108,3 +108,24 @@ it('refuses thread_key and thread_id together', function () {
     $this->postJson("/hooks/{$this->token}", ['text' => 'x', 'thread_key' => 'TXN-1', 'thread_id' => 1])
         ->assertJsonValidationErrors('thread_key');
 });
+
+it('draws the card on a thread reply too', function () {
+    $payload = fn (string $text): array => [
+        'text' => $text,
+        'thread_key' => 'ovi2nurip',
+        'attachments' => [
+            'color' => ['danger'],
+            'title' => ['Card declined'],
+            'fields' => [['title' => 'Reason', 'value' => 'Insufficient funds']],
+        ],
+    ];
+
+    $this->postJson("/hooks/{$this->token}", $payload('Automation Parent'))->assertCreated();
+    $this->postJson("/hooks/{$this->token}", $payload('Automation update'))->assertCreated();
+
+    $reply = Message::query()->whereNotNull('parent_message_id')->sole();
+
+    expect($reply->metadata['webhook']['attachments'][0])
+        ->color->toBe('danger')
+        ->title->toBe('Card declined');
+});

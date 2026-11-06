@@ -24,6 +24,15 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class DeliverWebhookRequest extends FormRequest
 {
+    /** Top-level keys that hold one value, not a list. */
+    private const SINGLE_KEYS = ['text', 'username', 'icon_emoji', 'thread_key', 'thread_id'];
+
+    /** Card keys that hold one value, not a list. */
+    private const CARD_SINGLE_KEYS = ['color', 'fallback', 'pretext', 'author_name', 'title', 'title_link', 'text', 'footer', 'ts'];
+
+    /** Field keys that hold one value, not a list. */
+    private const FIELD_SINGLE_KEYS = ['title', 'value', 'short'];
+
     public function authorize(): bool
     {
         return true;
@@ -42,15 +51,88 @@ class DeliverWebhookRequest extends FormRequest
     {
         $payload = $this->input('payload');
 
-        if (! is_string($payload)) {
-            return;
+        if (is_string($payload)) {
+            $decoded = json_decode($payload, true);
+
+            if (is_array($decoded)) {
+                $this->replace($decoded);
+            }
         }
 
-        $decoded = json_decode($payload, true);
+        $this->replace(self::normalizeShapes($this->all()));
+    }
 
-        if (is_array($decoded)) {
-            $this->replace($decoded);
+    /**
+     * Forgive the two shapes automation tools produce when building JSON from a
+     * form rather than by hand.
+     *
+     * - A lone card as an object, `"attachments": {...}`, rather than a list of
+     *   one. It is wrapped.
+     * - A single value wrapped in a list, `"color": ["danger"]`, because the
+     *   tool treats every field as repeatable. It is unwrapped.
+     *
+     * Without this both were dropped in silence — the object's keys were read as
+     * cards and the one-element lists as non-strings — so the message posted
+     * with no card and no error, which is the hardest kind of bug for the
+     * person on the other end to find. Only the obvious cases are touched: a
+     * list of two values is still ambiguous, and still dropped.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private static function normalizeShapes(array $data): array
+    {
+        $data = self::unwrapSingles($data, self::SINGLE_KEYS);
+
+        if (! is_array($data['attachments'] ?? null)) {
+            return $data;
         }
+
+        $data['attachments'] = array_map(function (mixed $card): mixed {
+            if (! is_array($card)) {
+                return $card;
+            }
+
+            $card = self::unwrapSingles($card, self::CARD_SINGLE_KEYS);
+
+            if (is_array($card['fields'] ?? null)) {
+                $card['fields'] = array_map(
+                    fn (mixed $field): mixed => is_array($field) ? self::unwrapSingles($field, self::FIELD_SINGLE_KEYS) : $field,
+                    self::asList($card['fields']),
+                );
+            }
+
+            return $card;
+        }, self::asList($data['attachments']));
+
+        return $data;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $value
+     * @return list<mixed>
+     */
+    private static function asList(array $value): array
+    {
+        return array_is_list($value) ? $value : [$value];
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $data
+     * @param  list<string>  $keys
+     * @return array<array-key, mixed>
+     */
+    private static function unwrapSingles(array $data, array $keys): array
+    {
+        foreach ($keys as $key) {
+            $value = $data[$key] ?? null;
+
+            if (is_array($value) && count($value) === 1 && array_is_list($value) && ! is_array($value[0])) {
+                $data[$key] = $value[0];
+            }
+        }
+
+        return $data;
     }
 
     /**
