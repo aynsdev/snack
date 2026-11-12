@@ -229,7 +229,8 @@ class AgentChannelMessages
      */
     private function ticketThreadProjects(int $workspaceId, int $channelId, int $threadRootId): Collection
     {
-        $root = Message::query()
+        // With trashed: the root's own deletion is built after it is soft-deleted, and the dispatcher must still hear it.
+        $root = Message::withTrashed()
             ->where('workspace_id', $workspaceId)
             ->where('channel_id', $channelId)
             ->whereNull('parent_message_id')

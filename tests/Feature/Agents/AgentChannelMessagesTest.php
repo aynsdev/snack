@@ -358,6 +358,14 @@ describe('after the agent channel moves', function () {
             ->and(outboundEvents(OutboundEventType::MessageDeleted))->toHaveCount(1);
     });
 
+    it('still exports the deletion of the thread\'s own first message', function () {
+        app(DeleteMessage::class)->handle($this->ticketRoot->fresh(), $this->dev);
+
+        $deleted = messageEventData(OutboundEventType::MessageDeleted);
+        expect($deleted['message_id'])->toBe($this->ticketRoot->id)
+            ->and($deleted['projects'][0]['id'])->toBe($this->project->id);
+    });
+
     it('does not export other threads in the old channel, or a new root posted there', function () {
         postIn($this, 'pca-agent', 'not ticket work', $this->otherRoot);
         app(ActorContext::class)->using($this->agent, fn (): Message => app(SendMessage::class)->handle(
