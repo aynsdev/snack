@@ -27,6 +27,7 @@ class ProjectResource extends JsonResource
     {
         $user = $request->user();
         $canManage = $user?->can('update', $this->resource) ?? false;
+        $canConfigureAgents = $user?->can('configureAgents', $this->resource) ?? false;
 
         return [
             'id' => $this->id,
@@ -57,11 +58,11 @@ class ProjectResource extends JsonResource
             /*
              * Where the project's agents talk and which columns they use. Only
              * for someone who can change them: which channel a project exports
-             * to the agent dispatcher is the leads' business, not every reader's.
+             * to the agent dispatcher is its team's business, not every reader's.
              */
-            'agent_channel_id' => $this->when($canManage, fn (): ?int => $this->agent_channel_id),
-            'agent_in_progress_column_id' => $this->when($canManage, fn (): ?int => $this->agent_in_progress_column_id),
-            'agent_review_column_id' => $this->when($canManage, fn (): ?int => $this->agent_review_column_id),
+            'agent_channel_id' => $this->when($canConfigureAgents, fn (): ?int => $this->agent_channel_id),
+            'agent_in_progress_column_id' => $this->when($canConfigureAgents, fn (): ?int => $this->agent_in_progress_column_id),
+            'agent_review_column_id' => $this->when($canConfigureAgents, fn (): ?int => $this->agent_review_column_id),
 
             // Whether the task panel offers its agent controls. Says only that
             // agents are on, not where they talk.
@@ -79,6 +80,7 @@ class ProjectResource extends JsonResource
             'abilities' => [
                 'contribute' => $user?->can('contribute', $this->resource) ?? false,
                 'manage' => $canManage,
+                'configure_agents' => $canConfigureAgents,
 
                 /*
                  * Whether this person can put themselves on the project, or

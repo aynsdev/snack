@@ -133,6 +133,7 @@ class ProjectController extends Controller
         $this->authorize('view', $project);
 
         $canManage = $request->user()->can('update', $project);
+        $canConfigureAgents = $request->user()->can('configureAgents', $project);
 
         return Inertia::render('projects/settings', [
             'project' => (new ProjectResource($project->loadCount(['members', 'tasks'])))->resolve($request),
@@ -155,6 +156,7 @@ class ProjectController extends Controller
                 ])
                 ->all(),
             'canManage' => $canManage,
+            'canConfigureAgents' => $canConfigureAgents,
 
             /*
              * What the Agents section offers: the channels this viewer could
@@ -162,10 +164,11 @@ class ProjectController extends Controller
              * Only channels they can see — choosing one decides which
              * conversations leave Snack, and nobody may choose one they were
              * never in. See UpdateProjectRequest, which enforces the same.
-             * Empty for anyone who cannot change them; the section is a lead's.
+             * Empty for anyone who cannot change them — see
+             * ProjectPolicy::configureAgents().
              */
-            'agentChannels' => $canManage ? $this->agentChannels($workspace, $project, $request) : [],
-            'columns' => $canManage
+            'agentChannels' => $canConfigureAgents ? $this->agentChannels($workspace, $project, $request) : [],
+            'columns' => $canConfigureAgents
                 ? $project->columns()->ordered()->get(['id', 'name'])
                     ->map(fn (BoardColumn $column): array => ['id' => $column->id, 'name' => $column->name])
                     ->all()

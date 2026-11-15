@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ProjectRole;
+use App\Policies\ProjectPolicy;
 use Database\Factories\ProjectFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
@@ -62,6 +63,17 @@ class Project extends Model
      */
     public const AGENT_SETTINGS = [
         'agent_channel_id', 'agent_in_progress_column_id', 'agent_review_column_id',
+    ];
+
+    /**
+     * Everything a project member may change to set its agents up: the agent
+     * settings above, and the repository they work in. A save touching only
+     * these needs {@see ProjectPolicy::configureAgents()} rather than a lead.
+     *
+     * @var array<int, string>
+     */
+    public const AGENT_CONFIGURATION = [
+        ...self::AGENT_SETTINGS, 'repository_url', 'repository_base_branch',
     ];
 
     /**

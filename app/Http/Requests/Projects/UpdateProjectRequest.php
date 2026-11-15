@@ -5,17 +5,37 @@ namespace App\Http\Requests\Projects;
 use App\Actions\Projects\UpdateProject;
 use App\Models\Project;
 use App\Models\User;
+use App\Policies\ProjectPolicy;
 use App\Support\GitHubRepository;
 use Closure;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class UpdateProjectRequest extends FormRequest
 {
-    public function authorize(): bool
+    /**
+     * A lead's right, unless the save only sets the project's agents up — the
+     * channel, the columns and the repository — which any member may do; see
+     * {@see ProjectPolicy::configureAgents()}. Returned as a response so the
+     * person refused is told why.
+     */
+    public function authorize(): Response|bool
     {
-        return $this->user()?->can('update', $this->project()) ?? false;
+        $user = $this->user();
+
+        if ($user === null) {
+            return false;
+        }
+
+        $sent = array_intersect(array_keys($this->all()), array_keys($this->rules()));
+        $ability = array_diff($sent, Project::AGENT_CONFIGURATION) === [] && $sent !== []
+            ? 'configureAgents'
+            : 'update';
+
+        return Gate::forUser($user)->inspect($ability, $this->project());
     }
 
     /**
@@ -158,9 +178,9 @@ class UpdateProjectRequest extends FormRequest
              * An agent channel is where a project's ticket conversations are
              * sent out to the agent dispatcher, so choosing one is choosing what
              * leaves Snack. It must be a live, non-announcement channel in this
-             * workspace that the person choosing it can see — otherwise a lead
+             * workspace that the person choosing it can see — otherwise anybody
              * could export a private channel they were never in by typing its
-             * id. Keeping the channel already set is always allowed, so a lead
+             * id. Keeping the channel already set is always allowed, so someone
              * who cannot see it can still change the columns.
              */
             function (Validator $validator): void {

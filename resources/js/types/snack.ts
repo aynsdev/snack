@@ -1020,6 +1020,8 @@ export type Project = {
     abilities: {
         contribute: boolean;
         manage: boolean;
+        /** Can set its agents up: channel, columns and repository. */
+        configure_agents: boolean;
         /** Can put themselves on it — false when already on, or a guest. */
         join: boolean;
         /** Can take themselves off it. */

@@ -46,12 +46,21 @@ it('clears the link', function () {
     expect($this->project->fresh()->repository_url)->toBeNull();
 });
 
-it('is only changed by somebody who can manage the project', function () {
+it('is changed by any member of the project, not only a lead', function () {
     $member = joinWorkspace($this->workspace);
     addToProject($this->project, $member);
 
     $this->actingAs($member);
+    saveRepository($this, 'git@github.com:acme/demo.git')->assertSessionHasNoErrors();
+
+    expect($this->project->fresh()->repository_url)->toBe('https://github.com/acme/demo');
+});
+
+it('is not changed by somebody who is not on the project', function () {
+    $this->actingAs(joinWorkspace($this->workspace));
     saveRepository($this, 'https://github.com/acme/demo')->assertForbidden();
+
+    expect($this->project->fresh()->repository_url)->toBeNull();
 });
 
 it('normalises without a request too', function () {

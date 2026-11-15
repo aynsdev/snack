@@ -197,9 +197,10 @@ describe('the transport', function () {
 });
 
 describe('who sees agent settings', function () {
-    it('shows the agent ids to a lead and hides them from a member', function () {
+    it('shows the agent ids to the project\'s people and hides them from everyone else', function () {
         $member = joinWorkspace($this->workspace);
         addToProject($this->project, $member);
+        $outsider = joinWorkspace($this->workspace);
 
         $this->actingAs($this->owner)
             ->get(route('projects.board', [$this->workspace->slug, $this->project->slug]))
@@ -207,12 +208,16 @@ describe('who sees agent settings', function () {
 
         $this->actingAs($member)
             ->get(route('projects.board', [$this->workspace->slug, $this->project->slug]))
+            ->assertInertia(fn (Assert $page) => $page->where('project.agent_channel_id', $this->channel->id));
+
+        $this->actingAs($outsider)
+            ->get(route('projects.board', [$this->workspace->slug, $this->project->slug]))
             ->assertInertia(fn (Assert $page) => $page
                 ->missing('project.agent_channel_id')
                 ->missing('project.agent_in_progress_column_id')
                 ->missing('project.agent_review_column_id'));
 
-        $this->actingAs($member)
+        $this->actingAs($outsider)
             ->get(route('projects.settings.edit', [$this->workspace->slug, $this->project->slug]))
             ->assertInertia(fn (Assert $page) => $page
                 ->missing('project.agent_channel_id')

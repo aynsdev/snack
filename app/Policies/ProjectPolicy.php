@@ -94,7 +94,8 @@ class ProjectPolicy
 
     /**
      * Changing what the project *is*: its name, its columns, its labels, its
-     * card fields, and who is on it.
+     * card fields, and who is on it. Where its agents work is lighter — see
+     * {@see configureAgents()}.
      */
     public function update(User $user, Project $project): Response
     {
@@ -140,6 +141,37 @@ class ProjectPolicy
     public function manageSprints(User $user, Project $project): Response
     {
         return $this->update($user, $project);
+    }
+
+    /**
+     * Pointing the project's agents somewhere: the agent channel, the two
+     * columns they move cards into, and the repository they work in.
+     *
+     * A member's right rather than a lead's. These say where agents work, not
+     * what the project is, and a team should not have to find a lead to set
+     * them up. What leaves Snack stays bounded all the same — the channel must
+     * be one the person choosing it can see; see
+     * {@see Project::acceptsAgentChannelFrom()}.
+     *
+     * Guests are left out even when they are on the project: they are confined
+     * to what they were added to, and this decides which conversations are
+     * sent to the agent dispatcher.
+     */
+    public function configureAgents(User $user, Project $project): Response
+    {
+        if ($this->update($user, $project)->allowed()) {
+            return Response::allow();
+        }
+
+        $contributing = $this->contribute($user, $project);
+
+        if ($contributing->denied()) {
+            return $contributing;
+        }
+
+        return $user->roleIn($project->workspace)?->isGuest() === true
+            ? Response::deny('Guests cannot change where this project\'s agents work.')
+            : Response::allow();
     }
 
     /**

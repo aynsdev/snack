@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
  * Tells the agent dispatcher about messages in project agent channels — and
  * only those.
  *
- * Which conversations leave Snack is decided by a project lead choosing an
+ * Which conversations leave Snack is decided by a project member choosing an
  * agent channel in the project's settings — or, for one thread, by somebody
  * writing `@agent` in it; see {@see AgentSummons}. A message
  * anywhere that is not the agent channel of some live project in its own
