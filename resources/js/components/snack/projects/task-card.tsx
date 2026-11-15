@@ -7,6 +7,7 @@ import {
     TaskTypeIcon,
 } from '@/components/snack/projects/task-glyphs';
 import { UserAvatar } from '@/components/snack/user-avatar';
+import { Checkbox } from '@/components/ui/checkbox';
 import { agentStateOf, withoutReservedLabels } from '@/lib/agent-labels';
 import { CLICK_LIKE_DRAG_MS } from '@/lib/board-drag';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,9 @@ export function TaskCard({
     fields,
     isDragging = false,
     draggable = false,
+    isSelected = false,
+    showSelect = false,
+    onToggleSelected,
     onOpen,
     onDragStart,
     onDragEnd,
@@ -46,6 +50,11 @@ export function TaskCard({
     fields: CardFields;
     isDragging?: boolean;
     draggable?: boolean;
+    isSelected?: boolean;
+    /** Keep the tick box showing — while anything on the board is ticked. */
+    showSelect?: boolean;
+    /** Ticks the card for the bulk action bar; no box is drawn without it. */
+    onToggleSelected?: (task: Task, range: boolean) => void;
     onOpen: (task: Task) => void;
     onDragStart?: (task: Task) => void;
     onDragEnd?: () => void;
@@ -86,13 +95,39 @@ export function TaskCard({
                 }
             }}
             className={cn(
-                'group rounded-lg border border-border bg-card p-2.5 text-left shadow-sm transition-all',
+                'group relative rounded-lg border border-border bg-card p-2.5 text-left shadow-sm transition-all',
                 'hover:border-brand/40 hover:shadow',
                 'cursor-pointer',
                 draggable && 'active:cursor-grabbing',
                 isDragging && 'opacity-40',
+                isSelected && 'border-brand bg-brand-subtle/30',
             )}
         >
+            {/*
+             * The tick box sits over the corner rather than in the layout, so a
+             * board nobody is selecting on looks exactly as it did. Its click
+             * is stopped here: it would otherwise bubble to the article and
+             * open the card it was meant to tick.
+             */}
+            {onToggleSelected !== undefined && (
+                <Checkbox
+                    checked={isSelected}
+                    draggable={false}
+                    onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onToggleSelected(task, event.shiftKey);
+                    }}
+                    aria-label={`Select ${task.reference}`}
+                    className={cn(
+                        'absolute top-2.5 right-2.5 bg-card transition-opacity',
+                        isSelected || showSelect
+                            ? 'opacity-100'
+                            : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+                    )}
+                />
+            )}
+
             {/*
              * A button around the text rather than around the whole article: the
              * card is a drag handle, and a button that is also draggable
@@ -100,7 +135,13 @@ export function TaskCard({
              * keyboard target only; its click bubbles to the article, which
              * opens the card from anywhere on it.
              */}
-            <button type="button" className="w-full text-left">
+            <button
+                type="button"
+                className={cn(
+                    'w-full text-left',
+                    onToggleSelected !== undefined && 'pr-6',
+                )}
+            >
                 <p
                     className={cn(
                         'text-sm leading-snug',

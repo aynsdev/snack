@@ -43,6 +43,8 @@ export function BoardColumnView({
     workspaceSlug,
     projectSlug,
     draggingId,
+    selected,
+    onToggleSelected,
     onOpenTask,
     onDragStart,
     onDragEnd,
@@ -59,6 +61,9 @@ export function BoardColumnView({
     projectSlug: string;
     /** The card currently being dragged, so it can be dimmed in place. */
     draggingId: number | null;
+    /** Ticked cards, when the board offers bulk actions. */
+    selected?: ReadonlySet<number>;
+    onToggleSelected?: (task: Task, range: boolean) => void;
     onOpenTask: (task: Task) => void;
     onDragStart: (task: Task) => void;
     onDragEnd: () => void;
@@ -175,6 +180,9 @@ export function BoardColumnView({
                             fields={fields}
                             draggable={canContribute}
                             isDragging={draggingId === task.id}
+                            isSelected={selected?.has(task.id) ?? false}
+                            showSelect={(selected?.size ?? 0) > 0}
+                            onToggleSelected={onToggleSelected}
                             onOpen={onOpenTask}
                             onDragStart={onDragStart}
                             onDragEnd={onDragEnd}

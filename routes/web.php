@@ -88,6 +88,7 @@ use App\Http\Controllers\Projects\ProjectSummaryController;
 use App\Http\Controllers\Projects\ReleaseController;
 use App\Http\Controllers\Projects\SprintController;
 use App\Http\Controllers\Projects\TaskAttachmentController;
+use App\Http\Controllers\Projects\TaskBulkController;
 use App\Http\Controllers\Projects\TaskCommentController;
 use App\Http\Controllers\Projects\TaskController;
 use App\Http\Controllers\Projects\TaskLabelController;
@@ -802,6 +803,16 @@ Route::middleware(['auth', 'verified', 'workspace'])
         Route::post('projects/{project}/tasks', [TaskController::class, 'store'])
             ->middleware('throttle:messages')
             ->name('projects.tasks.store');
+
+        /*
+         * Several selected cards at once, from the board's or the backlog's
+         * bulk action bar. Throttled as one request, like a drop: it is one
+         * gesture however many cards it carries, and it is bounded at
+         * BulkUpdateTasks::MAX_TASKS.
+         */
+        Route::patch('projects/{project}/tasks/bulk', [TaskBulkController::class, 'update'])
+            ->middleware('throttle:messages')
+            ->name('projects.tasks.bulk');
 
         /*
          * Edits, moves and deletes address the task directly: a task id already

@@ -188,4 +188,37 @@ describe('TaskCard', () => {
 
         expect(onOpen).not.toHaveBeenCalled();
     });
+    it('ticks the card for bulk actions without opening it', () => {
+        const onOpen = vi.fn();
+        const onToggleSelected = vi.fn();
+
+        render(
+            <TaskCard
+                task={makeTask()}
+                fields={ALL_FIELDS}
+                onOpen={onOpen}
+                onToggleSelected={onToggleSelected}
+            />,
+        );
+
+        fireEvent.click(screen.getByLabelText('Select PWA-1499'), {
+            shiftKey: true,
+        });
+
+        expect(onToggleSelected).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 1 }),
+            true,
+        );
+        expect(onOpen).not.toHaveBeenCalled();
+    });
+
+    it('draws no tick box where bulk actions are not offered', () => {
+        render(
+            <TaskCard task={makeTask()} fields={ALL_FIELDS} onOpen={vi.fn()} />,
+        );
+
+        expect(
+            screen.queryByLabelText('Select PWA-1499'),
+        ).not.toBeInTheDocument();
+    });
 });
