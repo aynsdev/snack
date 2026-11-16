@@ -93,7 +93,7 @@ class UpdateProject
 
         /*
          * Read again under a row lock, and every "before" taken from that read.
-         * Two leads saving at once would otherwise each describe the settings
+         * Two people saving at once would otherwise each describe the settings
          * from the page they loaded, and the agent dispatcher would be told a
          * history that never happened — or have agents switched back on by the
          * slower of the two.
@@ -208,7 +208,7 @@ class UpdateProject
          */
         $actor = User::query()->findOrFail($actor->id);
 
-        Gate::forUser($actor)->authorize('update', $locked);
+        Gate::forUser($actor)->authorize('configureAgents', $locked);
 
         $channelId = self::id($attributes['agent_channel_id'] ?? null);
 

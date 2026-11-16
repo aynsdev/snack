@@ -5,6 +5,7 @@ use App\Enums\ChannelType;
 use App\Enums\ColumnCategory;
 use App\Enums\OutboundEventType;
 use App\Enums\ProjectRole;
+use App\Enums\WorkspaceRole;
 use App\Models\AuditLog;
 use App\Models\BoardColumn;
 use App\Models\Channel;
@@ -121,11 +122,65 @@ it('records nothing when nothing changed, or only something else did', function 
         ->and(AuditLog::query()->where('action', AuditAction::ProjectUpdated)->count())->toBe(1);
 });
 
-it('is a lead\'s decision, not a member\'s', function () {
-    saveAgentSettings($this, $this->member, ['agent_channel_id' => $this->channel->id])->assertForbidden();
+it('lets a project member who is not a lead set them, and records who did', function () {
+    saveAgentSettings($this, $this->member, [
+        'agent_channel_id' => $this->channel->id,
+        'agent_in_progress_column_id' => $this->started->id,
+        'agent_review_column_id' => $this->review->id,
+    ])->assertSessionHasNoErrors()->assertRedirect();
+
+    $project = $this->project->fresh();
+
+    expect($project->agent_channel_id)->toBe($this->channel->id)
+        ->and($project->agent_in_progress_column_id)->toBe($this->started->id)
+        ->and($project->agent_review_column_id)->toBe($this->review->id)
+        ->and(AuditLog::query()->where('action', AuditAction::ProjectAgentSettingsUpdated)->sole()->user_id)->toBe($this->member->id)
+        ->and(outboundEvents(OutboundEventType::ProjectAgentSettingsChanged))->toHaveCount(1);
+});
+
+it('still keeps the rest of the project a lead\'s, even alongside agent settings', function () {
+    $this->actingAs($this->member)
+        ->patch(route('projects.update', [$this->workspace->slug, $this->project->slug]), [
+            'name' => 'Renamed',
+            'agent_channel_id' => $this->channel->id,
+        ])
+        ->assertForbidden();
+
+    expect($this->project->fresh())
+        ->name->toBe('Pedi Client App')
+        ->agent_channel_id->toBeNull()
+        ->and(outboundEvents())->toHaveCount(0);
+});
+
+it('refuses somebody who is not on the project, saying why', function () {
+    $outsider = joinWorkspace($this->workspace);
+
+    saveAgentSettings($this, $outsider, ['agent_channel_id' => $this->channel->id])
+        ->assertForbidden()
+        ->assertSee('Join this project to work on its board.');
 
     expect($this->project->fresh()->agent_channel_id)->toBeNull()
         ->and(outboundEvents())->toHaveCount(0);
+});
+
+it('refuses a guest, even one on the project', function () {
+    $guest = joinWorkspace($this->workspace, role: WorkspaceRole::Guest);
+    addToProject($this->project, $guest);
+
+    saveAgentSettings($this, $guest, ['agent_channel_id' => $this->channel->id])
+        ->assertForbidden()
+        ->assertSee('Guests cannot change where this project', false);
+
+    expect($this->project->fresh()->agent_channel_id)->toBeNull();
+});
+
+it('refuses a member a private channel they are not in', function () {
+    $hidden = makeChannel($this->workspace, ChannelType::Private, ['name' => 'founders']);
+
+    saveAgentSettings($this, $this->member, ['agent_channel_id' => $hidden->id])
+        ->assertSessionHasErrors('agent_channel_id');
+
+    expect($this->project->fresh()->agent_channel_id)->toBeNull();
 });
 
 it('cannot be changed on an archived project', function () {
@@ -263,11 +318,29 @@ it('offers only channels the viewer could choose, and the project\'s columns', f
         });
 });
 
-it('shows the settings read-only to a member', function () {
+it('offers the agent settings to a member, with the rest of the page read-only', function () {
     $this->actingAs($this->member)
         ->get(route('projects.settings.edit', [$this->workspace->slug, $this->project->slug]))
         ->assertOk()
-        ->assertInertia(fn (Assert $page) => $page->where('canManage', false)->has('agentChannels'));
+        ->assertInertia(function (Assert $page) {
+            $page->where('canManage', false)
+                ->where('canConfigureAgents', true)
+                ->where('project.abilities.configure_agents', true)
+                ->where('project.agent_channel_id', null);
+
+            expect(collect($page->toArray()['props']['agentChannels'])->pluck('id'))->toContain($this->channel->id)
+                ->and($page->toArray()['props']['columns'])->not->toBeEmpty();
+        });
+});
+
+it('offers nothing to somebody who is not on the project', function () {
+    $this->actingAs(joinWorkspace($this->workspace))
+        ->get(route('projects.settings.edit', [$this->workspace->slug, $this->project->slug]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('canConfigureAgents', false)
+            ->where('agentChannels', [])
+            ->where('columns', [])
+            ->missing('project.agent_channel_id'));
 });
 
 it('treats a workspace admin as able to change them', function () {

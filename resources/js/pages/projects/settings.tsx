@@ -75,6 +75,11 @@ type Props = {
     members: ProjectMembership[];
     labels: TaskLabel[];
     canManage: boolean;
+    /**
+     * May set the project's agents up — its channel, columns and repository.
+     * Any member, not only a lead; see ProjectPolicy::configureAgents().
+     */
+    canConfigureAgents: boolean;
     /** Channels this viewer could point the project's agents at. */
     agentChannels: Pick<Channel, 'id' | 'name'>[];
     /** The project's columns, for the agents' two column pickers. */
@@ -91,7 +96,8 @@ type Props = {
  * shape is not here — a column is renamed, retyped and removed from the board
  * itself, where you can see what you are changing.
  *
- * Read-only for anyone who is not a lead. Rendering the page and refusing every
+ * Read-only for anyone who is not a lead, except the Agents section, which
+ * any project member can change. Rendering the page and refusing every
  * control is deliberate — "you cannot change this" is a more useful answer than
  * a 403 for somebody who came here to look up the project key.
  */
@@ -101,6 +107,7 @@ export default function ProjectSettingsPage({
     members,
     labels,
     canManage,
+    canConfigureAgents,
     agentChannels,
     columns,
     addable,
@@ -148,14 +155,13 @@ export default function ProjectSettingsPage({
                         canManage={canManage}
                     />
 
-                    {canManage && (
-                        <AgentsSection
-                            project={project}
-                            channels={agentChannels}
-                            columns={columns}
-                            workspaceSlug={workspace.slug}
-                        />
-                    )}
+                    <AgentsSection
+                        project={project}
+                        channels={agentChannels}
+                        columns={columns}
+                        workspaceSlug={workspace.slug}
+                        canConfigure={canConfigureAgents}
+                    />
                 </div>
             </div>
         </div>
@@ -177,8 +183,6 @@ function DetailsSection({
         name: project.name,
         key: project.key,
         description: project.description ?? '',
-        repository_url: project.repository_url ?? '',
-        repository_base_branch: project.repository_base_branch ?? '',
         color: project.color,
         uses_sprints: project.uses_sprints,
         next_task_number: String(project.next_task_number),
@@ -200,10 +204,6 @@ function DetailsSection({
                     form.transform((data) => ({
                         ...data,
                         next_task_number: Number(data.next_task_number),
-                        repository_base_branch:
-                            data.repository_url.trim() === ''
-                                ? ''
-                                : data.repository_base_branch,
                     }));
 
                     form.patch(
@@ -265,47 +265,6 @@ function DetailsSection({
                             form.setData('description', event.target.value)
                         }
                     />
-                </div>
-
-                <div className="space-y-1.5">
-                    <Label htmlFor="repository-url">GitHub repository</Label>
-                    <Input
-                        id="repository-url"
-                        value={form.data.repository_url}
-                        disabled={!canManage}
-                        placeholder="https://github.com/owner/repo"
-                        aria-describedby="repository-url-hint"
-                        onChange={(event) =>
-                            form.setData('repository_url', event.target.value)
-                        }
-                    />
-                    <p
-                        id="repository-url-hint"
-                        className="text-xs text-muted-foreground"
-                    >
-                        Where agents find this project's code. github.com only,
-                        over https or ssh.
-                    </p>
-                    <InputError message={form.errors.repository_url} />
-                </div>
-
-                <div className="max-w-xs space-y-1.5">
-                    <Label htmlFor="repository-base-branch">Base branch</Label>
-                    <Input
-                        id="repository-base-branch"
-                        value={form.data.repository_base_branch}
-                        disabled={
-                            !canManage || form.data.repository_url.trim() === ''
-                        }
-                        placeholder="default branch"
-                        onChange={(event) =>
-                            form.setData(
-                                'repository_base_branch',
-                                event.target.value,
-                            )
-                        }
-                    />
-                    <InputError message={form.errors.repository_base_branch} />
                 </div>
 
                 {/*
@@ -846,31 +805,35 @@ function MembersSection({
 }
 
 /**
- * Where the project's agents talk, and which columns they move cards into.
+ * Where the project's agents work: the repository they open pull requests
+ * against, the channel they talk in, and the columns they move cards into.
  *
- * Each picker saves the moment it changes, like the group picker: they are
- * independent settings, and the channel alone is what switches agents on or
- * off. Choosing a channel decides which conversations are sent to the agent
- * dispatcher, which is why only channels this viewer can see are offered — and
- * why the section is shown only to someone who can change it.
+ * Any project member can change these, not only a lead. The repository is
+ * shown to everyone, read-only for anyone who cannot change it. The pickers
+ * are shown only to someone who can: each saves the moment it changes, like
+ * the group picker, and choosing a channel decides which conversations are
+ * sent to the agent dispatcher — which is why only channels this viewer can
+ * see are offered.
  */
 function AgentsSection({
     project,
     channels,
     columns,
     workspaceSlug,
+    canConfigure,
 }: {
     project: Project;
     channels: Option[];
     columns: Option[];
     workspaceSlug: string;
+    canConfigure: boolean;
 }) {
     const { errors } = usePage().props;
     const channelId = project.agent_channel_id ?? null;
 
     /*
      * The channel already set may not be on offer — archived since, or a
-     * private channel another lead chose. It stays selectable under a neutral
+     * private channel somebody else chose. It stays selectable under a neutral
      * name, so the picker shows that something is set without naming it.
      */
     const channelOptions = useMemo(() => {
@@ -902,42 +865,143 @@ function AgentsSection({
     return (
         <Section
             title="Agents"
-            description="Pick a channel to let agents work this project's tickets. Each ticket gets a thread there; clearing the channel turns agents off."
+            description="Pick a channel to let agents work this project's tickets. Each ticket gets a thread there; clearing the channel turns agents off. Any project member can change these."
         >
-            <div className="grid gap-4 sm:grid-cols-3">
-                <AgentPicker
-                    id="agent-channel"
-                    label="Agent channel"
-                    unsetLabel="Off"
-                    value={channelId}
-                    options={channelOptions}
-                    error={errors.agent_channel_id}
-                    onChange={(value) => save('agent_channel_id', value)}
-                />
+            <RepositoryForm
+                project={project}
+                workspaceSlug={workspaceSlug}
+                canConfigure={canConfigure}
+            />
 
-                <AgentPicker
-                    id="agent-in-progress-column"
-                    label="In progress column"
-                    unsetLabel="Leave the card"
-                    value={project.agent_in_progress_column_id ?? null}
-                    options={columns}
-                    error={errors.agent_in_progress_column_id}
-                    onChange={(value) =>
-                        save('agent_in_progress_column_id', value)
+            {canConfigure && (
+                <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                    <AgentPicker
+                        id="agent-channel"
+                        label="Agent channel"
+                        unsetLabel="Off"
+                        value={channelId}
+                        options={channelOptions}
+                        error={errors.agent_channel_id}
+                        onChange={(value) => save('agent_channel_id', value)}
+                    />
+
+                    <AgentPicker
+                        id="agent-in-progress-column"
+                        label="In progress column"
+                        unsetLabel="Leave the card"
+                        value={project.agent_in_progress_column_id ?? null}
+                        options={columns}
+                        error={errors.agent_in_progress_column_id}
+                        onChange={(value) =>
+                            save('agent_in_progress_column_id', value)
+                        }
+                    />
+
+                    <AgentPicker
+                        id="agent-review-column"
+                        label="Review column"
+                        unsetLabel="Leave the card"
+                        value={project.agent_review_column_id ?? null}
+                        options={columns}
+                        error={errors.agent_review_column_id}
+                        onChange={(value) =>
+                            save('agent_review_column_id', value)
+                        }
+                    />
+                </div>
+            )}
+        </Section>
+    );
+}
+
+/**
+ * The repository agents work in, saved on its own so a member can change it
+ * without the lead-only project details travelling with it.
+ */
+function RepositoryForm({
+    project,
+    workspaceSlug,
+    canConfigure,
+}: {
+    project: Project;
+    workspaceSlug: string;
+    canConfigure: boolean;
+}) {
+    const form = useForm({
+        repository_url: project.repository_url ?? '',
+        repository_base_branch: project.repository_base_branch ?? '',
+    });
+
+    return (
+        <form
+            className="space-y-4"
+            onSubmit={(event) => {
+                event.preventDefault();
+
+                form.transform((data) => ({
+                    ...data,
+                    repository_base_branch:
+                        data.repository_url.trim() === ''
+                            ? ''
+                            : data.repository_base_branch,
+                }));
+
+                form.patch(
+                    updateProject.url({
+                        workspace: workspaceSlug,
+                        project: project.slug,
+                    }),
+                    { preserveScroll: true },
+                );
+            }}
+        >
+            <div className="space-y-1.5">
+                <Label htmlFor="repository-url">GitHub repository</Label>
+                <Input
+                    id="repository-url"
+                    value={form.data.repository_url}
+                    disabled={!canConfigure}
+                    placeholder="https://github.com/owner/repo"
+                    aria-describedby="repository-url-hint"
+                    onChange={(event) =>
+                        form.setData('repository_url', event.target.value)
                     }
                 />
-
-                <AgentPicker
-                    id="agent-review-column"
-                    label="Review column"
-                    unsetLabel="Leave the card"
-                    value={project.agent_review_column_id ?? null}
-                    options={columns}
-                    error={errors.agent_review_column_id}
-                    onChange={(value) => save('agent_review_column_id', value)}
-                />
+                <p
+                    id="repository-url-hint"
+                    className="text-xs text-muted-foreground"
+                >
+                    Where agents find this project's code. github.com only, over
+                    https or ssh.
+                </p>
+                <InputError message={form.errors.repository_url} />
             </div>
-        </Section>
+
+            <div className="max-w-xs space-y-1.5">
+                <Label htmlFor="repository-base-branch">Base branch</Label>
+                <Input
+                    id="repository-base-branch"
+                    value={form.data.repository_base_branch}
+                    disabled={
+                        !canConfigure || form.data.repository_url.trim() === ''
+                    }
+                    placeholder="default branch"
+                    onChange={(event) =>
+                        form.setData(
+                            'repository_base_branch',
+                            event.target.value,
+                        )
+                    }
+                />
+                <InputError message={form.errors.repository_base_branch} />
+            </div>
+
+            {canConfigure && (
+                <Button type="submit" disabled={form.processing}>
+                    Save repository
+                </Button>
+            )}
+        </form>
     );
 }
 
