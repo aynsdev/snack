@@ -4,6 +4,8 @@ import { useMemo, useRef, useState } from 'react';
 import { AddColumnTile } from '@/components/snack/projects/add-column-tile';
 import { BoardColumnView } from '@/components/snack/projects/board-column-view';
 import { BoardFiltersBar } from '@/components/snack/projects/board-filters';
+import { BulkActionBar } from '@/components/snack/projects/bulk-action-bar';
+import type { BulkChange } from '@/components/snack/projects/bulk-action-bar';
 import { ProjectHeader } from '@/components/snack/projects/project-header';
 import { TaskPanel } from '@/components/snack/projects/task-panel';
 import { Button } from '@/components/ui/button';
@@ -30,6 +32,7 @@ import {
 } from '@/hooks/use-board';
 import type { BoardFilters } from '@/hooks/use-board';
 import { useOpenTask } from '@/hooks/use-open-task';
+import { selectedIn, useTaskSelection } from '@/hooks/use-task-selection';
 import { useCurrentUser, useWorkspace } from '@/hooks/use-workspace';
 import { withoutReservedLabels } from '@/lib/agent-labels';
 import { isClickLikeDrop } from '@/lib/board-drag';
@@ -98,7 +101,17 @@ export default function ProjectBoardPage({
         [projectLabels],
     );
 
-    const { tasks, create, update, remove, move, error, setError } = useBoard({
+    const {
+        tasks,
+        apply,
+        create,
+        update,
+        remove,
+        move,
+        bulkUpdate,
+        error,
+        setError,
+    } = useBoard({
         projectId: project.id,
         projectSlug: project.slug,
         workspaceSlug: workspace.slug,
@@ -148,6 +161,42 @@ export default function ProjectBoardPage({
      * So the columns are replaced outright rather than left empty.
      */
     const sprintless = project.uses_sprints && sprint === null;
+
+    /*
+     * Ticked cards, for the bulk action bar. `order` walks the visible cards
+     * column by column, top to bottom, so a shift-click selects the run the
+     * reader sees; a card the filter hides is never ticked by one.
+     */
+    const selection = useTaskSelection();
+    const order = columns.flatMap((column) =>
+        tasksInColumn(visible, column.id).map((task) => task.id),
+    );
+    const selectedIds = selectedIn(selection.selected, order);
+    const selectedSet = new Set(selectedIds);
+
+    /*
+     * A sprint board shows its own sprint, so cards the bar sends to another
+     * sprint or to the backlog leave it — the board would otherwise go on
+     * drawing them until the next reload.
+     */
+    const applyBulk = async (change: BulkChange) => {
+        const result = await bulkUpdate(
+            tasks.filter((task) => selectedSet.has(task.id)),
+            change,
+        );
+
+        if (
+            !('error' in result) &&
+            sprint !== null &&
+            (change.in_backlog === true ||
+                (change.sprint_id !== undefined &&
+                    change.sprint_id !== sprint.id))
+        ) {
+            selectedIds.forEach((id) => apply(id, null));
+        }
+
+        return result;
+    };
 
     /*
      * Where a column added from the board lands: just left of the first Done
@@ -251,6 +300,17 @@ export default function ProjectBoardPage({
                 </p>
             )}
 
+            {canContribute && !sprintless && (
+                <BulkActionBar
+                    count={selectedIds.length}
+                    sprints={sprint === null ? [] : [sprint, ...plannedSprints]}
+                    members={members}
+                    agentsEnabled={project.agents_enabled}
+                    onApply={applyBulk}
+                    onClear={selection.clear}
+                />
+            )}
+
             {!sprintless && (
                 <BoardFiltersBar
                     filters={filters}
@@ -293,6 +353,16 @@ export default function ProjectBoardPage({
                             workspaceSlug={workspace.slug}
                             projectSlug={project.slug}
                             draggingId={dragging?.id ?? null}
+                            selected={canContribute ? selectedSet : undefined}
+                            onToggleSelected={
+                                canContribute
+                                    ? (task, range) =>
+                                          selection.toggle(task.id, {
+                                              range,
+                                              order,
+                                          })
+                                    : undefined
+                            }
                             onOpenTask={(task) => void openPanel.open(task.id)}
                             onDragStart={(task) => {
                                 dragStartedAt.current = performance.now();

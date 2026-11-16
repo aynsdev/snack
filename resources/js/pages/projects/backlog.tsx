@@ -1,6 +1,7 @@
 import { Head, router } from '@inertiajs/react';
 import { CalendarClock, ChevronDown, Play, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { BulkActionBar } from '@/components/snack/projects/bulk-action-bar';
 import { ProjectHeader } from '@/components/snack/projects/project-header';
 import { AgentBadge, LabelChip } from '@/components/snack/projects/task-glyphs';
 import { TaskPanel } from '@/components/snack/projects/task-panel';
@@ -12,6 +13,7 @@ import {
     TaskTypeMenu,
 } from '@/components/snack/projects/task-quick-actions';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Collapsible,
     CollapsibleContent,
@@ -19,6 +21,11 @@ import {
 } from '@/components/ui/collapsible';
 import { orderedTasks, useBoard } from '@/hooks/use-board';
 import { useOpenTask } from '@/hooks/use-open-task';
+import {
+    allSelected,
+    selectedIn,
+    useTaskSelection,
+} from '@/hooks/use-task-selection';
 import { useWorkspace } from '@/hooks/use-workspace';
 import { agentStateOf, withoutReservedLabels } from '@/lib/agent-labels';
 import { cn } from '@/lib/utils';
@@ -81,7 +88,7 @@ export default function ProjectBacklogPage({
         [projectLabels],
     );
 
-    const { tasks, create, update, remove, move } = useBoard({
+    const { tasks, create, update, remove, move, bulkUpdate } = useBoard({
         projectId: project.id,
         projectSlug: project.slug,
         workspaceSlug: workspace.slug,
@@ -93,6 +100,22 @@ export default function ProjectBacklogPage({
     const backlog = orderedTasks(
         tasks.filter((task) => task.sprint_id === null),
     );
+    const sprintTasks = (sprintId: number) =>
+        orderedTasks(tasks.filter((task) => task.sprint_id === sprintId));
+
+    /*
+     * Ticked rows, for the bulk action bar. `order` is every row as the page
+     * lists them, top to bottom, so a shift-click selects the run the reader
+     * sees — across sections too.
+     */
+    const selection = useTaskSelection();
+    const order = [
+        ...sprints.flatMap((sprint) => sprintTasks(sprint.id)),
+        ...backlog,
+    ].map((task) => task.id);
+    const selectedIds = selectedIn(selection.selected, order);
+    const toggleSelected = (task: Task, range: boolean) =>
+        selection.toggle(task.id, { range, order });
 
     /**
      * Dropping onto a section moves the card into it, keeping the status it
@@ -175,6 +198,24 @@ export default function ProjectBacklogPage({
                 )}
             </ProjectHeader>
 
+            {canContribute && (
+                <BulkActionBar
+                    count={selectedIds.length}
+                    sprints={sprints}
+                    members={members}
+                    agentsEnabled={project.agents_enabled}
+                    onApply={(change) =>
+                        bulkUpdate(
+                            tasks.filter((task) =>
+                                selectedIds.includes(task.id),
+                            ),
+                            change,
+                        )
+                    }
+                    onClear={selection.clear}
+                />
+            )}
+
             <div className="snack-scroll min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
                 {sprints.map((sprint) => (
                     <BacklogSection
@@ -182,17 +223,16 @@ export default function ProjectBacklogPage({
                         title={sprint.name}
                         subtitle={sprintSubtitle(sprint)}
                         state={sprint.state}
-                        tasks={orderedTasks(
-                            tasks.filter(
-                                (task) => task.sprint_id === sprint.id,
-                            ),
-                        )}
+                        tasks={sprintTasks(sprint.id)}
                         columns={columns}
                         sprints={sprints}
                         members={members}
                         labels={labels}
                         canContribute={canContribute}
                         draggingId={dragging?.id ?? null}
+                        selected={selection.selected}
+                        onToggleSelected={toggleSelected}
+                        onToggleAll={selection.toggleAll}
                         onOpenTask={(task) => void openPanel.open(task.id)}
                         onDragStart={setDragging}
                         onDragEnd={() => setDragging(null)}
@@ -230,6 +270,9 @@ export default function ProjectBacklogPage({
                     labels={labels}
                     canContribute={canContribute}
                     draggingId={dragging?.id ?? null}
+                    selected={selection.selected}
+                    onToggleSelected={toggleSelected}
+                    onToggleAll={selection.toggleAll}
                     onOpenTask={(task) => void openPanel.open(task.id)}
                     onDragStart={setDragging}
                     onDragEnd={() => setDragging(null)}
@@ -288,7 +331,10 @@ function BacklogSection({
     labels,
     canContribute,
     draggingId,
+    selected,
     actions,
+    onToggleSelected,
+    onToggleAll,
     onOpenTask,
     onDragStart,
     onDragEnd,
@@ -308,7 +354,10 @@ function BacklogSection({
     labels: TaskLabel[];
     canContribute: boolean;
     draggingId: number | null;
+    selected: ReadonlySet<number>;
     actions?: React.ReactNode;
+    onToggleSelected: (task: Task, range: boolean) => void;
+    onToggleAll: (taskIds: number[]) => void;
     onOpenTask: (task: Task) => void;
     onDragStart: (task: Task) => void;
     onDragEnd: () => void;
@@ -354,6 +403,19 @@ function BacklogSection({
             )}
         >
             <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+                {canContribute && tasks.length > 0 && (
+                    <Checkbox
+                        checked={allSelected(
+                            selected,
+                            tasks.map((task) => task.id),
+                        )}
+                        onCheckedChange={() =>
+                            onToggleAll(tasks.map((task) => task.id))
+                        }
+                        aria-label={`Select every task in ${title}`}
+                    />
+                )}
+
                 <CollapsibleTrigger className="flex items-center gap-1.5">
                     <ChevronDown
                         aria-hidden="true"
@@ -401,6 +463,8 @@ function BacklogSection({
                             canContribute={canContribute}
                             draggable={canContribute}
                             isDragging={draggingId === task.id}
+                            isSelected={selected.has(task.id)}
+                            onToggleSelected={onToggleSelected}
                             onOpen={onOpenTask}
                             onDragStart={onDragStart}
                             onDragEnd={onDragEnd}
@@ -482,6 +546,8 @@ function BacklogRow({
     canContribute,
     draggable,
     isDragging,
+    isSelected,
+    onToggleSelected,
     onOpen,
     onDragStart,
     onDragEnd,
@@ -497,6 +563,8 @@ function BacklogRow({
     canContribute: boolean;
     draggable: boolean;
     isDragging: boolean;
+    isSelected: boolean;
+    onToggleSelected: (task: Task, range: boolean) => void;
     onOpen: (task: Task) => void;
     onDragStart: (task: Task) => void;
     onDragEnd: () => void;
@@ -526,8 +594,24 @@ function BacklogRow({
                 'group/row flex items-center gap-2 px-3 py-2 transition-colors hover:bg-accent/40',
                 draggable && 'cursor-grab active:cursor-grabbing',
                 isDragging && 'opacity-40',
+                isSelected && 'bg-brand-subtle/30',
             )}
         >
+            {canContribute && (
+                <Checkbox
+                    checked={isSelected}
+                    draggable={false}
+                    // Handled on click rather than onCheckedChange, which does
+                    // not say whether shift was held. Space on the focused box
+                    // is a click too.
+                    onClick={(event) => {
+                        event.preventDefault();
+                        onToggleSelected(task, event.shiftKey);
+                    }}
+                    aria-label={`Select ${task.reference}`}
+                />
+            )}
+
             <TaskTypeMenu
                 task={task}
                 disabled={!canContribute}

@@ -1,9 +1,9 @@
 import { router } from '@inertiajs/react';
 import { useEchoPresence } from '@laravel/echo-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { channels, events } from '@/lib/echo';
-import { store as storeTask } from '@/routes/projects/tasks';
+import { bulk as bulkTasks, store as storeTask } from '@/routes/projects/tasks';
 import {
     destroy as destroyTask,
     move as moveTask,
@@ -206,7 +206,81 @@ export function useBoard({
         [apply, workspaceSlug],
     );
 
-    return { tasks, apply, create, update, remove, move, error, setError };
+    /**
+     * Several selected cards, changed the same way at once — the bulk action
+     * bar.
+     *
+     * A sprint change is applied optimistically, like a drop; handing cards to
+     * an agent is not, because which label each card ends up with is the
+     * server's decision (see ResolveTaskAgentIntent). Either way the answer
+     * replaces every card it names, and a refusal puts them all back.
+     *
+     * Resolves with the references the server left alone — cards that already
+     * had an agent — or with the reason nothing changed. The reason is handed
+     * back rather than set as the board's error, so the bar that asked can show
+     * it on the backlog too, which has no error strip of its own.
+     */
+    const bulkUpdate = useCallback(
+        async (
+            selected: Task[],
+            change: {
+                sprint_id?: number;
+                in_backlog?: boolean;
+                agent?: 'assign';
+                assignee_id?: number;
+            },
+        ): Promise<{ skipped: string[] } | { error: string }> => {
+            const originals = selected;
+
+            if (change.sprint_id !== undefined || change.in_backlog === true) {
+                const sprintId =
+                    change.in_backlog === true ? null : change.sprint_id;
+
+                originals.forEach((task) =>
+                    apply(task.id, { ...task, sprint_id: sprintId ?? null }),
+                );
+            }
+
+            try {
+                const { tasks: saved, skipped } = await api.patch<{
+                    tasks: Task[];
+                    skipped: string[];
+                }>(
+                    bulkTasks.url({
+                        workspace: workspaceSlug,
+                        project: projectSlug,
+                    }),
+                    { task_ids: originals.map((task) => task.id), ...change },
+                );
+
+                saved.forEach((task) => apply(task.id, task));
+
+                return { skipped };
+            } catch (caught) {
+                originals.forEach((task) => apply(task.id, task));
+
+                return {
+                    error:
+                        caught instanceof ApiError && caught.isValidationError
+                            ? caught.userMessage
+                            : 'Those tasks could not be changed. Try again.',
+                };
+            }
+        },
+        [apply, projectSlug, workspaceSlug],
+    );
+
+    return {
+        tasks,
+        apply,
+        create,
+        update,
+        remove,
+        move,
+        bulkUpdate,
+        error,
+        setError,
+    };
 }
 
 /**
