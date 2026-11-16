@@ -321,3 +321,68 @@ describe('roots', function () {
         expect(outboundEvents())->toHaveCount(0);
     });
 });
+
+/*
+ * A project that moves its agent channel keeps hearing the threads its agents
+ * already started for its tickets, so work under way finishes where it began;
+ * new work starts in the new channel only.
+ */
+describe('after the agent channel moves', function () {
+    beforeEach(function () {
+        connectAs($this->dev, $this->workspace, ConnectorKind::Agent);
+        $this->agent = Actor::agent($this->dev, OAuthToken::query()->where('user_id', $this->dev->id)->latest()->firstOrFail());
+        $this->task = makeTask($this->project, $this->owner);
+        $this->ticketRoot = app(ActorContext::class)->using($this->agent, fn (): Message => app(SendMessage::class)->handle(
+            $this->agentChannel,
+            $this->dev,
+            'PCA-1: thread',
+            agentContext: ['kind' => 'root', 'task_reference' => 'PCA-1', 'task_id' => $this->task->id],
+        ));
+        $this->otherRoot = postIn($this, 'pca-agent', 'a person\'s own thread');
+        $this->moved = makeChannel($this->workspace, attributes: ['name' => 'dev-triage', 'slug' => 'dev-triage']);
+        $this->project->forceFill(['agent_channel_id' => $this->moved->id])->save();
+        OutboundEvent::query()->delete();
+    });
+
+    it('still exports replies, edits and deletions in a thread an agent started for a ticket', function () {
+        $reply = postIn($this, 'pca-agent', '/approve', $this->ticketRoot);
+        app(UpdateMessage::class)->handle($reply, '/approve please');
+        app(DeleteMessage::class)->handle($reply->fresh(), $this->dev);
+
+        $created = messageEventData(OutboundEventType::MessageCreated);
+        // The deletion blanks the text of events not sent yet; the reply itself was still reported.
+        expect($created['message']['id'])->toBe($reply->id)
+            ->and($created['channel']['name'])->toBe('pca-agent')
+            ->and($created['projects'][0]['id'])->toBe($this->project->id)
+            ->and(outboundEvents(OutboundEventType::MessageUpdated))->toHaveCount(1)
+            ->and(outboundEvents(OutboundEventType::MessageDeleted))->toHaveCount(1);
+    });
+
+    it('still exports the deletion of the thread\'s own first message', function () {
+        app(DeleteMessage::class)->handle($this->ticketRoot->fresh(), $this->dev);
+
+        $deleted = messageEventData(OutboundEventType::MessageDeleted);
+        expect($deleted['message_id'])->toBe($this->ticketRoot->id)
+            ->and($deleted['projects'][0]['id'])->toBe($this->project->id);
+    });
+
+    it('does not export other threads in the old channel, or a new root posted there', function () {
+        postIn($this, 'pca-agent', 'not ticket work', $this->otherRoot);
+        app(ActorContext::class)->using($this->agent, fn (): Message => app(SendMessage::class)->handle(
+            $this->agentChannel,
+            $this->dev,
+            'PCA-1: a second thread',
+            agentContext: ['kind' => 'root', 'task_reference' => 'PCA-1', 'task_id' => $this->task->id],
+        ));
+
+        expect(outboundEvents())->toHaveCount(0);
+    });
+
+    it('stops once the project turns its agents off', function () {
+        $this->project->forceFill(['agent_channel_id' => null])->save();
+
+        postIn($this, 'pca-agent', 'too late', $this->ticketRoot);
+
+        expect(outboundEvents())->toHaveCount(0);
+    });
+});

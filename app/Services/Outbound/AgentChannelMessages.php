@@ -11,6 +11,7 @@ use App\Models\OutboundEvent;
 use App\Models\Project;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -19,7 +20,10 @@ use Illuminate\Support\Facades\DB;
  *
  * Which conversations leave Snack is decided by a project lead choosing an
  * agent channel in the project's settings — or, for one thread, by somebody
- * writing `@agent` in it; see {@see AgentSummons}. A message
+ * writing `@agent` in it; see {@see AgentSummons}. A thread an agent started
+ * for one of a project's tickets keeps being reported after the project moves
+ * its agent channel, so work under way finishes where it began; see
+ * {@see ticketThreadProjects()}. A message
  * anywhere that is not the agent channel of some live project in its own
  * workspace is never exported, whoever sent it and however it was sent — and
  * even there, only thread replies and the agents' own posts, and their edits
@@ -56,6 +60,7 @@ class AgentChannelMessages
         $locks = $channelId !== null && $this->events->enabled() && ($summoning || ($reportable && (
             $this->listeningProjects($workspaceId, $channelId)->exists()
             || ($threadRootId !== null && $this->summoned($threadRootId))
+            || ($threadRootId !== null && $this->ticketThreadProjects($workspaceId, $channelId, $threadRootId)->isNotEmpty())
         )));
 
         if (! $locks) {
@@ -155,8 +160,10 @@ class AgentChannelMessages
          */
         $summons = AgentSummon::query()->where('thread_root_id', $message->threadRootId())->open()->first();
         $exportsThread = $summons !== null && ! ($type === OutboundEventType::MessageCreated && $summons->message_id === $message->id);
+        // A new root starts new work, which belongs in the current agent channel only.
+        $continuesTicketThread = ! ($type === OutboundEventType::MessageCreated && $message->parent_message_id === null);
 
-        $this->events->defer($type, $message->workspace_id, function () use ($message, $body, $exportsThread): array {
+        $this->events->defer($type, $message->workspace_id, function () use ($message, $body, $exportsThread, $continuesTicketThread): array {
             $channel = Channel::query()
                 ->where('workspace_id', $message->workspace_id)
                 ->find($message->channel_id);
@@ -167,6 +174,15 @@ class AgentChannelMessages
             }
 
             $projects = $this->listeningProjects($message->workspace_id, $channel->id)->get();
+
+            if ($continuesTicketThread) {
+                $projects = $projects
+                    ->merge($this->ticketThreadProjects($message->workspace_id, $channel->id, $message->threadRootId()))
+                    ->unique('id')
+                    ->sortBy('id')
+                    ->values();
+            }
+
             $data = $body();
 
             if ($data === null || ($projects->isEmpty() && ! $exportsThread)) {
@@ -199,6 +215,40 @@ class AgentChannelMessages
             ->update(['payload' => DB::raw(<<<'SQL'
                 jsonb_set(jsonb_set(payload, '{data,message,body}', '""'), '{data,message,body_plaintext}', '""')
             SQL)]);
+    }
+
+    /**
+     * The project whose ticket an agent started this thread for, when the
+     * thread is not in that project's agent channel any more: the project moved
+     * its agent channel while the work was under way. Only an agent's own root
+     * that names a ticket counts, and only while the project still has agents
+     * on (an agent channel, not archived). Matched by workspace as well, so no
+     * bad row can carry a thread across tenants.
+     *
+     * @return Collection<int, Project>
+     */
+    private function ticketThreadProjects(int $workspaceId, int $channelId, int $threadRootId): Collection
+    {
+        // With trashed: the root's own deletion is built after it is soft-deleted, and the dispatcher must still hear it.
+        $root = Message::withTrashed()
+            ->where('workspace_id', $workspaceId)
+            ->where('channel_id', $channelId)
+            ->whereNull('parent_message_id')
+            ->find($threadRootId, ['id', 'metadata']);
+        $agent = $root?->metadata['agent'] ?? null;
+        $taskId = is_array($agent) && isset($agent['connector_id']) && is_int($agent['task_id'] ?? null) ? $agent['task_id'] : null;
+
+        if ($taskId === null) {
+            return new Collection;
+        }
+
+        return Project::query()
+            ->where('workspace_id', $workspaceId)
+            ->whereNotNull('agent_channel_id')
+            ->where('agent_channel_id', '!=', $channelId)
+            ->notArchived()
+            ->whereHas('tasks', fn (Builder $query) => $query->whereKey($taskId))
+            ->get();
     }
 
     /**
