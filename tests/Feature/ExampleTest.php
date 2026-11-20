@@ -2,13 +2,11 @@
 
 use App\Models\User;
 
-test('returns a successful response', function () {
-    // The landing page is only reachable on an initialized installation; with
-    // no accounts it redirects to first-run setup. See
+test('the root redirects to workspaces', function () {
+    // The app has no landing page of its own; the root only forwards. With no
+    // accounts it goes to first-run setup instead. See
     // tests/Feature/Setup/InstanceSetupTest.php.
     User::factory()->create();
 
-    $response = $this->get(route('home'));
-
-    $response->assertOk();
+    $this->get(route('home'))->assertRedirect('/workspaces');
 });

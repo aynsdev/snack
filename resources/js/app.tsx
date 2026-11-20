@@ -32,7 +32,7 @@ const appName = import.meta.env.VITE_APP_NAME || 'Snack';
  * no workspace to build a rail and sidebar from. A new page inside a workspace
  * now gets the right chrome by doing nothing at all.
  */
-const STANDALONE_PAGES = ['welcome', 'workspace/index', 'workspace/create'];
+const STANDALONE_PAGES = ['workspace/index', 'workspace/create'];
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
