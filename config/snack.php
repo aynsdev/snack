@@ -17,6 +17,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Legal
+    |--------------------------------------------------------------------------
+    |
+    | Who operates this installation, as quoted by the public terms, privacy
+    | policy and account deletion pages. Every installation has a different
+    | operator, so set these before pointing anyone at those pages.
+    |
+    */
+
+    'legal' => [
+        'company' => env('SNACK_LEGAL_COMPANY', env('APP_NAME', 'Snack')),
+        'country' => env('SNACK_LEGAL_COUNTRY', 'the country where the operator is based'),
+        'contact_email' => env('SNACK_LEGAL_CONTACT_EMAIL', env('MAIL_FROM_ADDRESS', 'privacy@example.com')),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Workspaces
     |--------------------------------------------------------------------------
     |
@@ -876,7 +893,7 @@ return [
          */
         'app_review' => [
             'name' => env('SNACK_APP_REVIEW_NAME', 'App Review'),
-            'email' => env('SNACK_APP_REVIEW_EMAIL', 'appreview@pedi.ph'),
+            'email' => env('SNACK_APP_REVIEW_EMAIL', 'appreview@example.com'),
             'username' => env('SNACK_APP_REVIEW_USERNAME', 'appreview'),
             'password' => env('SNACK_APP_REVIEW_PASSWORD'),
             'workspace' => env('SNACK_APP_REVIEW_WORKSPACE', 'snack-demo'),

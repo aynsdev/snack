@@ -23,3 +23,18 @@ test('legal pages are public', function (string $route, string $component) {
 test('legal pages are reachable before first-run setup', function () {
     $this->get(route('legal.privacy'))->assertOk();
 });
+
+test('legal pages name the operator configured for this installation', function (string $route) {
+    config([
+        'snack.legal.company' => 'Acme Chat Ltd.',
+        'snack.legal.country' => 'New Zealand',
+        'snack.legal.contact_email' => 'privacy@acme.test',
+    ]);
+
+    $this->get(route($route))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('legal.company', 'Acme Chat Ltd.')
+            ->where('legal.country', 'New Zealand')
+            ->where('legal.contactEmail', 'privacy@acme.test'));
+})->with(['legal.terms', 'legal.privacy', 'legal.delete-account']);

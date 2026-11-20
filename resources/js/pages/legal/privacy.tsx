@@ -1,5 +1,9 @@
 import { Link } from '@inertiajs/react';
-import { ContactLink, LEGAL, LegalPage } from '@/components/legal/legal-page';
+import {
+    ContactLink,
+    LegalPage,
+    useLegal,
+} from '@/components/legal/legal-page';
 import { deleteAccount, terms } from '@/routes/legal';
 
 type DataSafetyRow = {
@@ -61,16 +65,18 @@ const DATA_SAFETY: readonly DataSafetyRow[] = [
 ] as const;
 
 export default function Privacy() {
+    const legal = useLegal();
+
     return (
         <LegalPage
             title="Privacy Policy"
-            summary={`How ${LEGAL.company} collects, uses, shares and protects your information when you use Snack on the web and in the Snack mobile apps.`}
+            summary={`How ${legal.company} collects, uses, shares and protects your information when you use Snack on the web and in the Snack mobile apps.`}
         >
             <section>
                 <h2>1. Who we are</h2>
                 <p>
-                    Snack is operated by {LEGAL.company}, based in{' '}
-                    {LEGAL.country}. We process personal data in line with the
+                    Snack is operated by {legal.company}, based in{' '}
+                    {legal.country}. We process personal data in line with the
                     Philippine Data Privacy Act of 2012 (Republic Act No. 10173)
                     and other laws that apply to you. For workspaces run by an
                     employer or other organization, that organization decides
@@ -332,7 +338,7 @@ export default function Privacy() {
                 <h2>10. International transfers</h2>
                 <p>
                     Our service providers may process data outside{' '}
-                    {LEGAL.country}, including in Singapore and the United
+                    {legal.country}, including in Singapore and the United
                     States. We rely on contractual safeguards to protect it
                     wherever it is processed.
                 </p>

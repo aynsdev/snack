@@ -1,4 +1,8 @@
-import { ContactLink, LEGAL, LegalPage } from '@/components/legal/legal-page';
+import {
+    ContactLink,
+    LegalPage,
+    useLegal,
+} from '@/components/legal/legal-page';
 
 /**
  * The page the Play Store's "delete account URL" points at. Google requires it
@@ -6,10 +10,12 @@ import { ContactLink, LEGAL, LegalPage } from '@/components/legal/legal-page';
  * all three are here, and the in-app steps must match the real settings screen.
  */
 export default function DeleteAccount() {
+    const legal = useLegal();
+
     return (
         <LegalPage
             title="Delete your Snack account"
-            summary={`How to permanently delete your Snack account, published by ${LEGAL.company}, and what happens to your data when you do.`}
+            summary={`How to permanently delete your Snack account, published by ${legal.company}, and what happens to your data when you do.`}
         >
             <section>
                 <h2>In the mobile app</h2>
