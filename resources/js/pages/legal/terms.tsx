@@ -1,12 +1,18 @@
 import { Link } from '@inertiajs/react';
-import { ContactLink, LEGAL, LegalPage } from '@/components/legal/legal-page';
+import {
+    ContactLink,
+    LegalPage,
+    useLegal,
+} from '@/components/legal/legal-page';
 import { deleteAccount, privacy } from '@/routes/legal';
 
 export default function Terms() {
+    const legal = useLegal();
+
     return (
         <LegalPage
             title="Terms of Service"
-            summary={`These terms govern your use of Snack, the team chat, project and HR workspace operated by ${LEGAL.company}, on the web and in the Snack mobile apps.`}
+            summary={`These terms govern your use of Snack, the team chat, project and HR workspace operated by ${legal.company}, on the web and in the Snack mobile apps.`}
         >
             <section>
                 <h2>1. Agreement</h2>
@@ -60,7 +66,7 @@ export default function Terms() {
                 <h2>4. Your content</h2>
                 <p>
                     You keep ownership of the messages, files, tasks and other
-                    content you post. You grant {LEGAL.company} a limited
+                    content you post. You grant {legal.company} a limited
                     license to host, store, process, transmit and display that
                     content only as needed to operate Snack for you and your
                     workspace — for example, delivering a message, generating a
@@ -134,7 +140,7 @@ export default function Terms() {
                 <h2>9. Disclaimers and liability</h2>
                 <p>
                     Snack is provided "as is" and "as available". To the fullest
-                    extent permitted by law, {LEGAL.company} disclaims all
+                    extent permitted by law, {legal.company} disclaims all
                     implied warranties, and is not liable for indirect,
                     incidental, special, consequential or punitive damages, or
                     for loss of data, profits or goodwill. Our total liability
@@ -158,7 +164,7 @@ export default function Terms() {
             <section>
                 <h2>11. Governing law</h2>
                 <p>
-                    These terms are governed by the laws of {LEGAL.country}.
+                    These terms are governed by the laws of {legal.country}.
                     Disputes will be resolved in the courts of Metro Manila,
                     unless the law where you live gives you the right to bring
                     them elsewhere.
