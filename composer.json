@@ -1,6 +1,6 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "pedi-solutions-inc/snack",
+    "name": "aynsdev/snack",
     "type": "project",
     "description": "Self-hosted team chat with channels, huddles, projects, HR tools and an AI teammate.",
     "keywords": [

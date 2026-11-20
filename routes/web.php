@@ -63,6 +63,7 @@ use App\Http\Controllers\Hr\TimeEntryController;
 use App\Http\Controllers\Hr\WorkTypeRequestController;
 use App\Http\Controllers\Huddles\HuddleHistoryController;
 use App\Http\Controllers\InvitationAcceptanceController;
+use App\Http\Controllers\LegalPageController;
 use App\Http\Controllers\Mcp\AuthorizeWorkspaceController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\Messages\MentionController;
@@ -155,9 +156,11 @@ Route::redirect('/', '/workspaces')
  * Play Store listings link to. Outside EnsureInstanceIsSetUp: a store reviewer
  * opening these must never be bounced to first-run setup.
  */
-Route::inertia('terms', 'legal/terms')->name('legal.terms');
-Route::inertia('privacy', 'legal/privacy')->name('legal.privacy');
-Route::inertia('delete-account', 'legal/delete-account')->name('legal.delete-account');
+Route::controller(LegalPageController::class)->group(function () {
+    Route::get('terms', 'terms')->name('legal.terms');
+    Route::get('privacy', 'privacy')->name('legal.privacy');
+    Route::get('delete-account', 'deleteAccount')->name('legal.delete-account');
+});
 
 /*
 |--------------------------------------------------------------------------
