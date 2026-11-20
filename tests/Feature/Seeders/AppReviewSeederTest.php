@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Hash;
 
 beforeEach(function () {
     config([
-        'snack.mobile.app_review.email' => 'appreview@pedi.ph',
+        'snack.mobile.app_review.email' => 'appreview@example.com',
         'snack.mobile.app_review.username' => 'appreview',
         'snack.mobile.app_review.password' => 'review-secret',
         'snack.mobile.app_review.workspace' => 'snack-demo',
@@ -22,7 +22,7 @@ beforeEach(function () {
 
 function reviewer(): User
 {
-    return User::query()->where('email', 'appreview@pedi.ph')->sole();
+    return User::query()->where('email', 'appreview@example.com')->sole();
 }
 
 function demoWorkspace(): Workspace
@@ -89,7 +89,7 @@ test('running it again resets the workspace and the password', function () {
 
     expect(Workspace::query()->whereKey($first->id)->exists())->toBeFalse()
         ->and(Workspace::query()->where('slug', 'snack-demo')->count())->toBe(1)
-        ->and(User::query()->where('email', 'appreview@pedi.ph')->count())->toBe(1)
+        ->and(User::query()->where('email', 'appreview@example.com')->count())->toBe(1)
         ->and(Hash::check('rotated-secret', reviewer()->password))->toBeTrue()
         ->and(demoWorkspace()->channels()->where('name', 'general')->sole()->messages()->pluck('body'))->not->toContain('testing 123');
 });
@@ -109,7 +109,7 @@ test('it refuses to run without a password', function () {
 
     expect(fn () => $this->seed(AppReviewSeeder::class))->toThrow(RuntimeException::class, 'SNACK_APP_REVIEW_PASSWORD');
 
-    expect(User::query()->where('email', 'appreview@pedi.ph')->exists())->toBeFalse();
+    expect(User::query()->where('email', 'appreview@example.com')->exists())->toBeFalse();
 });
 
 test('it never replaces a real workspace that shares the slug', function () {

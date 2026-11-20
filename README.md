@@ -80,7 +80,9 @@ Set `SNACK_BITE_ENABLED=true` and `ANTHROPIC_API_KEY` in `.env`. Bite sends work
 
 ## Configuration
 
-Every setting lives in `.env.example`, and app behavior is in `config/snack.php`. Both are commented. Never commit `.env` or anything in `storage/*.key`.
+Every setting lives in `.env.example`, and app behavior is in `config/snack.php`. Both are commented.
+
+Before you share the public terms, privacy and account deletion pages (`/terms`, `/privacy`, `/delete-account`), set `SNACK_LEGAL_COMPANY`, `SNACK_LEGAL_COUNTRY` and `SNACK_LEGAL_CONTACT_EMAIL` to your own details, and review the policy text in `resources/js/pages/legal/` so it matches how you run Snack. Never commit `.env` or anything in `storage/*.key`.
 
 ## Testing
 

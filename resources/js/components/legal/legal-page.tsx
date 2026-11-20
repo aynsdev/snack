@@ -1,20 +1,29 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { SnackLogo } from '@/components/snack/snack-logo';
 import { home } from '@/routes';
 import { deleteAccount, privacy, terms } from '@/routes/legal';
 
 /**
- * Who operates the hosted Snack service and how to reach them. One place,
- * because the terms, the privacy policy and the deletion instructions all quote
- * it, and an address that differs between them is the first thing an app store
- * reviewer notices.
+ * Who operates this installation and how to reach them, from `snack.legal` on
+ * the server. One place, because the terms, the privacy policy and the deletion
+ * instructions all quote it, and an address that differs between them is the
+ * first thing an app store reviewer notices.
  */
-export const LEGAL = {
-    company: 'Pedi Solutions Inc.',
-    country: 'the Philippines',
-    contactEmail: 'privacy@pedi.ph',
-    effectiveDate: 'October 26, 2026',
-} as const;
+export type LegalOperator = {
+    company: string;
+    country: string;
+    contactEmail: string;
+};
+
+/**
+ * When the current wording took effect. It lives with the copy, not in config,
+ * because it changes only when the text does.
+ */
+export const EFFECTIVE_DATE = 'October 26, 2026';
+
+export function useLegal(): LegalOperator {
+    return usePage<{ legal: LegalOperator }>().props.legal;
+}
 
 const LINKS = [
     { label: 'Terms of Service', href: terms() },
@@ -55,7 +64,7 @@ export function LegalPage({
                     </h1>
 
                     <p className="mt-3 text-sm text-muted-foreground">
-                        Effective {LEGAL.effectiveDate}
+                        Effective {EFFECTIVE_DATE}
                     </p>
 
                     <p className="mt-6 text-lg text-pretty text-muted-foreground">
@@ -89,5 +98,7 @@ export function LegalPage({
 }
 
 export function ContactLink() {
-    return <a href={`mailto:${LEGAL.contactEmail}`}>{LEGAL.contactEmail}</a>;
+    const { contactEmail } = useLegal();
+
+    return <a href={`mailto:${contactEmail}`}>{contactEmail}</a>;
 }
