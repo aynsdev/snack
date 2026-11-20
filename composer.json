@@ -1,11 +1,14 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/react-starter-kit",
+    "name": "pedi-solutions-inc/snack",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
+    "description": "Self-hosted team chat with channels, huddles, projects, HR tools and an AI teammate.",
     "keywords": [
         "laravel",
-        "framework"
+        "chat",
+        "team",
+        "self-hosted",
+        "slack-alternative"
     ],
     "license": "MIT",
     "require": {

@@ -1,0 +1,32 @@
+name: Bug report
+description: Something in Snack doesn't work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: For security issues, don't use this form. Follow SECURITY.md instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: PHP version, database, browser or mobile OS.
