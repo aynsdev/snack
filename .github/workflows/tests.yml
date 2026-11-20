@@ -13,6 +13,31 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    # Snack's migrations use PostgreSQL features (citext, pg_trgm, unaccent,
+    # tsvector), so it cannot run on the SQLite the starter kit defaults to.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: snack_testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: snack_testing
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

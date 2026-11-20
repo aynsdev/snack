@@ -47,11 +47,11 @@
 | Frontend | React 19, Inertia v3, Tailwind CSS v4, Wayfinder |
 | Realtime | Laravel Reverb, LiveKit for huddles |
 | AI | Laravel AI SDK (Anthropic by default) |
-| Database | SQLite for local work, PostgreSQL in production (search uses Postgres full-text) |
+| Database | PostgreSQL (full-text search, trigram matching and case-insensitive text) |
 
 ## Getting started
 
-You need PHP 8.4, Composer, Node 22 and npm.
+You need PHP 8.4, Composer, Node 22, npm and PostgreSQL. Create a database called `snack` for the app and one called `snack_testing` for the tests. `.env.example` connects as `postgres` with no password. If your setup is different, copy `.env.example` to `.env` and change the `DB_*` values before running `composer setup`.
 
 ```bash
 git clone https://github.com/aynsdev/snack.git
