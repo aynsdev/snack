@@ -141,7 +141,11 @@ Route::middleware(EnsureInstanceNeedsSetup::class)->group(function () {
 |--------------------------------------------------------------------------
 */
 
-Route::inertia('/', 'welcome')
+/*
+ * No landing page lives in the app: the root sends people straight to their
+ * workspaces, and guests on to the login screen from there.
+ */
+Route::redirect('/', '/workspaces')
     ->middleware(EnsureInstanceIsSetUp::class)
     ->name('home');
 

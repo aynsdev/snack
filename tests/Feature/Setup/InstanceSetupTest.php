@@ -211,12 +211,19 @@ test('the landing page and login redirect to setup while the instance is empty',
     $this->get(route('login'))->assertRedirect(route('setup.create'));
 });
 
-test('the landing page and login are reachable once setup is done', function () {
+test('the root redirects to workspaces and login is reachable once setup is done', function () {
     User::factory()->create();
 
-    $this->get('/')
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page->component('welcome'));
+    $this->get('/')->assertRedirect('/workspaces');
 
     $this->get(route('login'))->assertOk();
+});
+
+test('a guest opening the root ends up on the login screen', function () {
+    User::factory()->create();
+
+    $this->followingRedirects()
+        ->get('/')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('auth/login'));
 });
